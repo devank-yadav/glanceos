@@ -31,6 +31,10 @@ import {
   pushRotatingDevices, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
+import {
+  connLookupFor, createConnection, deleteConnection, getConnectionSummary, listConnections, updateConnection,
+} from "./connections";
+import { PROVIDERS } from "./providers/registry";
 import { resolveSource } from "./providers/resolve";
 import { resolveWidgetData } from "./widgets";
 
@@ -366,17 +370,58 @@ export function buildApp(): Hono<Env> {
     const body = (await c.req.json().catch(() => ({}))) as { document?: unknown };
     const parsed = safeParseDocument(body.document);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.issues }, 400);
-    return c.json({ data: await resolveWidgetData(parsed.data, c.get("userId")) });
+    const userId = c.get("userId");
+    return c.json({ data: await resolveWidgetData(parsed.data, userId, connLookupFor(userId)) });
   });
 
-  // Dry-run a binding (anonymous public/secret URL — no saved connection) so the
-  // Data tab can show what a source returns before you commit to it.
+  // Dry-run a binding so the Data tab can preview what a source returns. Works
+  // for anonymous URLs and for the caller's own saved connections (secrets stay
+  // server-side — the response carries only the resolved data).
   app.post("/api/source/preview", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { source?: unknown };
     const parsed = BlockSource.safeParse(body.source);
     if (!parsed.success) return c.json({ error: "validation" }, 400);
-    if (parsed.data.connectionId) return c.json({ error: "use /api/connections/:id/sample for saved connections" }, 400);
-    return c.json({ data: await resolveSource(parsed.data) });
+    const userId = c.get("userId");
+    return c.json({ data: await resolveSource(parsed.data, connLookupFor(userId)) });
+  });
+
+  // ---- integrations: provider catalog + per-user connections ----
+
+  app.get("/api/providers", (c) =>
+    c.json([...PROVIDERS.values()].map((p) => ({
+      id: p.id, label: p.label, category: p.category, authKind: p.authKind,
+      resources: p.resources.map((r) => ({ id: r.id, label: r.label, shape: r.shape })),
+    }))));
+
+  app.get("/api/connections", (c) => c.json(listConnections(c.get("userId"))));
+
+  app.post("/api/connections", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { provider?: string; label?: string; config?: Record<string, unknown>; secret?: string };
+    if (!body.provider) return c.json({ error: "provider required" }, 400);
+    const created = createConnection(c.get("userId"), { provider: body.provider, label: body.label, config: body.config, secret: body.secret });
+    if (!created) return c.json({ error: "unknown provider" }, 400);
+    return c.json(created, 201);
+  });
+
+  app.patch("/api/connections/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { label?: string; config?: Record<string, unknown>; secret?: string };
+    const updated = updateConnection(c.req.param("id"), c.get("userId"), body);
+    if (!updated) return c.json({ error: "not found" }, 404);
+    return c.json(updated);
+  });
+
+  app.delete("/api/connections/:id", (c) =>
+    deleteConnection(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // Preview a resource of a saved connection (secrets never returned).
+  app.post("/api/connections/:id/sample", async (c) => {
+    const id = c.req.param("id");
+    const userId = c.get("userId");
+    if (!getConnectionSummary(id, userId)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { source?: unknown };
+    const parsed = BlockSource.safeParse({ ...(body.source ?? {}), connectionId: id });
+    if (!parsed.success) return c.json({ error: "validation" }, 400);
+    return c.json({ data: await resolveSource(parsed.data, connLookupFor(userId)) });
   });
 
   app.get("/api/layouts/:id", (c) => {

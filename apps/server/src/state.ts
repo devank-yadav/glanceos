@@ -1,4 +1,5 @@
 import type { StreamPayloadT } from "@glanceos/schema";
+import { connLookupFor } from "./connections";
 import { devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
@@ -29,7 +30,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
     state: {
       layoutVersion: layout.version,
       layout: layout.document,
-      data: await resolveWidgetData(layout.document, device.user_id ?? ""),
+      data: await resolveWidgetData(layout.document, device.user_id ?? "", connLookupFor(device.user_id ?? "")),
       deviceName: device.name ?? undefined,
     },
   };

@@ -365,9 +365,11 @@ export const SERIES_BLOCKS = new Set<WidgetType>([
 export const SCALAR_BLOCKS = new Set<WidgetType>([
   "stat", "metric", "bigNumber", "trend", "deltaStat", "percentBig", "progress", "gauge",
 ]);
+// Newline-joined text lists (Todoist/Notion/GitHub issues → a list block).
+export const LIST_BLOCKS = new Set<WidgetType>(["bulletList", "numberedList", "checklist"]);
 // Already-typed live shapes — bind the whole block, no field mapping needed.
 export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines"]);
-export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...PASSTHROUGH_BLOCKS]);
+export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PASSTHROUGH_BLOCKS]);
 
 // Single-line types: never hold their own newlines.
 export const SINGLE_LINE = new Set<WidgetType>([

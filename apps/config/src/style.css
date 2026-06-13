@@ -1857,3 +1857,62 @@ ul.tasks li:last-child {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ---------- integrations page ---------- */
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  cursor: pointer;
+  padding: 13px 15px;
+}
+.provider-card:hover {
+  border-color: var(--indigo);
+}
+.conn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chip.conn-ok {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+.chip.conn-needs_auth {
+  background: rgba(217, 119, 6, 0.15);
+  color: #b45309;
+}
+.chip.conn-error {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(17, 17, 17, 0.32);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal {
+  width: min(440px, 94vw);
+  padding: 20px 22px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  backdrop-filter: blur(28px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  animation: rise 0.16s var(--ease) both;
+}
+.modal h3 {
+  margin: 0 0 8px;
+}

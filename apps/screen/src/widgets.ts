@@ -55,6 +55,18 @@ const boundNum = (w: WidgetT, data: unknown, prop: string): number => {
   const n = Number(raw);
   return Number.isFinite(n) ? n : Number((w.props as Record<string, unknown>)[prop]) || 0;
 };
+const boundLines = (w: WidgetT, data: unknown, prop: string): string => {
+  if (data == null) return String((w.props as Record<string, unknown>)[prop] ?? "");
+  if (typeof data === "string") return data;
+  if (Array.isArray(data)) {
+    return data
+      .map((x) => (x && typeof x === "object"
+        ? String((x as Record<string, unknown>).text ?? (x as Record<string, unknown>).value ?? (x as Record<string, unknown>).title ?? JSON.stringify(x))
+        : String(x)))
+      .join("\n");
+  }
+  return String((w.props as Record<string, unknown>)[prop] ?? "");
+};
 
 // ---------- existing ----------
 
@@ -177,8 +189,8 @@ const quote: Render = (el, w) => {
   el.appendChild(wrap);
 };
 
-const listRender = (cls: string, marker: (i: number) => string): Render => (el, w) => {
-  const items = "items" in w.props ? lines((w.props as { items: string }).items) : [];
+const listRender = (cls: string, marker: (i: number) => string): Render => (el, w, data) => {
+  const items = "items" in w.props ? lines(boundLines(w, data, "items")) : [];
   const list = div(cls);
   items.forEach((item, i) => {
     const row = div("li");
@@ -192,10 +204,10 @@ const listRender = (cls: string, marker: (i: number) => string): Render => (el, 
 const bulletList = listRender("list", () => "•");
 const numberedList = listRender("list", (i) => `${i + 1}.`);
 
-const checklist: Render = (el, w) => {
+const checklist: Render = (el, w, data) => {
   if (w.type !== "checklist") return;
   const list = div("list");
-  for (const raw of lines(w.props.items)) {
+  for (const raw of lines(boundLines(w, data, "items"))) {
     const done = /^(\[?x\]?|✓)\s+/i.test(raw);
     const label = raw.replace(/^(\[?x\]?|\[?\s?\]?|✓|-)\s+/i, "");
     const row = div("li");

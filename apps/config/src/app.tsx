@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api, type AuthStatus } from "./api";
 import { AuthPage } from "./auth";
 import { HubPage } from "./pages/hub";
+import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
@@ -98,6 +99,9 @@ export function App() {
           <a href="#/hub" class={page.name === "hub" ? "active" : ""}>
             Hub
           </a>
+          <a href="#/integrations" class={page.name === "integrations" ? "active" : ""}>
+            Integrations
+          </a>
         </nav>
         <span class="spacer" />
         <span class="muted">{status.user!.name}</span>
@@ -109,6 +113,7 @@ export function App() {
       {page.name === "setups" && <SetupsPage />}
       {page.name === "playlists" && <PlaylistsPage />}
       {page.name === "hub" && <HubPage />}
+      {page.name === "integrations" && <IntegrationsPage />}
     </main>
   );
 }

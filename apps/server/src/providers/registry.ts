@@ -130,3 +130,72 @@ reg({
     return headlinesData({ url, max: Number(ctx.query.max) || 10 });
   },
 });
+
+// ---- productivity providers (paste a personal token — no OAuth app needed) ----
+
+reg({
+  id: "todoist", label: "Todoist", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "todoist.tasks", label: "Tasks", shape: "list" },
+    { id: "todoist.projects", label: "Projects", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "todoist.projects") return getJSON("https://api.todoist.com/rest/v2/projects", h);
+    const params = new URLSearchParams();
+    if (ctx.query.project_id) params.set("project_id", ctx.query.project_id);
+    else if (ctx.query.filter) params.set("filter", ctx.query.filter);
+    const qs = params.toString();
+    return getJSON(`https://api.todoist.com/rest/v2/tasks${qs ? `?${qs}` : ""}`, h);
+  },
+});
+
+reg({
+  id: "github", label: "GitHub", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [
+    { id: "github.issues", label: "Issues", shape: "list" },
+    { id: "github.repo", label: "Repo stats", shape: "scalar" },
+    { id: "github.commits", label: "Commit activity", shape: "series" },
+  ],
+  async resolve(ctx) {
+    const h: Record<string, string> = { accept: "application/vnd.github+json" };
+    if (ctx.secret) h.authorization = `Bearer ${ctx.secret}`;
+    const repo = ctx.query.repo; // "owner/name"
+    if (ctx.resource === "github.issues") {
+      if (ctx.query.q) return getJSON(`https://api.github.com/search/issues?q=${encodeURIComponent(ctx.query.q)}`, h);
+      if (repo) return getJSON(`https://api.github.com/repos/${repo}/issues?per_page=20`, h);
+      return null;
+    }
+    if (ctx.resource === "github.repo") return repo ? getJSON(`https://api.github.com/repos/${repo}`, h) : null;
+    if (ctx.resource === "github.commits") return repo ? getJSON(`https://api.github.com/repos/${repo}/stats/commit_activity`, h) : null;
+    return null;
+  },
+});
+
+reg({
+  id: "notion", label: "Notion", category: "docs", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "notion.database", label: "Database rows", shape: "table" }],
+  async resolve(ctx) {
+    if (!ctx.secret || !ctx.query.database_id) return null;
+    return postJSON(
+      `https://api.notion.com/v1/databases/${ctx.query.database_id}/query`,
+      ctx.query.body ? JSON.parse(ctx.query.body) : {},
+      { authorization: `Bearer ${ctx.secret}`, "notion-version": "2022-06-28" },
+    );
+  },
+});
+
+reg({
+  id: "linear", label: "Linear", category: "issues", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "linear.issues", label: "Issues", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const query = ctx.query.gqlQuery || "{ issues(first: 20) { nodes { title state { name } } } }";
+    return postJSON("https://api.linear.app/graphql", { query }, { authorization: ctx.secret });
+  },
+});

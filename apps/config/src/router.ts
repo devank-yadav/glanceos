@@ -9,6 +9,7 @@ export type Route =
   | { name: "setups" }
   | { name: "playlists" }
   | { name: "hub" }
+  | { name: "integrations" }
   | { name: "edit"; layoutId: number };
 
 export function parseRoute(hash: string): Route {
@@ -18,6 +19,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/setups") return { name: "setups" };
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };
+  if (path === "/integrations") return { name: "integrations" };
   const edit = /^\/edit\/(\d+)$/.exec(path);
   if (edit) return { name: "edit", layoutId: Number(edit[1]) };
   return { name: "screens" };
