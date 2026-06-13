@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# local state
+.env
+.env.*
+*.local
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+apps/server/data/
+coverage/
+
+# OS noise
+.DS_Store
+
+# device artifacts
+*.img
+*.img.xz
+.pio/
+__pycache__/

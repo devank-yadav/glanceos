@@ -1,0 +1,203 @@
+import type { WidgetT } from "@glanceos/schema";
+
+// The single registry the palette, slash menu, and insert logic read.
+// defaultH = the height (units /24) a new block's line gets, so adding a block
+// never fills the screen.
+
+export type WidgetType = WidgetT["type"];
+export type BlockCategory = "Text" | "Media" | "Numbers" | "Charts" | "Time" | "Nature" | "Trackers" | "Info" | "Live" | "Smart home";
+
+export interface BlockDef {
+  type: WidgetType;
+  label: string;
+  glyph: string;
+  description: string;
+  keywords: string;
+  category: BlockCategory;
+  defaultH: number;
+  defaultProps: Record<string, unknown>;
+}
+
+export const BLOCKS: BlockDef[] = [
+  // Text
+  { type: "text", label: "Text", glyph: "T", category: "Text", defaultH: 3, description: "Plain paragraph", keywords: "paragraph note plain write", defaultProps: { content: "Write something calm.", align: "left" } },
+  { type: "heading", label: "Heading", glyph: "H", category: "Text", defaultH: 3, description: "Large section title", keywords: "title h1 h2", defaultProps: { content: "Heading", level: 1 } },
+  { type: "subheading", label: "Subheading", glyph: "h", category: "Text", defaultH: 3, description: "Smaller title", keywords: "title h3 subtitle", defaultProps: { content: "Subheading" } },
+  { type: "label", label: "Label", glyph: "¶", category: "Text", defaultH: 2, description: "Small uppercase eyebrow", keywords: "eyebrow caption tag", defaultProps: { content: "LABEL" } },
+  { type: "quote", label: "Quote", glyph: "❝", category: "Text", defaultH: 4, description: "A pull quote", keywords: "blockquote citation", defaultProps: { content: "A calm quote.", author: "" } },
+  { type: "callout", label: "Callout", glyph: "✸", category: "Text", defaultH: 4, description: "Emphasized note with emoji", keywords: "note highlight box", defaultProps: { content: "Something worth noticing.", emoji: "💡" } },
+  { type: "banner", label: "Banner", glyph: "▭", category: "Text", defaultH: 3, description: "Full-width announcement", keywords: "announcement title big", defaultProps: { content: "Announcement" } },
+  { type: "bulletList", label: "Bullet list", glyph: "•", category: "Text", defaultH: 5, description: "Unordered list", keywords: "list ul items", defaultProps: { items: "First item\nSecond item\nThird item" } },
+  { type: "numberedList", label: "Numbered list", glyph: "1.", category: "Text", defaultH: 5, description: "Ordered list", keywords: "list ol steps", defaultProps: { items: "First\nSecond\nThird" } },
+  { type: "checklist", label: "Checklist", glyph: "☑", category: "Text", defaultH: 5, description: "Static checkbox list", keywords: "todo tasks check", defaultProps: { items: "x Done already\nStill to do\nAnd this" } },
+  { type: "code", label: "Code", glyph: "</>", category: "Text", defaultH: 4, description: "Monospace block", keywords: "code mono pre", defaultProps: { content: "echo hello", language: "" } },
+  { type: "keyValue", label: "Key / value", glyph: "≔", category: "Text", defaultH: 5, description: "Label–value pairs", keywords: "facts details spec", defaultProps: { pairs: "Status: Open\nRoom: 3" } },
+  { type: "table", label: "Table", glyph: "▦", category: "Text", defaultH: 6, description: "Rows and columns", keywords: "grid data", defaultProps: { content: "Name, Status\nDoor, Locked\nLights, On", header: true } },
+  { type: "definition", label: "Definition", glyph: "𝐃", category: "Text", defaultH: 4, description: "Term and meaning", keywords: "word glossary", defaultProps: { term: "Word", meaning: "Its meaning." } },
+  { type: "divider", label: "Divider", glyph: "—", category: "Text", defaultH: 1, description: "Horizontal rule", keywords: "rule line separator hr", defaultProps: {} },
+  { type: "spacer", label: "Spacer", glyph: "␣", category: "Text", defaultH: 2, description: "Empty breathing room", keywords: "gap blank space", defaultProps: {} },
+
+  // Media & identity
+  { type: "image", label: "Image", glyph: "▣", category: "Media", defaultH: 7, description: "Picture from a URL", keywords: "photo picture media", defaultProps: { url: "https://picsum.photos/800/600?grayscale", fit: "cover" } },
+  { type: "icon", label: "Icon", glyph: "★", category: "Media", defaultH: 5, description: "A big symbol or emoji", keywords: "symbol emoji glyph", defaultProps: { symbol: "★", label: "" } },
+  { type: "avatar", label: "Avatar", glyph: "☻", category: "Media", defaultH: 5, description: "Photo, name and role", keywords: "person profile face", defaultProps: { url: "https://i.pravatar.cc/200", name: "Name", role: "" } },
+  { type: "badge", label: "Badge", glyph: "◖", category: "Media", defaultH: 2, description: "A small pill", keywords: "tag chip status", defaultProps: { text: "Badge" } },
+  { type: "nameTag", label: "Name tag", glyph: "🪪", category: "Media", defaultH: 4, description: "Large name and subtitle", keywords: "desk identity title", defaultProps: { name: "Your Name", subtitle: "" } },
+  { type: "link", label: "Link", glyph: "↗", category: "Media", defaultH: 3, description: "A prominent URL", keywords: "url website href", defaultProps: { label: "Open", url: "https://example.com" } },
+
+  // Numbers
+  { type: "stat", label: "Stat", glyph: "№", category: "Numbers", defaultH: 5, description: "Big number and label", keywords: "kpi number metric count", defaultProps: { value: "0", label: "Label" } },
+  { type: "metric", label: "Metric", glyph: "±", category: "Numbers", defaultH: 5, description: "Value, unit and delta", keywords: "kpi change trend", defaultProps: { label: "Metric", value: "0", unit: "", delta: "" } },
+  { type: "progress", label: "Progress", glyph: "▰", category: "Numbers", defaultH: 3, description: "A progress bar", keywords: "percent bar completion", defaultProps: { label: "", value: 50 } },
+  { type: "gauge", label: "Gauge", glyph: "◔", category: "Numbers", defaultH: 6, description: "A ring gauge", keywords: "percent ring dial", defaultProps: { label: "", value: 70 } },
+  { type: "rating", label: "Rating", glyph: "✦", category: "Numbers", defaultH: 3, description: "Stars out of five", keywords: "stars score review", defaultProps: { value: 4, label: "" } },
+
+  // Time
+  { type: "clock", label: "Clock", glyph: "◷", category: "Time", defaultH: 4, description: "Time and date", keywords: "time date now", defaultProps: { showDate: true } },
+  { type: "worldClock", label: "World clock", glyph: "🌐", category: "Time", defaultH: 4, description: "Time in a timezone", keywords: "timezone city utc", defaultProps: { label: "London", timeZone: "Europe/London" } },
+  { type: "analogClock", label: "Analog clock", glyph: "◴", category: "Time", defaultH: 7, description: "Clock with hands", keywords: "time round dial", defaultProps: { label: "" } },
+  { type: "countdown", label: "Countdown", glyph: "⏳", category: "Time", defaultH: 4, description: "Time to a moment", keywords: "timer until deadline", defaultProps: { label: "Countdown", target: "2027-01-01T00:00:00" } },
+  { type: "daysUntil", label: "Days until", glyph: "⌛", category: "Time", defaultH: 4, description: "Days to a date", keywords: "until event date", defaultProps: { label: "New Year", target: "2027-01-01" } },
+  { type: "timer", label: "Days since", glyph: "⏱", category: "Time", defaultH: 5, description: "Days since a date", keywords: "since streak counter", defaultProps: { label: "Days since", since: "2026-01-01" } },
+  { type: "dateBadge", label: "Date badge", glyph: "▤", category: "Time", defaultH: 6, description: "Calendar-tile date", keywords: "today day month", defaultProps: { label: "" } },
+  { type: "weekNumber", label: "Week number", glyph: "W", category: "Time", defaultH: 4, description: "ISO week of the year", keywords: "week iso", defaultProps: { label: "Week" } },
+
+  // Nature
+  { type: "weather", label: "Weather", glyph: "☼", category: "Nature", defaultH: 5, description: "Current conditions", keywords: "temperature forecast sun rain", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "moonPhase", label: "Moon phase", glyph: "☾", category: "Nature", defaultH: 6, description: "Tonight's moon", keywords: "lunar moon", defaultProps: { label: "" } },
+  { type: "sunriseSunset", label: "Sun times", glyph: "☀", category: "Nature", defaultH: 5, description: "Sunrise and sunset", keywords: "sunrise sunset dawn dusk", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+
+  // Info
+  { type: "calendar", label: "Calendar", glyph: "🗓", category: "Info", defaultH: 8, description: "Upcoming ICS events", keywords: "agenda events ics schedule", defaultProps: { source: "ics", url: "https://example.com/calendar.ics", maxEvents: 5 } },
+  { type: "tasks", label: "To-do list", glyph: "✔", category: "Info", defaultH: 6, description: "Open items from a list", keywords: "todo tasks checklist", defaultProps: { listId: "default", maxItems: 7 } },
+  { type: "queue", label: "Queue board", glyph: "⊟", category: "Info", defaultH: 8, description: "Now-serving counter", keywords: "clinic serving number waiting", defaultProps: { queueId: "default", title: "Now serving" } },
+  { type: "hours", label: "Opening hours", glyph: "◷", category: "Info", defaultH: 6, description: "Days and times", keywords: "hours schedule open", defaultProps: { content: "Mon–Fri: 9–5\nSat: 10–2\nSun: closed" } },
+  { type: "menuList", label: "Menu", glyph: "≡", category: "Info", defaultH: 6, description: "Items and prices", keywords: "cafe price list menu", defaultProps: { content: "Espresso | 120\nLatte | 150\nCold brew | 180" } },
+
+  // Smart home
+  { type: "deviceStatus", label: "Device status", glyph: "◉", category: "Smart home", defaultH: 4, description: "On/off indicator", keywords: "light switch home assistant", defaultProps: { label: "Living room", state: "off" } },
+  { type: "sensor", label: "Sensor", glyph: "∿", category: "Smart home", defaultH: 4, description: "A sensor reading", keywords: "humidity temperature value home", defaultProps: { label: "Humidity", value: "48", unit: "%" } },
+  { type: "thermostat", label: "Thermostat", glyph: "🌡", category: "Smart home", defaultH: 4, description: "A temperature", keywords: "thermostat climate home", defaultProps: { label: "Thermostat", temperature: 22, unit: "C" } },
+
+  // ===== v0.6 — text & structure =====
+  { type: "lead", label: "Lead", glyph: "¶", category: "Text", defaultH: 4, description: "Large intro paragraph", keywords: "intro lede summary", defaultProps: { content: "A larger introduction that sets the tone." } },
+  { type: "pullquote", label: "Pull quote", glyph: "❞", category: "Text", defaultH: 5, description: "Big emphasized quote", keywords: "quote highlight", defaultProps: { content: "The quiet thing, said loudly.", author: "" } },
+  { type: "dropCap", label: "Drop cap", glyph: "Ꭺ", category: "Text", defaultH: 6, description: "Paragraph with a large initial", keywords: "paragraph story prose", defaultProps: { content: "Once upon a calm morning, the screen showed only what mattered, and nothing more." } },
+  { type: "finePrint", label: "Fine print", glyph: "ⁿ", category: "Text", defaultH: 2, description: "Small footnote text", keywords: "footnote legal small", defaultProps: { content: "Terms apply. Prices include tax." } },
+  { type: "numberedHeading", label: "Numbered heading", glyph: "№", category: "Text", defaultH: 3, description: "Number + title", keywords: "section step numbered", defaultProps: { number: "01", content: "Section title" } },
+  { type: "verse", label: "Verse", glyph: "♪", category: "Text", defaultH: 5, description: "Centered stanza", keywords: "poem lyrics stanza", defaultProps: { content: "first line\nsecond line\nthird line" } },
+  { type: "ascii", label: "ASCII art", glyph: "⌨", category: "Text", defaultH: 5, description: "Monospace art", keywords: "ascii mono art", defaultProps: { content: "  /\\_/\\\n ( o.o )\n  > ^ <" } },
+  { type: "tagCloud", label: "Tags", glyph: "#", category: "Text", defaultH: 4, description: "A row of tags", keywords: "tags chips keywords", defaultProps: { tags: "calm, glance, minimal, quiet, focus" } },
+  { type: "timeline", label: "Timeline", glyph: "┊", category: "Text", defaultH: 6, description: "Time-stamped events", keywords: "schedule agenda events", defaultProps: { items: "09:00 | Standup\n12:30 | Lunch\n16:00 | Review" } },
+  { type: "steps", label: "Steps", glyph: "⟫", category: "Text", defaultH: 6, description: "Numbered steps", keywords: "how-to guide numbered", defaultProps: { items: "Plug in the screen\nConnect to Wi-Fi\nClaim with the code" } },
+  { type: "faq", label: "FAQ", glyph: "?", category: "Text", defaultH: 6, description: "Question & answer pairs", keywords: "faq questions help", defaultProps: { items: "Is it free? | Yes, MIT licensed.\nNeed an account? | One per install." } },
+  { type: "prosCons", label: "Pros / cons", glyph: "⊕", category: "Text", defaultH: 6, description: "Two-column list", keywords: "pros cons compare", defaultProps: { pros: "Quiet\nFast\nYours", cons: "No color\nNo apps" } },
+
+  // ===== v0.6 — charts =====
+  { type: "sparkline", label: "Sparkline", glyph: "∿", category: "Charts", defaultH: 5, description: "Tiny line chart", keywords: "line trend chart graph", defaultProps: { values: "3,5,4,6,7,6,8,7,9", label: "" } },
+  { type: "barChart", label: "Bar chart", glyph: "▁", category: "Charts", defaultH: 6, description: "Mini vertical bars", keywords: "bars chart graph", defaultProps: { values: "4,8,6,10,7,9", label: "" } },
+  { type: "progressRing", label: "Progress ring", glyph: "◍", category: "Charts", defaultH: 6, description: "Circular percent", keywords: "ring percent circle", defaultProps: { value: 64, label: "" } },
+  { type: "dotProgress", label: "Dot progress", glyph: "⣿", category: "Charts", defaultH: 4, description: "Filled dots out of N", keywords: "progress dots count", defaultProps: { value: 7, total: 10, label: "" } },
+  { type: "scoreboard", label: "Scoreboard", glyph: "⚀", category: "Charts", defaultH: 6, description: "Two scores", keywords: "score match versus game", defaultProps: { leftLabel: "Home", leftScore: "2", rightLabel: "Away", rightScore: "1" } },
+  { type: "fraction", label: "Fraction", glyph: "½", category: "Charts", defaultH: 6, description: "Numerator over denominator", keywords: "fraction ratio out of", defaultProps: { numerator: "3", denominator: "10", label: "" } },
+  { type: "tally", label: "Tally", glyph: "≣", category: "Charts", defaultH: 4, description: "Tally marks", keywords: "count tally marks", defaultProps: { value: 12, label: "" } },
+  { type: "heatStrip", label: "Heat strip", glyph: "▦", category: "Charts", defaultH: 4, description: "Intensity cells", keywords: "heatmap intensity activity", defaultProps: { values: "0,1,2,3,2,4,1,0,3,4,2,1", label: "" } },
+  { type: "trend", label: "Trend", glyph: "↗", category: "Charts", defaultH: 5, description: "Value with a delta", keywords: "trend change delta kpi", defaultProps: { value: "1,284", delta: "+12%", label: "Visitors" } },
+  { type: "kpiSpark", label: "KPI + spark", glyph: "⌁", category: "Charts", defaultH: 6, description: "Value over a sparkline", keywords: "kpi metric sparkline", defaultProps: { value: "92", unit: "%", label: "Uptime", values: "88,90,89,93,92" } },
+
+  // ===== v0.6 — time computed =====
+  { type: "dayProgress", label: "Day progress", glyph: "◐", category: "Time", defaultH: 3, description: "Percent of day elapsed", keywords: "day progress percent", defaultProps: { label: "Day" } },
+  { type: "yearProgress", label: "Year progress", glyph: "◓", category: "Time", defaultH: 3, description: "Percent of year elapsed", keywords: "year progress percent", defaultProps: { label: "Year" } },
+  { type: "weekProgress", label: "Week progress", glyph: "◑", category: "Time", defaultH: 3, description: "Percent of week elapsed", keywords: "week progress percent", defaultProps: { label: "Week" } },
+  { type: "greeting", label: "Greeting", glyph: "☺", category: "Time", defaultH: 4, description: "Good morning / evening", keywords: "greeting hello welcome", defaultProps: { name: "" } },
+  { type: "romanClock", label: "Roman clock", glyph: "Ⅻ", category: "Time", defaultH: 5, description: "Time in Roman numerals", keywords: "roman clock time", defaultProps: { label: "" } },
+  { type: "binaryClock", label: "Binary clock", glyph: "⊚", category: "Time", defaultH: 6, description: "Time as binary dots", keywords: "binary clock time geek", defaultProps: { label: "" } },
+  { type: "seasonClock", label: "Season", glyph: "❄", category: "Time", defaultH: 6, description: "Current season", keywords: "season winter summer", defaultProps: { hemisphere: "north", label: "" } },
+  { type: "zodiac", label: "Zodiac", glyph: "♈", category: "Time", defaultH: 6, description: "Star sign from a date", keywords: "zodiac star sign", defaultProps: { date: "2000-08-15", label: "" } },
+
+  // ===== v0.6 — trackers =====
+  { type: "habitTracker", label: "Habit tracker", glyph: "•", category: "Trackers", defaultH: 5, description: "A week of dots", keywords: "habit streak week", defaultProps: { label: "This week", days: "x x x . x . ." } },
+  { type: "streak", label: "Streak", glyph: "✶", category: "Trackers", defaultH: 5, description: "Big day count", keywords: "streak days count", defaultProps: { value: 42, label: "day streak" } },
+  { type: "waterTracker", label: "Water", glyph: "▮", category: "Trackers", defaultH: 5, description: "Glasses out of a goal", keywords: "water hydration glasses", defaultProps: { value: 5, total: 8, label: "Water" } },
+  { type: "wifiCard", label: "Wi-Fi card", glyph: "≋", category: "Trackers", defaultH: 5, description: "Network + password", keywords: "wifi guest password cafe", defaultProps: { ssid: "Café Guest", password: "staycalm", label: "Wi-Fi" } },
+
+  // ===== v0.6 — live (server-fetched, keyless) =====
+  { type: "forecast", label: "Forecast", glyph: "☁", category: "Live", defaultH: 7, description: "Multi-day weather", keywords: "weather forecast days", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "", days: 4 } },
+  { type: "windCompass", label: "Wind", glyph: "➤", category: "Live", defaultH: 7, description: "Wind speed & direction", keywords: "wind compass weather", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "uvIndex", label: "UV index", glyph: "☀", category: "Live", defaultH: 5, description: "Today's UV index", keywords: "uv sun index weather", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "airQuality", label: "Air quality", glyph: "⊙", category: "Live", defaultH: 6, description: "AQI and PM2.5", keywords: "air quality aqi pollution", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "precip", label: "Rain chance", glyph: "☂", category: "Live", defaultH: 5, description: "Precipitation probability", keywords: "rain precipitation weather", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "headlines", label: "Headlines", glyph: "▤", category: "Live", defaultH: 8, description: "Titles from an RSS feed", keywords: "news rss feed headlines", defaultProps: { url: "https://hnrss.org/frontpage", max: 5, label: "Headlines" } },
+  { type: "currencyRate", label: "Currency", glyph: "$", category: "Live", defaultH: 5, description: "Live exchange rate", keywords: "currency forex exchange money", defaultProps: { from: "USD", to: "INR", label: "" } },
+  { type: "cryptoPrice", label: "Crypto", glyph: "₿", category: "Live", defaultH: 5, description: "Live coin price", keywords: "crypto bitcoin price", defaultProps: { coin: "bitcoin", vs: "usd", label: "" } },
+  { type: "onThisDay", label: "On this day", glyph: "✦", category: "Live", defaultH: 8, description: "Historical events today", keywords: "history wikipedia events", defaultProps: { max: 4, label: "On this day" } },
+  { type: "wikiToday", label: "Wikipedia", glyph: "W", category: "Live", defaultH: 7, description: "A Wikipedia summary", keywords: "wikipedia article reference", defaultProps: { title: "", label: "From Wikipedia" } },
+  { type: "quoteLive", label: "Quote of the day", glyph: "“", category: "Live", defaultH: 5, description: "A fresh daily quote", keywords: "quote inspiration daily", defaultProps: { label: "" } },
+  { type: "factLive", label: "Fact of the day", glyph: "✓", category: "Live", defaultH: 5, description: "A random fact", keywords: "fact trivia daily", defaultProps: { label: "Did you know" } },
+  { type: "hackerNews", label: "Hacker News", glyph: "Y", category: "Live", defaultH: 8, description: "Top story titles", keywords: "hacker news tech headlines", defaultProps: { max: 5, label: "Hacker News" } },
+  { type: "githubStats", label: "GitHub stats", glyph: "★", category: "Live", defaultH: 5, description: "Stars or followers", keywords: "github stars followers", defaultProps: { user: "torvalds", repo: "", label: "" } },
+  { type: "nextHoliday", label: "Next holiday", glyph: "▣", category: "Live", defaultH: 5, description: "Upcoming public holiday", keywords: "holiday public next", defaultProps: { country: "IN", label: "Next holiday" } },
+  { type: "issNow", label: "ISS position", glyph: "⊕", category: "Live", defaultH: 5, description: "Live ISS coordinates", keywords: "iss space station orbit", defaultProps: { label: "ISS now" } },
+  { type: "jsonFeed", label: "Custom URL", glyph: "◇", category: "Live", defaultH: 6, description: "Any JSON URL → a {{template}}", keywords: "json api custom plugin url webhook integration byo", defaultProps: { url: "https://api.frankfurter.app/latest?from=USD&to=INR", template: "USD → INR\n{{rates.INR}}", label: "Custom feed", refreshSeconds: 900 } },
+];
+
+export const CATEGORIES: BlockCategory[] = ["Text", "Media", "Numbers", "Charts", "Time", "Nature", "Trackers", "Info", "Live", "Smart home"];
+
+export const blockFor = (type: WidgetType): BlockDef => BLOCKS.find((b) => b.type === type)!;
+
+let counter = 0;
+export function newWidgetId(): string {
+  counter += 1;
+  return `w${Date.now().toString(36)}${counter.toString(36)}`;
+}
+
+export function makeBlock(type: WidgetType): WidgetT {
+  const block = blockFor(type);
+  return {
+    id: newWidgetId(),
+    type,
+    width: 1,
+    style: { invert: false, align: "start", valign: "top" },
+    props: structuredClone(block.defaultProps),
+  } as WidgetT;
+}
+
+// Which prop holds a block's primary text — what inline editing types into.
+export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
+  text: "content",
+  heading: "content",
+  subheading: "content",
+  label: "content",
+  quote: "content",
+  callout: "content",
+  banner: "content",
+  code: "content",
+  bulletList: "items",
+  numberedList: "items",
+  checklist: "items",
+  keyValue: "pairs",
+  table: "content",
+  hours: "content",
+  menuList: "content",
+  definition: "meaning",
+  stat: "value",
+  badge: "text",
+  nameTag: "name",
+  // v0.6
+  lead: "content",
+  pullquote: "content",
+  dropCap: "content",
+  finePrint: "content",
+  numberedHeading: "content",
+  verse: "content",
+  ascii: "content",
+  tagCloud: "tags",
+  timeline: "items",
+  steps: "items",
+  faq: "items",
+};
+
+// Single-line types: Enter commits and starts a new text line below.
+export const SINGLE_LINE = new Set<WidgetType>([
+  "heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading",
+]);

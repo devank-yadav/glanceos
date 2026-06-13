@@ -1,0 +1,18 @@
+{
+  "name": "glanceos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A calm, glanceable dashboard layer for any screen.",
+  "license": "MIT",
+  "author": "Devank Yadav",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

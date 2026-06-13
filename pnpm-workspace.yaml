@@ -1,0 +1,11 @@
+# devices/* is deliberately NOT a workspace — it holds non-TS artifacts
+# (pi-gen image configs, ESP32 firmware) with their own toolchains.
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Dependencies allowed to run their build scripts (pnpm blocks the rest).
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
