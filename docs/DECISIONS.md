@@ -222,3 +222,17 @@ ADR-lite log. Every pinned choice gets an entry **when it's made** — context, 
 - **Why:** Composition over invention — every layer rides an existing primitive (the `style`-style optional field, the `cached()` fetcher shape, `data[b.id]`, the `geometry.blocks` boxes). Secrets never leave the server; bound blocks degrade to props; CI stays offline.
 - **Verified live:** a bar chart bound to CoinGecko's 7-day series renders 8 live bars; a list bound to GitHub issues (via a connection) shows real titles; a cloud-metadata URL is blocked → null.
 - **Revisit when:** OAuth2 providers (Google/Microsoft/Notion/Apple — scaffolded design in the spec, gated on user-supplied client id/secret) and in-place table-cell editing land.
+
+### 030 — Studio: Notion-true editing, handle menu, 39 sizes, modern chrome
+- **Status:** accepted · 2026-06-13
+- **Context:** The Studio had 4 raw screen sizes, a permanent on-select toolbar, an always-visible sidebar with board settings, an invisible drag (text-only chip), double-click-to-insert-text, and Unicode-glyph chrome. The owner wanted it to feel exactly like Notion and look great. Designed via a 6-dimension audit workflow → one consolidated plan.
+- **Decision:**
+  - **Document typing.** Typing anywhere on the board creates/continues a text line — text is part of the document, not an inserted object; a fresh board starts blank; `/` inserts non-text blocks; **double-click no longer inserts** (removed `onBackgroundDbl`). Global `p`/`?` hotkeys dropped so every printable key types (present/help are buttons). New text lines are born in ONE commit (`insertTextWith`) to avoid an insert-then-append docRef race.
+  - **Handle menu.** The ⠿ handle does double duty: a **click opens** a vertical block-options menu (`BlockMenu`); a **drag moves** (4px threshold via `handleDrag.started`, no timer). The permanent floating toolbar is gone. `menuId` is NOT cleared by the selection-change effect (the `menuId === primary` render gate hides stale menus).
+  - **Drag preview.** `dragLayer.show(label, glyph)` builds a glass card (glyph + label) centred on the cursor; the source block dims.
+  - **39 screen presets** (`ScreenPreset[]`, id/label/w/h/category) grouped by category in an `<optgroup>` select + a hover size label on the stage; legacy `"1920×1080"`-style keys migrate to ids.
+  - **Sidebar** collapses/pins Notion-style (`sidebarPinned` persisted; unpinned = floating overlay + reveal button); **Board settings** moved behind a `settings-toggle`; **`+ Block` removed** from the topbar.
+  - **Icons:** a dependency-free inline-SVG set (`editor/icons.tsx`, ~22 Feather-style icons) replaces Unicode glyphs across the chrome; plus selection emphasis, focus-visible rings, save-chip icons, responsive topbar.
+- **Why:** Compose on the existing primitives (geometry boxes, the gesture/commit model, the `style`-style optional fields). The one structural fix (single-commit text insert) removes a real state race. zod stays out of the screen; the studio chunk is ~45 kB gzip.
+- **Verified live:** type-to-create text + continue typing; double-click inserts nothing; `/` opens the menu; ⠿ click opens the vertical menu while drag still moves; 39 grouped sizes switch + persist; sidebar collapse/pin; board settings hidden by default; no Unicode glyphs left in chrome.
+- **Revisit when:** in-place per-cell table editing; converting the ~200 block-palette glyphs to SVG; a true caret renderer over the preview iframe.
