@@ -139,6 +139,60 @@ export const BLOCKS: BlockDef[] = [
   { type: "nextHoliday", label: "Next holiday", glyph: "▣", category: "Live", defaultH: 5, description: "Upcoming public holiday", keywords: "holiday public next", defaultProps: { country: "IN", label: "Next holiday" } },
   { type: "issNow", label: "ISS position", glyph: "⊕", category: "Live", defaultH: 5, description: "Live ISS coordinates", keywords: "iss space station orbit", defaultProps: { label: "ISS now" } },
   { type: "jsonFeed", label: "Custom URL", glyph: "◇", category: "Live", defaultH: 6, description: "Any JSON URL → a {{template}}", keywords: "json api custom plugin url webhook integration byo", defaultProps: { url: "https://api.frankfurter.app/latest?from=USD&to=INR", template: "USD → INR\n{{rates.INR}}", label: "Custom feed", refreshSeconds: 900 } },
+
+  // ===== v0.8 — text & structure =====
+  { type: "signature", label: "Signature", glyph: "✍", category: "Text", defaultH: 4, description: "Name over a signature line", keywords: "sign name signoff", defaultProps: { name: "Your Name", role: "" } },
+  { type: "address", label: "Address", glyph: "⌖", category: "Text", defaultH: 5, description: "A postal address block", keywords: "address location contact", defaultProps: { content: "221B Baker Street\nLondon NW1\nUnited Kingdom" } },
+  { type: "byline", label: "Byline", glyph: "✑", category: "Text", defaultH: 2, description: "Author and date", keywords: "byline author credit", defaultProps: { author: "Author", date: "Today" } },
+  { type: "legend", label: "Legend", glyph: "⊜", category: "Text", defaultH: 5, description: "A key of symbols", keywords: "legend key symbols", defaultProps: { items: "● Open\n○ Closed\n◐ Partial" } },
+  { type: "breadcrumb", label: "Breadcrumb", glyph: "›", category: "Text", defaultH: 2, description: "A path trail", keywords: "breadcrumb path nav", defaultProps: { path: "Home / Section / Page" } },
+  { type: "noticeBar", label: "Notice", glyph: "⚠", category: "Text", defaultH: 3, description: "A callout bar with an icon", keywords: "notice warning alert", defaultProps: { content: "Heads up — something to know.", icon: "⚠" } },
+  { type: "keyCombo", label: "Shortcut", glyph: "⌘", category: "Text", defaultH: 3, description: "A keyboard shortcut", keywords: "keyboard shortcut keys hotkey", defaultProps: { keys: "Cmd S", label: "" } },
+  { type: "dividerLabeled", label: "Labeled rule", glyph: "—", category: "Text", defaultH: 1, description: "A divider with a label", keywords: "divider rule section", defaultProps: { label: "SECTION" } },
+
+  // ===== v0.8 — visual =====
+  { type: "iconRow", label: "Icon row", glyph: "✦", category: "Media", defaultH: 4, description: "A row of big symbols", keywords: "icons symbols row emoji", defaultProps: { symbols: "★ ☀ ☾ ✶ ◆" } },
+  { type: "statRow", label: "Stat row", glyph: "⌗", category: "Numbers", defaultH: 5, description: "Several mini stats in a row", keywords: "stats kpis row", defaultProps: { items: "12 | Sales\n89% | Uptime\n4.8 | Rating" } },
+  { type: "spacerDots", label: "Dot spacer", glyph: "⋯", category: "Text", defaultH: 1, description: "A quiet · · · break", keywords: "spacer dots break", defaultProps: {} },
+  { type: "frame", label: "Frame", glyph: "▢", category: "Text", defaultH: 5, description: "A labeled bordered box", keywords: "frame box border", defaultProps: { label: "NOTE", content: "Framed content." } },
+
+  // ===== v0.8 — charts =====
+  { type: "lineChart", label: "Line chart", glyph: "📈", category: "Charts", defaultH: 6, description: "A larger line chart", keywords: "line chart graph trend", defaultProps: { values: "3,5,4,6,7,6,8,7,9,8,10", label: "" } },
+  { type: "areaChart", label: "Area chart", glyph: "◣", category: "Charts", defaultH: 6, description: "A filled area chart", keywords: "area chart fill graph", defaultProps: { values: "3,5,4,6,7,6,8,7,9", label: "" } },
+  { type: "bulletGraph", label: "Bullet graph", glyph: "▸", category: "Charts", defaultH: 4, description: "Value vs target bar", keywords: "bullet target goal kpi", defaultProps: { value: 72, target: 80, label: "" } },
+  { type: "horizontalBars", label: "H-bars", glyph: "▬", category: "Charts", defaultH: 6, description: "Labeled horizontal bars", keywords: "bars chart horizontal", defaultProps: { items: "Mon | 8\nTue | 5\nWed | 9\nThu | 6" } },
+  { type: "rankingList", label: "Ranking", glyph: "❶", category: "Charts", defaultH: 6, description: "A ranked bar list", keywords: "ranking leaderboard top", defaultProps: { items: "Alice | 92\nBob | 85\nCara | 78" } },
+  { type: "waffle", label: "Waffle", glyph: "▦", category: "Charts", defaultH: 8, description: "A 100-dot percent grid", keywords: "waffle percent grid", defaultProps: { value: 64, label: "" } },
+  { type: "signalBars", label: "Signal", glyph: "▮", category: "Charts", defaultH: 5, description: "Strength bars", keywords: "signal strength bars wifi", defaultProps: { value: 3, label: "Signal" } },
+  { type: "thermometer", label: "Thermometer", glyph: "▯", category: "Charts", defaultH: 7, description: "A vertical fill gauge", keywords: "thermometer level fill", defaultProps: { value: 22, min: 0, max: 40, unit: "°", label: "" } },
+  { type: "comparison", label: "Comparison", glyph: "⇄", category: "Charts", defaultH: 4, description: "A vs B split bar", keywords: "comparison versus split", defaultProps: { leftLabel: "A", leftValue: 60, rightLabel: "B", rightValue: 40 } },
+  { type: "percentList", label: "Percent split", glyph: "◔", category: "Charts", defaultH: 4, description: "A stacked percent bar", keywords: "percent breakdown split stack", defaultProps: { items: "Design | 40\nDev | 35\nQA | 25" } },
+
+  // ===== v0.8 — time & calendar =====
+  { type: "monthCalendar", label: "Month", glyph: "▦", category: "Time", defaultH: 10, description: "This month, today marked", keywords: "calendar month grid date", defaultProps: { label: "" } },
+  { type: "weekStrip", label: "Week strip", glyph: "▤", category: "Time", defaultH: 5, description: "Mon–Sun, today marked", keywords: "week days strip", defaultProps: { label: "" } },
+  { type: "nowNext", label: "Now / next", glyph: "▷", category: "Time", defaultH: 5, description: "Current + next from a schedule", keywords: "now next agenda schedule", defaultProps: { items: "09:00 | Standup\n12:30 | Lunch\n16:00 | Review" } },
+  { type: "ageCounter", label: "Age", glyph: "⧗", category: "Time", defaultH: 5, description: "Years since a date", keywords: "age years since birthday", defaultProps: { since: "2000-01-01", label: "Age" } },
+  { type: "anniversary", label: "Anniversary", glyph: "❤", category: "Time", defaultH: 4, description: "Days until the next occurrence", keywords: "anniversary recurring yearly", defaultProps: { date: "2020-06-13", label: "Anniversary" } },
+  { type: "timeBlocks", label: "Time blocks", glyph: "▣", category: "Time", defaultH: 6, description: "Today's time blocks", keywords: "schedule blocks plan day", defaultProps: { items: "09–10 | Focus\n10–11 | Email\n11–13 | Build" } },
+  { type: "shiftStatus", label: "Open hours", glyph: "◷", category: "Time", defaultH: 5, description: "Open now? from hours", keywords: "open closed hours shift", defaultProps: { open: 9, close: 17, label: "" } },
+  { type: "pomodoro", label: "Pomodoro", glyph: "◓", category: "Time", defaultH: 5, description: "Work / break minutes", keywords: "pomodoro focus timer", defaultProps: { workMin: 25, breakMin: 5, label: "" } },
+
+  // ===== v0.8 — trackers =====
+  { type: "monthHabit", label: "Month habit", glyph: "⣿", category: "Trackers", defaultH: 5, description: "A month of habit dots", keywords: "habit month dots streak", defaultProps: { label: "This month", days: "x x . x x . . x x x . x" } },
+  { type: "savingsGoal", label: "Savings goal", glyph: "▰", category: "Trackers", defaultH: 5, description: "Saved vs target", keywords: "savings goal money budget", defaultProps: { saved: 6500, target: 10000, unit: "₹", label: "Savings" } },
+  { type: "readingNow", label: "Reading", glyph: "▤", category: "Trackers", defaultH: 5, description: "Book + progress", keywords: "reading book progress", defaultProps: { title: "A Calm Book", author: "Anon", percent: 45 } },
+  { type: "weightTrend", label: "Weight trend", glyph: "∿", category: "Trackers", defaultH: 6, description: "A measurement trend", keywords: "weight trend measurement spark", defaultProps: { values: "72,71.6,71.4,71,70.8", unit: "kg", label: "Weight" } },
+  { type: "moodWeek", label: "Mood week", glyph: "☻", category: "Trackers", defaultH: 5, description: "A week of moods", keywords: "mood week faces feelings", defaultProps: { moods: "🙂 😐 🙂 😀 😐 🙁 🙂" } },
+  { type: "checklistProgress", label: "Checklist %", glyph: "☑", category: "Trackers", defaultH: 6, description: "A checklist with progress", keywords: "checklist progress tasks done", defaultProps: { items: "x Ship\nx Test\nWrite docs\nCelebrate", label: "Tasks" } },
+
+  // ===== v0.8 — signage & office =====
+  { type: "roomStatus", label: "Room status", glyph: "◫", category: "Info", defaultH: 6, description: "Free / busy", keywords: "room free busy meeting booking", defaultProps: { room: "Room 3", status: "free" } },
+  { type: "directory", label: "Directory", glyph: "≡", category: "Info", defaultH: 7, description: "Names → locations", keywords: "directory wayfinding rooms", defaultProps: { items: "Dr. Rao | Room 3\nReception | Floor 1\nPharmacy | Floor 2" } },
+  { type: "eventBanner", label: "Event", glyph: "✸", category: "Info", defaultH: 5, description: "A big event + time", keywords: "event banner announce when", defaultProps: { title: "Annual Meetup", when: "Sat 6 PM · Hall A" } },
+  { type: "openSign", label: "Open sign", glyph: "⊙", category: "Info", defaultH: 6, description: "OPEN / CLOSED", keywords: "open closed sign shop", defaultProps: { open: true, label: "" } },
+  { type: "nowPlaying", label: "Now playing", glyph: "♪", category: "Info", defaultH: 5, description: "Track + artist", keywords: "music now playing song", defaultProps: { title: "Quiet Song", artist: "Someone" } },
+  { type: "splitFlap", label: "Split-flap", glyph: "❑", category: "Info", defaultH: 4, description: "A departures-board word", keywords: "splitflap board departures retro", defaultProps: { text: "DEPARTURES" } },
 ];
 
 export const CATEGORIES: BlockCategory[] = ["Text", "Media", "Numbers", "Charts", "Time", "Nature", "Trackers", "Info", "Live", "Smart home"];
@@ -195,9 +249,27 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   timeline: "items",
   steps: "items",
   faq: "items",
+  // v0.8
+  signature: "name",
+  address: "content",
+  byline: "author",
+  breadcrumb: "path",
+  noticeBar: "content",
+  frame: "content",
+  eventBanner: "title",
+  nowPlaying: "title",
+  splitFlap: "text",
+  roomStatus: "room",
 };
 
-// Single-line types: Enter commits and starts a new text line below.
+// Single-line types: never hold their own newlines.
 export const SINGLE_LINE = new Set<WidgetType>([
   "heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading",
+]);
+
+// Prose types where pressing Enter starts a NEW text line below (Notion-style),
+// like typing a document. Shift+Enter still inserts a literal newline.
+// Everything else editable (lists, code, callout, tables…) keeps Enter = newline.
+export const ENTER_BREAKS = new Set<WidgetType>([
+  "text", "heading", "subheading", "lead", "pullquote", "quote", "label", "banner", "numberedHeading",
 ]);

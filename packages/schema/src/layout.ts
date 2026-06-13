@@ -186,6 +186,60 @@ export const JsonFeedProps = z.object({
   refreshSeconds: z.number().int().min(30).max(86400).default(900),
 });
 
+// ===== v0.8 blocks: text & structure =====
+export const SignatureProps = z.object({ name: line(60).default("Your Name"), role: line(60).default("") });
+export const AddressProps = z.object({ content: line(300).default("221B Baker Street\nLondon NW1\nUnited Kingdom") });
+export const BylineProps = z.object({ author: line(60).default("Author"), date: line(40).default("Today") });
+export const LegendProps = z.object({ items: line(400).default("● Open\n○ Closed\n◐ Partial") });
+export const BreadcrumbProps = z.object({ path: line(200).default("Home / Section / Page") });
+export const NoticeBarProps = z.object({ content: line(200).default("Heads up — something to know."), icon: line(8).default("⚠") });
+export const KeyComboProps = z.object({ keys: line(80).default("Cmd S"), label: line(60).default("") });
+export const DividerLabeledProps = z.object({ label: line(60).default("SECTION") });
+
+// ===== v0.8 blocks: visual & layout =====
+export const IconRowProps = z.object({ symbols: line(120).default("★ ☀ ☾ ✶ ◆") });
+export const StatRowProps = z.object({ items: line(400).default("12 | Sales\n89% | Uptime\n4.8 | Rating") });
+export const SpacerDotsProps = z.object({});
+export const FrameProps = z.object({ label: line(40).default("NOTE"), content: line(300).default("Framed content.") });
+
+// ===== v0.8 blocks: charts =====
+export const LineChartProps = z.object({ values: line(400).default("3,5,4,6,7,6,8,7,9,8,10"), label: line(60).default("") });
+export const AreaChartProps = z.object({ values: line(400).default("3,5,4,6,7,6,8,7,9"), label: line(60).default("") });
+export const BulletGraphProps = z.object({ value: z.number().default(72), target: z.number().default(80), label: line(60).default("") });
+export const HorizontalBarsProps = z.object({ items: line(600).default("Mon | 8\nTue | 5\nWed | 9\nThu | 6") });
+export const RankingListProps = z.object({ items: line(600).default("Alice | 92\nBob | 85\nCara | 78") });
+export const WaffleProps = z.object({ value: z.number().min(0).max(100).default(64), label: line(60).default("") });
+export const SignalBarsProps = z.object({ value: z.number().int().min(0).max(5).default(3), label: line(60).default("Signal") });
+export const ThermometerProps = z.object({ value: z.number().default(22), min: z.number().default(0), max: z.number().default(40), unit: line(8).default("°"), label: line(60).default("") });
+export const ComparisonProps = z.object({ leftLabel: line(30).default("A"), leftValue: z.number().default(60), rightLabel: line(30).default("B"), rightValue: z.number().default(40) });
+export const PercentListProps = z.object({ items: line(400).default("Design | 40\nDev | 35\nQA | 25") });
+
+// ===== v0.8 blocks: time & calendar (computed) =====
+export const MonthCalendarProps = z.object({ label: line(40).default("") });
+export const WeekStripProps = z.object({ label: line(40).default("") });
+export const NowNextProps = z.object({ items: line(600).default("09:00 | Standup\n12:30 | Lunch\n16:00 | Review") });
+export const AgeCounterProps = z.object({ since: z.string().default("2000-01-01"), label: line(60).default("Age") });
+export const AnniversaryProps = z.object({ date: z.string().default("2020-06-13"), label: line(60).default("Anniversary") });
+export const TimeBlocksProps = z.object({ items: line(600).default("09–10 | Focus\n10–11 | Email\n11–13 | Build") });
+export const ShiftStatusProps = z.object({ open: z.number().int().min(0).max(23).default(9), close: z.number().int().min(0).max(24).default(17), label: line(60).default("") });
+export const PomodoroProps = z.object({ workMin: z.number().int().min(1).max(180).default(25), breakMin: z.number().int().min(1).max(60).default(5), label: line(40).default("") });
+
+// ===== v0.8 blocks: trackers =====
+export const MonthHabitProps = z.object({ label: line(60).default("This month"), days: line(200).default("x x . x x . . x x x . x") });
+export const SavingsGoalProps = z.object({ saved: z.number().default(6500), target: z.number().default(10000), unit: line(8).default("₹"), label: line(60).default("Savings") });
+export const ReadingNowProps = z.object({ title: line(80).default("A Calm Book"), author: line(60).default("Anon"), percent: z.number().min(0).max(100).default(45) });
+export const WeightTrendProps = z.object({ values: line(400).default("72,71.6,71.4,71,70.8"), unit: line(8).default("kg"), label: line(60).default("Weight") });
+export const MoodWeekProps = z.object({ moods: line(80).default("🙂 😐 🙂 😀 😐 🙁 🙂") });
+export const ChecklistProgressProps = z.object({ items: line(600).default("x Ship\nx Test\nWrite docs\nCelebrate"), label: line(60).default("Tasks") });
+
+// ===== v0.8 blocks: signage & office =====
+export const RoomStatusProps = z.object({ room: line(60).default("Room 3"), status: z.enum(["free", "busy"]).default("free") });
+export const DirectoryProps = z.object({ items: line(600).default("Dr. Rao | Room 3\nReception | Floor 1\nPharmacy | Floor 2") });
+export const EventBannerProps = z.object({ title: line(80).default("Annual Meetup"), when: line(60).default("Sat 6 PM · Hall A") });
+export const OpenSignProps = z.object({ open: z.boolean().default(true), label: line(40).default("") });
+export const NowPlayingProps = z.object({ title: line(80).default("Quiet Song"), artist: line(60).default("Someone") });
+export const SplitFlapProps = z.object({ text: line(40).default("DEPARTURES") });
+
 const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}) };
 
 export const Widget = z.discriminatedUnion("type", [
@@ -291,6 +345,54 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("nextHoliday"), props: NextHolidayProps }),
   z.object({ ...b, type: z.literal("issNow"), props: IssNowProps }),
   z.object({ ...b, type: z.literal("jsonFeed"), props: JsonFeedProps }),
+  // v0.8 text & structure
+  z.object({ ...b, type: z.literal("signature"), props: SignatureProps }),
+  z.object({ ...b, type: z.literal("address"), props: AddressProps }),
+  z.object({ ...b, type: z.literal("byline"), props: BylineProps }),
+  z.object({ ...b, type: z.literal("legend"), props: LegendProps }),
+  z.object({ ...b, type: z.literal("breadcrumb"), props: BreadcrumbProps }),
+  z.object({ ...b, type: z.literal("noticeBar"), props: NoticeBarProps }),
+  z.object({ ...b, type: z.literal("keyCombo"), props: KeyComboProps }),
+  z.object({ ...b, type: z.literal("dividerLabeled"), props: DividerLabeledProps }),
+  // v0.8 visual & layout
+  z.object({ ...b, type: z.literal("iconRow"), props: IconRowProps }),
+  z.object({ ...b, type: z.literal("statRow"), props: StatRowProps }),
+  z.object({ ...b, type: z.literal("spacerDots"), props: SpacerDotsProps }),
+  z.object({ ...b, type: z.literal("frame"), props: FrameProps }),
+  // v0.8 charts
+  z.object({ ...b, type: z.literal("lineChart"), props: LineChartProps }),
+  z.object({ ...b, type: z.literal("areaChart"), props: AreaChartProps }),
+  z.object({ ...b, type: z.literal("bulletGraph"), props: BulletGraphProps }),
+  z.object({ ...b, type: z.literal("horizontalBars"), props: HorizontalBarsProps }),
+  z.object({ ...b, type: z.literal("rankingList"), props: RankingListProps }),
+  z.object({ ...b, type: z.literal("waffle"), props: WaffleProps }),
+  z.object({ ...b, type: z.literal("signalBars"), props: SignalBarsProps }),
+  z.object({ ...b, type: z.literal("thermometer"), props: ThermometerProps }),
+  z.object({ ...b, type: z.literal("comparison"), props: ComparisonProps }),
+  z.object({ ...b, type: z.literal("percentList"), props: PercentListProps }),
+  // v0.8 time & calendar
+  z.object({ ...b, type: z.literal("monthCalendar"), props: MonthCalendarProps }),
+  z.object({ ...b, type: z.literal("weekStrip"), props: WeekStripProps }),
+  z.object({ ...b, type: z.literal("nowNext"), props: NowNextProps }),
+  z.object({ ...b, type: z.literal("ageCounter"), props: AgeCounterProps }),
+  z.object({ ...b, type: z.literal("anniversary"), props: AnniversaryProps }),
+  z.object({ ...b, type: z.literal("timeBlocks"), props: TimeBlocksProps }),
+  z.object({ ...b, type: z.literal("shiftStatus"), props: ShiftStatusProps }),
+  z.object({ ...b, type: z.literal("pomodoro"), props: PomodoroProps }),
+  // v0.8 trackers
+  z.object({ ...b, type: z.literal("monthHabit"), props: MonthHabitProps }),
+  z.object({ ...b, type: z.literal("savingsGoal"), props: SavingsGoalProps }),
+  z.object({ ...b, type: z.literal("readingNow"), props: ReadingNowProps }),
+  z.object({ ...b, type: z.literal("weightTrend"), props: WeightTrendProps }),
+  z.object({ ...b, type: z.literal("moodWeek"), props: MoodWeekProps }),
+  z.object({ ...b, type: z.literal("checklistProgress"), props: ChecklistProgressProps }),
+  // v0.8 signage & office
+  z.object({ ...b, type: z.literal("roomStatus"), props: RoomStatusProps }),
+  z.object({ ...b, type: z.literal("directory"), props: DirectoryProps }),
+  z.object({ ...b, type: z.literal("eventBanner"), props: EventBannerProps }),
+  z.object({ ...b, type: z.literal("openSign"), props: OpenSignProps }),
+  z.object({ ...b, type: z.literal("nowPlaying"), props: NowPlayingProps }),
+  z.object({ ...b, type: z.literal("splitFlap"), props: SplitFlapProps }),
 ]);
 
 export const Row = z.object({

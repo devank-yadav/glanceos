@@ -40,6 +40,14 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       "forecast", "windCompass", "uvIndex", "airQuality", "precip", "headlines", "currencyRate", "cryptoPrice",
       "onThisDay", "wikiToday", "quoteLive", "factLive", "hackerNews", "githubStats", "nextHoliday", "issNow",
       "jsonFeed",
+      // v0.8
+      "signature", "address", "byline", "legend", "breadcrumb", "noticeBar", "keyCombo", "dividerLabeled",
+      "iconRow", "statRow", "spacerDots", "frame",
+      "lineChart", "areaChart", "bulletGraph", "horizontalBars", "rankingList", "waffle", "signalBars",
+      "thermometer", "comparison", "percentList",
+      "monthCalendar", "weekStrip", "nowNext", "ageCounter", "anniversary", "timeBlocks", "shiftStatus", "pomodoro",
+      "monthHabit", "savingsGoal", "readingNow", "weightTrend", "moodWeek", "checklistProgress",
+      "roomStatus", "directory", "eventBanner", "openSign", "nowPlaying", "splitFlap",
     ];
     // Types whose props have required fields with no default.
     const sampleProps: Record<string, unknown> = {
@@ -56,7 +64,7 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       const result = Layout.safeParse({ schemaVersion: 3, name: "n", rows: [{ id: "r", blocks }] });
       expect(result.success, `${type} should parse`).toBe(true);
     }
-    expect(new Set(types).size).toBe(97);
+    expect(new Set(types).size).toBe(139);
   });
 
   it("defaults block style and board align (v0.6, additive)", () => {

@@ -1,12 +1,10 @@
 import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
-import { BLOCKS, blockFor, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
+import { BLOCKS, blockFor, ENTER_BREAKS, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
 import {
-  applyDrop, deleteRow, duplicateRow, indicatorBox, moveBlock, moveRow, pageGeometry,
-  removeBlocks, type DropTarget,
+  applyDrop, indicatorBox, moveBlock, moveRow, pageGeometry, removeBlocks, type DropTarget,
 } from "./geometry";
-import { Outline } from "./outline";
 import { Overlay } from "./overlay";
 import { Palette } from "./palette";
 import { Present } from "./present";
@@ -289,6 +287,31 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (prop) setEditing({ id, prop, multiline: !SINGLE_LINE.has(block!.type) });
   };
 
+  // Backspace on an empty line: drop it and put the cursor at the line above.
+  const deleteAndFocusPrev = (id: string) => {
+    const all = docRef.current.rows.flatMap((r) => r.blocks);
+    const idx = all.findIndex((b) => b.id === id);
+    const prev = idx > 0 ? all[idx - 1] : undefined;
+    setEditing(null);
+    commitDoc(removeBlocks(docRef.current, new Set([id])));
+    if (prev) {
+      const p = TEXT_PROP[prev.type];
+      if (p) setEditing({ id: prev.id, prop: p, multiline: !SINGLE_LINE.has(prev.type) });
+      else dispatch({ type: "select", id: prev.id });
+    }
+  };
+
+  // A fresh board opens with a heading on the first line, cursor ready — type
+  // a title and keep going, like a new note. (Notion's "Untitled" line.)
+  const initedRef = useRef(false);
+  useEffect(() => {
+    if (loaded && !initedRef.current) {
+      initedRef.current = true;
+      if (docRef.current.rows.length === 0) insertBlock("heading", 0, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
   const openSlash = (index?: number) => {
     if (index !== undefined) {
       setSlashRow(index);
@@ -419,7 +442,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               onInsertTextAt={(rowIndex) => insertBlock("text", rowIndex, true)}
             />
             {state.present.rows.length === 0 && !editing && (
-              <div class="empty-hint">Double-click to write, or press <kbd>/</kbd> for blocks</div>
+              <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
             )}
             <div class="drop-indicator" ref={indicatorRef} />
             {editBox && editing && (
@@ -437,14 +460,21 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   });
                 }}
                 onKeyDown={(e) => {
+                  const ta = e.currentTarget as HTMLTextAreaElement;
+                  const type = docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.type;
                   if (e.key === "Escape") {
                     e.preventDefault();
                     setEditing(null);
-                  } else if (e.key === "Enter" && !editing.multiline) {
+                  } else if (e.key === "Enter" && !e.shiftKey && type && ENTER_BREAKS.has(type)) {
+                    // type a document: Enter starts a fresh text line below (Shift+Enter = newline)
                     e.preventDefault();
                     const rowIndex = docRef.current.rows.findIndex((r) => r.blocks.some((b) => b.id === editing.id));
                     setEditing(null);
                     insertBlock("text", rowIndex + 1, true);
+                  } else if (e.key === "Backspace" && ta.value === "") {
+                    // backspace on an empty line removes it and jumps to the line above
+                    e.preventDefault();
+                    deleteAndFocusPrev(editing.id);
                   }
                 }}
                 onBlur={() => setEditing(null)}
@@ -472,14 +502,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
             dragLayer={dragLayer}
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type])}
-          />
-          <Outline
-            doc={state.present}
-            selectedIds={state.selectedIds}
-            onSelect={(id, additive) => dispatch(additive ? { type: "selectToggle", id } : { type: "select", id })}
-            onMoveRow={(i, dir) => { const next = moveRow(docRef.current, i, dir); if (next) commitDoc(next); }}
-            onDupRow={(i) => { const next = duplicateRow(docRef.current, i, newWidgetId); if (next) commitDoc(next); }}
-            onDelRow={(i) => { commitDoc(deleteRow(docRef.current, i)); dispatch({ type: "select", id: null }); }}
           />
           <PropertiesPanel doc={state.present} selectedId={primary} stageEdit={stageEdit} commitDoc={commitDoc} onDelete={removeSelected} />
         </aside>
