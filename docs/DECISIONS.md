@@ -236,3 +236,17 @@ ADR-lite log. Every pinned choice gets an entry **when it's made** — context, 
 - **Why:** Compose on the existing primitives (geometry boxes, the gesture/commit model, the `style`-style optional fields). The one structural fix (single-commit text insert) removes a real state race. zod stays out of the screen; the studio chunk is ~45 kB gzip.
 - **Verified live:** type-to-create text + continue typing; double-click inserts nothing; `/` opens the menu; ⠿ click opens the vertical menu while drag still moves; 39 grouped sizes switch + persist; sidebar collapse/pin; board settings hidden by default; no Unicode glyphs left in chrome.
 - **Revisit when:** in-place per-cell table editing; converting the ~200 block-palette glyphs to SVG; a true caret renderer over the preview iframe.
+
+### 031 — Config app revamp: sidebar shell, dark mode, ⌘K, shared components
+- **Status:** accepted · 2026-06-13
+- **Context:** The config app had a floating top-nav, inconsistent button-heavy cards, inline error strings, no dark mode, no keyboard navigation, and accessibility gaps. The owner wanted the whole app to feel like Notion. Designed from a 7-dimension audit workflow → one consolidated plan.
+- **Decision:**
+  - **Shell:** a collapsible + pinnable **left sidebar** (`components/Sidebar.tsx` — brand, ⌘K search, icon nav with `aria-current`, account menu) replaces the top bar; each page renders a sticky `PageHeader` with contextual actions; `ShellCtx` exposes the mobile-drawer opener; responsive off-canvas drawer < 820px; skip link + `<main id="main">`.
+  - **Dark mode:** token-only `light/dark/system` via `useTheme()` + `<html data-theme>`; the dark token block lives in `style.css`. The opaque surfaces that hardcoded white (`--card-bg`, `--input-bg`, card/input/sidebar-search) were tokenized so both modes are coherent; `--muted`/`--faint` darkened for AA.
+  - **Shared components** (new `components/`): `Toast`+`useToast` (replaces every inline `.issues`/`.ok`), `Modal` (focus-trap, Esc, focus-restore), `ConfirmDialog`+`useConfirm`, `Menu` (kebab/overflow + account), `EmptyState`, `IconButton` (TS-required `aria-label`), `Spinner`, `StatChip`, `PageHeader`, `Sidebar`, `CommandPalette`. `ToastProvider`+`ConfirmProvider` mount in `main.tsx` above the route split so the lazy Studio chunk can use them.
+  - **⌘K command palette:** jump to pages / run actions (new setup, toggle theme, log out). Skeletons + rich empty states across pages.
+  - **Every page** rebuilt on the shared components for consistency (Screens claim-modal + inline rename + card menu + chips; Setups search + import modal + overflow menu; Hub header search; Playlists icon controls + dirty state; Integrations category groups + Modal; Auth toasts + autocomplete).
+  - **Icons:** 12 added to `editor/icons.tsx` (grid/x/moon/sun/bell/list/command/monitor/download/copy/upload) — one icon module, reused app-wide.
+- **Why:** Compose on the existing token system; extract only the components with real cross-page duplication (skip speculative Button/Card wrappers). Providers above the split avoid context gaps in the Studio.
+- **Verified live (light + dark):** sidebar nav + active state, ⌘K palette (8 commands), Setups search/menu/chips, dark-mode contrast after tokenizing surfaces. 80 tests green; config bundle ~34 kB gzip.
+- **Revisit when:** breadcrumbs (needs a richer router), in-card optimistic UI, a notifications surface, or extending dark mode + the icon pass to the public landing page and the Studio chrome.
