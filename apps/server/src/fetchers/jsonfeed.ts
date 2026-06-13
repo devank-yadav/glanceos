@@ -6,7 +6,7 @@ import { cached, FAIL, getText } from "./cache";
 // {{items.0.title}} or {{items[0].title}}). No code runs — only field lookup
 // and string interpolation, so it's safe to render on a screen.
 
-function resolvePath(root: unknown, path: string): unknown {
+export function resolvePath(root: unknown, path: string): unknown {
   return path
     .replace(/\[(\d+)\]/g, ".$1")
     .split(".")

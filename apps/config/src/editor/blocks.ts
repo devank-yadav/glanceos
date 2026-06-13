@@ -358,6 +358,17 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   socialHandle: "handle",
 };
 
+// Blocks that can draw from a live data source (the toolbar's ⟿ Data tab).
+export const SERIES_BLOCKS = new Set<WidgetType>([
+  "sparkline", "barChart", "lineChart", "areaChart", "histogram", "heatStrip", "winLossBar", "weightTrend", "kpiSpark",
+]);
+export const SCALAR_BLOCKS = new Set<WidgetType>([
+  "stat", "metric", "bigNumber", "trend", "deltaStat", "percentBig", "progress", "gauge",
+]);
+// Already-typed live shapes — bind the whole block, no field mapping needed.
+export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines"]);
+export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...PASSTHROUGH_BLOCKS]);
+
 // Single-line types: never hold their own newlines.
 export const SINGLE_LINE = new Set<WidgetType>([
   "heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading",

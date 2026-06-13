@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ClaimRequest, RegisterRequest, UserLoginRequest, UserRegisterRequest, safeParseDocument,
+  BlockSource, ClaimRequest, RegisterRequest, UserLoginRequest, UserRegisterRequest, safeParseDocument,
 } from "@glanceos/schema";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono, type Context } from "hono";
@@ -31,6 +31,7 @@ import {
   pushRotatingDevices, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
+import { resolveSource } from "./providers/resolve";
 import { resolveWidgetData } from "./widgets";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -366,6 +367,16 @@ export function buildApp(): Hono<Env> {
     const parsed = safeParseDocument(body.document);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.issues }, 400);
     return c.json({ data: await resolveWidgetData(parsed.data, c.get("userId")) });
+  });
+
+  // Dry-run a binding (anonymous public/secret URL — no saved connection) so the
+  // Data tab can show what a source returns before you commit to it.
+  app.post("/api/source/preview", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { source?: unknown };
+    const parsed = BlockSource.safeParse(body.source);
+    if (!parsed.success) return c.json({ error: "validation" }, 400);
+    if (parsed.data.connectionId) return c.json({ error: "use /api/connections/:id/sample for saved connections" }, 400);
+    return c.json({ data: await resolveSource(parsed.data) });
   });
 
   app.get("/api/layouts/:id", (c) => {

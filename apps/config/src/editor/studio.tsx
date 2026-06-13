@@ -1,7 +1,8 @@
 import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
-import { BLOCKS, blockFor, ENTER_BREAKS, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
+import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
+import { DataPanel } from "./databind";
 import {
   applyDrop, indicatorBox, moveBlock, moveRow, pageGeometry, removeBlocks, type DropTarget,
 } from "./geometry";
@@ -66,6 +67,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [presenting, setPresenting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(false);
   const [convertId, setConvertId] = useState<string | null>(null);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
@@ -84,7 +86,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const slashRef = useRef<number | null>(slashRow);
   slashRef.current = slashRow;
   const overlayRef = useRef({ presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: false });
-  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: optionsOpen || convertId !== null };
+  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: optionsOpen || dataOpen || convertId !== null };
   const lastSavedRef = useRef("");
   const typingTimer = useRef<number | undefined>(undefined);
 
@@ -175,7 +177,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
 
   // preview data (structure excluded so drags cost no server calls)
   const dataKey = useMemo(
-    () => JSON.stringify(state.present.rows.flatMap((r) => r.blocks).map((b) => [b.id, b.type, b.props])),
+    () => JSON.stringify(state.present.rows.flatMap((r) => r.blocks).map((b) => [b.id, b.type, b.props, b.source])),
     [state.present],
   );
   useEffect(() => {
@@ -316,8 +318,18 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const selectedKey = state.selectedIds.length === 1 ? state.selectedIds[0]! : "";
   useEffect(() => {
     setOptionsOpen(false);
+    setDataOpen(false);
     setConvertId(null);
   }, [selectedKey]);
+
+  // Point a block at (or unbind it from) a live data source.
+  const setSource = (id: string, src: unknown) =>
+    stageEdit((d) => {
+      const t = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
+      if (!t) return;
+      if (src) (t as unknown as { source: unknown }).source = src;
+      else delete (t as unknown as { source?: unknown }).source;
+    });
 
   // Just start typing — like Notion. A printable key with a text block selected
   // appends to it and opens the editor; on a blank board it births a text line.
@@ -434,7 +446,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         removeSelected();
       } else if (e.key === "Escape") {
         if (o.showHelp) setShowHelp(false);
-        else if (o.popover) { setOptionsOpen(false); setConvertId(null); }
+        else if (o.popover) { setOptionsOpen(false); setDataOpen(false); setConvertId(null); }
         else if (o.slashOpen) setSlashRow(null);
         else dispatch({ type: "select", id: null });
       } else if (e.key.startsWith("Arrow") && primaryRef.current) {
@@ -568,12 +580,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 scale={scale}
                 stageW={stageW}
                 canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
-                canBind={false}
-                bound={false}
+                canBind={BINDABLE.has(primaryBlock.type)}
+                bound={!!primaryBlock.source}
                 onEdit={() => primary && startEditing(primary)}
-                onConvert={() => { setOptionsOpen(false); setConvertId(primary); }}
-                onData={() => {}}
-                onOptions={() => { setConvertId(null); setOptionsOpen((v) => !v); }}
+                onConvert={() => { setOptionsOpen(false); setDataOpen(false); setConvertId(primary); }}
+                onData={() => { setConvertId(null); setOptionsOpen(false); setDataOpen((v) => !v); }}
+                onOptions={() => { setConvertId(null); setDataOpen(false); setOptionsOpen((v) => !v); }}
                 onDelete={removeSelected}
               />
             )}
@@ -582,6 +594,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <div class="popover-backdrop" onPointerDown={() => setOptionsOpen(false)} />
                 <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
                   <BlockFields block={primaryBlock} stageEdit={stageEdit} />
+                </div>
+              </>
+            )}
+            {dataOpen && optionsPos && primaryBlock && (
+              <>
+                <div class="popover-backdrop" onPointerDown={() => setDataOpen(false)} />
+                <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+                  <DataPanel block={primaryBlock} setSource={(src) => setSource(primaryBlock.id, src)} onClose={() => setDataOpen(false)} />
                 </div>
               </>
             )}

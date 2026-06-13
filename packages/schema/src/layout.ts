@@ -310,7 +310,28 @@ export const PhoneNumberProps = z.object({ label: line(40).default("Reception"),
 export const SocialHandleProps = z.object({ platform: line(40).default("Instagram"), handle: line(60).default("@glanceos") });
 export const WayfindingProps = z.object({ items: line(600).default("Reception | → Floor 1\nPharmacy | → Floor 2\nExit | ← Left") });
 
-const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}) };
+// ===== v1.0: data binding (optional, on every block) =====
+// A block can point a prop (or its whole data) at a live SOURCE instead of typed
+// props. Reuses jsonFeed's {{dotted.path}} extraction grammar so the mental model
+// is identical. `.optional()` keeps unbound blocks byte-identical → no migration.
+export const SourceMap = z.object({
+  path: z.string().max(400).default(""), // scalar/object path, e.g. "data.today.total"
+  items: z.string().max(400).optional(), // array path for a list/series, e.g. "results"
+  fields: z.record(z.string(), z.string().max(400)).optional(), // per-leaf rename: {value:"count", label:"date"}
+  transform: z.enum(["none", "series", "count", "sum", "first", "last", "join", "percent"]).default("none"),
+}).prefault({});
+export type SourceMapT = z.infer<typeof SourceMap>;
+
+export const BlockSource = z.object({
+  connectionId: z.string().min(1).optional(), // FK → a saved connection (decrypted server-side); absent = anonymous URL
+  kind: z.string().min(1).max(64), // resolver id: "rest" | "ical.events" | "todoist.tasks" | ...
+  query: z.record(z.string(), z.string().max(2000)).prefault({}), // resolver params: {url, project_id, repo, ...}
+  map: SourceMap,
+  refreshSeconds: z.number().int().min(30).max(86400).optional(),
+});
+export type BlockSourceT = z.infer<typeof BlockSource>;
+
+const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),

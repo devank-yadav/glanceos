@@ -1,4 +1,5 @@
 import type { LayoutT } from "@glanceos/schema";
+import { resolveSource, type ConnLookup } from "./providers/resolve";
 import { calendarData } from "./fetchers/ics";
 import { jsonFeedData } from "./fetchers/jsonfeed";
 import {
@@ -17,12 +18,19 @@ import { tasksData } from "./tasks";
  * Every live fetcher resolves to null on failure → the screen shows a calm
  * placeholder, so this never throws and works offline.
  */
-export async function resolveWidgetData(layout: LayoutT, userId: string): Promise<Record<string, unknown>> {
+export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
   const now = new Date();
   const blocks = layout.rows.flatMap((row) => row.blocks);
   await Promise.all(
     blocks.map(async (b) => {
+      // A bound block draws from a live source instead of its props. Resolves to
+      // null on any failure → the screen falls back to the block's props.
+      if (b.source) {
+        const out = await resolveSource(b.source, connLookup);
+        if (out !== null) data[b.id] = out;
+        return;
+      }
       switch (b.type) {
         case "weather": data[b.id] = await weatherData(b.props); break;
         case "calendar": data[b.id] = await calendarData(b.props); break;

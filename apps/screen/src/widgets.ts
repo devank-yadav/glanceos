@@ -33,6 +33,29 @@ const every = (ms: number, fn: () => void): Cleanup => {
   return () => window.clearInterval(h);
 };
 
+// ---- data-binding bridge ----
+// A bound block draws from the server-resolved data[id]; an unbound one uses its
+// typed-in props (the offline fallback). These keep zod out of the runtime — the
+// resolved value arrives as `unknown` and we coerce defensively.
+const boundNums = (w: WidgetT, data: unknown): number[] =>
+  Array.isArray(data)
+    ? (data as unknown[]).map((x) => (typeof x === "number" ? x : Number((x as { value?: unknown })?.value ?? x) || 0))
+    : nums((w.props as { values?: string }).values ?? "");
+const boundStr = (w: WidgetT, data: unknown, prop: string): string => {
+  if (data == null) return String((w.props as Record<string, unknown>)[prop] ?? "");
+  if (typeof data === "object") return String((data as Record<string, unknown>)[prop] ?? (data as Record<string, unknown>).value ?? "");
+  return String(data);
+};
+const boundNum = (w: WidgetT, data: unknown, prop: string): number => {
+  const raw = data == null
+    ? (w.props as Record<string, unknown>)[prop]
+    : typeof data === "object"
+      ? (data as Record<string, unknown>).value ?? (data as Record<string, unknown>)[prop]
+      : data;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : Number((w.props as Record<string, unknown>)[prop]) || 0;
+};
+
 // ---------- existing ----------
 
 const clock: Render = (el, widget) => {
@@ -251,17 +274,17 @@ const spacer: Render = () => {
 
 // ---------- numbers & metrics ----------
 
-const stat: Render = (el, w) => {
+const stat: Render = (el, w, data) => {
   if (w.type !== "stat") return;
-  el.appendChild(div("stat-value", w.props.value));
+  el.appendChild(div("stat-value", boundStr(w, data, "value")));
   el.appendChild(div("stat-label", w.props.label));
 };
 
-const metric: Render = (el, w) => {
+const metric: Render = (el, w, data) => {
   if (w.type !== "metric") return;
   el.appendChild(div("metric-label", w.props.label));
   const valRow = div("metric-row");
-  valRow.appendChild(div("metric-value", w.props.value));
+  valRow.appendChild(div("metric-value", boundStr(w, data, "value")));
   if (w.props.unit) valRow.appendChild(div("metric-unit", w.props.unit));
   el.appendChild(valRow);
   if (w.props.delta) {
@@ -273,9 +296,9 @@ const metric: Render = (el, w) => {
   }
 };
 
-const progress: Render = (el, w) => {
+const progress: Render = (el, w, data) => {
   if (w.type !== "progress") return;
-  const pct = Math.max(0, Math.min(100, w.props.value));
+  const pct = Math.max(0, Math.min(100, boundNum(w, data, "value")));
   const head = div("progress-head");
   if (w.props.label) head.appendChild(div("progress-label", w.props.label));
   head.appendChild(div("progress-pct", `${Math.round(pct)}%`));
@@ -294,9 +317,9 @@ const rating: Render = (el, w) => {
   if (w.props.label) el.appendChild(div("rating-label", w.props.label));
 };
 
-const gauge: Render = (el, w) => {
+const gauge: Render = (el, w, data) => {
   if (w.type !== "gauge") return;
-  const pct = Math.max(0, Math.min(100, w.props.value));
+  const pct = Math.max(0, Math.min(100, boundNum(w, data, "value")));
   const r = 42;
   const circ = 2 * Math.PI * r;
   const wrap = div("gauge");
@@ -677,21 +700,21 @@ const prosCons: Render = (el, w) => {
 
 // ---- charts ----
 
-const sparkline: Render = (el, w) => {
+const sparkline: Render = (el, w, data) => {
   if (w.type !== "sparkline") return;
   heading2(el, w.props.label);
-  const v = nums(w.props.values);
+  const v = boundNums(w, data);
   const wrap = div("spark");
   wrap.innerHTML = sparkSvg(v);
   el.appendChild(wrap);
   if (v.length) el.appendChild(div("spark-last", String(v[v.length - 1])));
 };
 
-const barChart: Render = (el, w) => {
+const barChart: Render = (el, w, data) => {
   if (w.type !== "barChart") return;
   heading2(el, w.props.label);
   const wrap = div("barchart");
-  wrap.innerHTML = barSvg(nums(w.props.values));
+  wrap.innerHTML = barSvg(boundNums(w, data));
   el.appendChild(wrap);
 };
 
@@ -755,10 +778,10 @@ const tally: Render = (el, w) => {
   el.appendChild(div("tally-num", String(w.props.value)));
 };
 
-const heatStrip: Render = (el, w) => {
+const heatStrip: Render = (el, w, data) => {
   if (w.type !== "heatStrip") return;
   heading2(el, w.props.label);
-  const v = nums(w.props.values);
+  const v = boundNums(w, data);
   const max = Math.max(1, ...v);
   const wrap = div("heatstrip");
   for (const n of v) {
@@ -769,16 +792,16 @@ const heatStrip: Render = (el, w) => {
   el.appendChild(wrap);
 };
 
-const trend: Render = (el, w) => {
+const trend: Render = (el, w, data) => {
   if (w.type !== "trend") return;
   heading2(el, w.props.label);
-  el.appendChild(div("trend-value", w.props.value));
+  el.appendChild(div("trend-value", boundStr(w, data, "value")));
   const up = /^\+|▲|↑/.test(w.props.delta);
   const down = /^-|−|▼|↓/.test(w.props.delta);
   el.appendChild(div(`trend-delta ${up ? "up" : down ? "down" : "flat"}`, `${up ? "↑ " : down ? "↓ " : ""}${w.props.delta}`));
 };
 
-const kpiSpark: Render = (el, w) => {
+const kpiSpark: Render = (el, w, data) => {
   if (w.type !== "kpiSpark") return;
   heading2(el, w.props.label);
   const row = div("metric-row");
@@ -786,7 +809,7 @@ const kpiSpark: Render = (el, w) => {
   if (w.props.unit) row.appendChild(div("metric-unit", w.props.unit));
   el.appendChild(row);
   const sp = div("spark");
-  sp.innerHTML = sparkSvg(nums(w.props.values));
+  sp.innerHTML = sparkSvg(boundNums(w, data));
   el.appendChild(sp);
 };
 
@@ -1208,18 +1231,18 @@ const areaSvg = (values: number[]): string => {
   const pts = values.map((v, i) => `${((i / (values.length - 1)) * W).toFixed(1)},${(H - ((v - min) / range) * H).toFixed(1)}`).join(" ");
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="area-svg"><polygon points="0,${H} ${pts} ${W},${H}"/></svg>`;
 };
-const lineChart: Render = (el, w) => {
+const lineChart: Render = (el, w, data) => {
   if (w.type !== "lineChart") return;
   heading2(el, w.props.label);
   const wrap = div("linechart");
-  wrap.innerHTML = sparkSvg(nums(w.props.values));
+  wrap.innerHTML = sparkSvg(boundNums(w, data));
   el.appendChild(wrap);
 };
-const areaChart: Render = (el, w) => {
+const areaChart: Render = (el, w, data) => {
   if (w.type !== "areaChart") return;
   heading2(el, w.props.label);
   const wrap = div("areachart");
-  wrap.innerHTML = areaSvg(nums(w.props.values));
+  wrap.innerHTML = areaSvg(boundNums(w, data));
   el.appendChild(wrap);
 };
 const bulletGraph: Render = (el, w) => {
@@ -1496,10 +1519,10 @@ const readingNow: Render = (el, w) => {
   bar.appendChild(fill);
   el.appendChild(bar);
 };
-const weightTrend: Render = (el, w) => {
+const weightTrend: Render = (el, w, data) => {
   if (w.type !== "weightTrend") return;
   if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
-  const v = nums(w.props.values);
+  const v = boundNums(w, data);
   const row = div("metric-row");
   row.append(div("metric-value", String(v[v.length - 1] ?? "—")), div("metric-unit", w.props.unit));
   el.appendChild(row);
@@ -1708,21 +1731,22 @@ const peopleList: Render = (el, w) => {
 };
 
 // ---- numbers ----
-const bigNumber: Render = (el, w) => {
+const bigNumber: Render = (el, w, data) => {
   if (w.type !== "bigNumber") return;
-  el.appendChild(div("stat-value", w.props.value));
+  el.appendChild(div("stat-value", boundStr(w, data, "value")));
   if (w.props.caption) el.appendChild(div("stat-label", w.props.caption));
 };
-const percentBig: Render = (el, w) => {
+const percentBig: Render = (el, w, data) => {
   if (w.type !== "percentBig") return;
   if (w.props.label) heading2(el, w.props.label);
-  el.appendChild(div("stat-value", `${Math.round(w.props.value)}%`));
-  el.appendChild(pctBar(w.props.value));
+  const pct = boundNum(w, data, "value");
+  el.appendChild(div("stat-value", `${Math.round(pct)}%`));
+  el.appendChild(pctBar(pct));
 };
-const deltaStat: Render = (el, w) => {
+const deltaStat: Render = (el, w, data) => {
   if (w.type !== "deltaStat") return;
   if (w.props.label) heading2(el, w.props.label);
-  el.appendChild(div("stat-value", w.props.value));
+  el.appendChild(div("stat-value", boundStr(w, data, "value")));
   const up = w.props.delta.trim().startsWith("-") ? "▾" : "▴";
   el.appendChild(div("delta", `${up} ${w.props.delta}`));
 };
@@ -1785,11 +1809,11 @@ const lollipopChart: Render = (el, w) => {
   }
   el.appendChild(list);
 };
-const winLossBar: Render = (el, w) => {
+const winLossBar: Render = (el, w, data) => {
   if (w.type !== "winLossBar") return;
   if (w.props.label) heading2(el, w.props.label);
   const wrap = div("winloss");
-  nums(w.props.values).slice(0, 40).forEach((v) => {
+  boundNums(w, data).slice(0, 40).forEach((v) => {
     const cls = v > 0 ? " win" : v < 0 ? " loss" : " tie";
     wrap.appendChild(div(`wl-cell${cls}`));
   });
@@ -1877,11 +1901,11 @@ const gaugeMini: Render = (el, w) => {
   ring.appendChild(div("ring-label", `${Math.round(w.props.value)}%`));
   el.appendChild(ring);
 };
-const histogram: Render = (el, w) => {
+const histogram: Render = (el, w, data) => {
   if (w.type !== "histogram") return;
   if (w.props.label) heading2(el, w.props.label);
   const sp = div("spark");
-  sp.innerHTML = barSvg(nums(w.props.values));
+  sp.innerHTML = barSvg(boundNums(w, data));
   el.appendChild(sp);
 };
 
