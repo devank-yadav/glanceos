@@ -241,35 +241,14 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   wayfinding: [T("items", "Lines (place | direction)")],
 };
 
-export function PropertiesPanel({
-  doc,
-  selectedId,
-  stageEdit,
-  commitDoc,
-  onDelete,
-}: {
-  doc: LayoutT;
-  selectedId: string | null;
-  stageEdit: (mutate: (d: LayoutT) => void) => void;
-  commitDoc: (doc: LayoutT) => void;
-  onDelete: () => void;
-}) {
-  const selected = doc.rows.flatMap((r) => r.blocks).find((b) => b.id === selectedId);
-  return selected ? (
-    <BlockProperties block={selected} stageEdit={stageEdit} onDelete={onDelete} />
-  ) : (
-    <BoardSettings doc={doc} commitDoc={commitDoc} />
-  );
-}
-
-function BlockProperties({
+// The per-block fields + emphasis controls, rendered on-board in the toolbar's
+// Options popover (no longer the side panel). Header/delete live on the toolbar.
+export function BlockFields({
   block,
   stageEdit,
-  onDelete,
 }: {
   block: WidgetT;
   stageEdit: (mutate: (d: LayoutT) => void) => void;
-  onDelete: () => void;
 }) {
   const editProp = (key: string, value: unknown) =>
     stageEdit((d) => {
@@ -286,12 +265,8 @@ function BlockProperties({
   const style = block.style;
 
   return (
-    <section class="properties">
-      <div class="row spread">
-        <h3>{blockFor(block.type).label}</h3>
-        <button class="danger" onClick={onDelete}>Delete</button>
-      </div>
-      <p class="muted">Click a text block to type; move with the ⠿ handle or arrow keys. Drag a seam to resize.</p>
+    <div class="block-fields">
+      <h3>{blockFor(block.type).label}</h3>
       <div class="row wrap">
         {fields.map((f) => (
           <PropField key={f.key} field={f} value={props[f.key]} onChange={(v) => editProp(f.key, v)} />
@@ -307,7 +282,7 @@ function BlockProperties({
         <Segmented label="Align" value={style.align} options={["start", "center", "end"]} icons={["⤙", "≡", "⤚"]} onChange={(v) => editStyle({ align: v })} />
         <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={["⤒", "─", "⤓"]} onChange={(v) => editStyle({ valign: v })} />
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -326,7 +301,7 @@ function Segmented({ label, value, options, icons, onChange }: { label: string; 
   );
 }
 
-function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (doc: LayoutT) => void }) {
+export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (doc: LayoutT) => void }) {
   return (
     <section class="properties">
       <h3>Board settings</h3>

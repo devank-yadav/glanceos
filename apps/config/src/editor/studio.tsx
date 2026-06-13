@@ -9,9 +9,10 @@ import { Overlay } from "./overlay";
 import { Palette } from "./palette";
 import { Present } from "./present";
 import { PreviewStage } from "./preview";
-import { PropertiesPanel } from "./properties";
+import { BlockFields, BoardSettings } from "./properties";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
+import { BlockToolbar } from "./toolbar";
 import { editorReducer, initialEditor, primaryId } from "./state";
 
 const SIZES: Record<string, [number, number]> = {
@@ -64,6 +65,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [presenting, setPresenting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [convertId, setConvertId] = useState<string | null>(null);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -80,8 +83,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   primaryRef.current = primaryId(state);
   const slashRef = useRef<number | null>(slashRow);
   slashRef.current = slashRow;
-  const overlayRef = useRef({ presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing });
-  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing };
+  const overlayRef = useRef({ presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: false });
+  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: optionsOpen || convertId !== null };
   const lastSavedRef = useRef("");
   const typingTimer = useRef<number | undefined>(undefined);
 
@@ -288,6 +291,34 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (prop) setEditing({ id, prop, multiline: !SINGLE_LINE.has(block!.type) });
   };
 
+  // Change a block's type in place (the toolbar's ⤳), keeping id/width/style and
+  // carrying the primary text across when both types have one.
+  const convertBlock = (id: string, type: WidgetType) => {
+    setConvertId(null);
+    const doc = structuredClone(docRef.current);
+    for (const r of doc.rows) {
+      const i = r.blocks.findIndex((bl) => bl.id === id);
+      if (i < 0) continue;
+      const old = r.blocks[i]!;
+      const fresh = makeBlock(type);
+      const op = TEXT_PROP[old.type];
+      const np = TEXT_PROP[type];
+      if (op && np) (fresh.props as Record<string, unknown>)[np] = (old.props as Record<string, unknown>)[op];
+      r.blocks[i] = { ...fresh, id: old.id, width: old.width, style: old.style } as WidgetT;
+      break;
+    }
+    commitDoc(doc);
+    dispatch({ type: "select", id });
+    if (TEXT_PROP[type]) setEditing({ id, prop: TEXT_PROP[type]!, multiline: !SINGLE_LINE.has(type) });
+  };
+
+  // Close the toolbar's popovers whenever the selection changes.
+  const selectedKey = state.selectedIds.length === 1 ? state.selectedIds[0]! : "";
+  useEffect(() => {
+    setOptionsOpen(false);
+    setConvertId(null);
+  }, [selectedKey]);
+
   // Just start typing — like Notion. A printable key with a text block selected
   // appends to it and opens the editor; on a blank board it births a text line.
   const appendChar = (id: string, prop: string, ch: string) => {
@@ -403,6 +434,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         removeSelected();
       } else if (e.key === "Escape") {
         if (o.showHelp) setShowHelp(false);
+        else if (o.popover) { setOptionsOpen(false); setConvertId(null); }
         else if (o.slashOpen) setSlashRow(null);
         else dispatch({ type: "select", id: null });
       } else if (e.key.startsWith("Arrow") && primaryRef.current) {
@@ -440,6 +472,19 @@ export function Studio({ layoutId }: { layoutId: number }) {
     ? String(((docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.props ?? {}) as Record<string, unknown>)[editing.prop] ?? "")
     : "";
   const saveLabel = saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "";
+
+  // The floating block toolbar + its popovers anchor to the single selected block.
+  const stageW = W * scale;
+  const stageH = H * scale;
+  const singleSel = state.selectedIds.length === 1;
+  const primaryBlock = primary ? state.present.rows.flatMap((r) => r.blocks).find((b) => b.id === primary) : undefined;
+  const primaryBox = primary ? geometry.blocks.find((b) => b.id === primary) : undefined;
+  const optionsPos = primaryBox
+    ? { x: Math.min(Math.max(8, primaryBox.x * scale), Math.max(8, stageW - 312)), y: Math.min(Math.max(8, primaryBox.y * scale + (primaryBox.y * scale < 60 ? 44 : -8)), Math.max(8, stageH - 392)) }
+    : null;
+  const convertPos = primaryBox
+    ? { x: Math.min(Math.max(8, primaryBox.x * scale), Math.max(8, stageW - 280)), y: Math.min(Math.max(8, primaryBox.y * scale + 28), Math.max(8, stageH - 360)) }
+    : null;
 
   return (
     <div class="studio">
@@ -517,6 +562,32 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 onBlur={() => setEditing(null)}
               />
             )}
+            {singleSel && primaryBox && primaryBlock && !presenting && slashRow === null && (
+              <BlockToolbar
+                box={primaryBox}
+                scale={scale}
+                stageW={stageW}
+                canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
+                canBind={false}
+                bound={false}
+                onEdit={() => primary && startEditing(primary)}
+                onConvert={() => { setOptionsOpen(false); setConvertId(primary); }}
+                onData={() => {}}
+                onOptions={() => { setConvertId(null); setOptionsOpen((v) => !v); }}
+                onDelete={removeSelected}
+              />
+            )}
+            {optionsOpen && optionsPos && primaryBlock && (
+              <>
+                <div class="popover-backdrop" onPointerDown={() => setOptionsOpen(false)} />
+                <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+                  <BlockFields block={primaryBlock} stageEdit={stageEdit} />
+                </div>
+              </>
+            )}
+            {convertId && convertPos && (
+              <SlashMenu at={convertPos} onClose={() => setConvertId(null)} onInsert={(type) => convertBlock(convertId, type)} />
+            )}
             {slashPos && slashRow !== null && (
               <SlashMenu
                 at={slashPos}
@@ -540,7 +611,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type])}
           />
-          <PropertiesPanel doc={state.present} selectedId={primary} stageEdit={stageEdit} commitDoc={commitDoc} onDelete={removeSelected} />
+          <BoardSettings doc={state.present} commitDoc={commitDoc} />
         </aside>
       </div>
       <div class="drag-chip" ref={ghostRef} />
