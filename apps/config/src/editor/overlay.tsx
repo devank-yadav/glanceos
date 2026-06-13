@@ -3,6 +3,7 @@ import type { RefObject } from "preact";
 import { useRef } from "preact/hooks";
 import type { Dispatch } from "preact/hooks";
 import { blockFor, TEXT_PROP } from "./blocks";
+import { Icon } from "./icons";
 import {
   hitTest, indicatorBox, resizeColumns, resizeRow,
   type DropTarget, type PageGeometry,
@@ -19,6 +20,7 @@ import type { DragLayer } from "./studio";
 interface HandleDrag {
   id: string;
   label: string;
+  glyph: string;
   target: DropTarget | null;
   started: boolean;
   startX: number;
@@ -49,7 +51,8 @@ export function Overlay({
   dragLayer,
   onDrop,
   onEdit,
-  onInsertTextAt,
+  onHandleClick,
+  menuId,
 }: {
   doc: LayoutT;
   geometry: PageGeometry;
@@ -60,7 +63,8 @@ export function Overlay({
   dragLayer: DragLayer;
   onDrop: (id: string, target: DropTarget) => void;
   onEdit: (id: string) => void;
-  onInsertTextAt: (rowIndex: number) => void;
+  onHandleClick: (id: string) => void;
+  menuId: string | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const handleDrag = useRef<HandleDrag | null>(null);
@@ -74,11 +78,11 @@ export function Overlay({
   const sx = (v: number) => v * scale;
 
   // ---- handle drag (move a block) ----
-  const onHandleDown = (e: PointerEvent, id: string, label: string, node: HTMLElement) => {
+  const onHandleDown = (e: PointerEvent, id: string, label: string, glyph: string, node: HTMLElement) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    handleDrag.current = { id, label, target: null, started: false, startX: e.clientX, startY: e.clientY, node };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* no active pointer (e.g. tests) */ }
+    handleDrag.current = { id, label, glyph, target: null, started: false, startX: e.clientX, startY: e.clientY, node };
     dispatch({ type: "select", id });
   };
   const onHandleMove = (e: PointerEvent) => {
@@ -89,7 +93,7 @@ export function Overlay({
       d.started = true;
       d.node.classList.add("is-dragging-source");
       rootRef.current!.classList.add("dragging");
-      dragLayer.show(d.label);
+      dragLayer.show(d.label, d.glyph);
     }
     dragLayer.move(e.clientX, e.clientY);
     const { x, y } = toPage(e);
@@ -110,14 +114,18 @@ export function Overlay({
     d.node.classList.remove("is-dragging-source");
     rootRef.current?.classList.remove("dragging");
     dragLayer.hide();
-    if (commit && d.started && d.target) onDrop(d.id, d.target);
+    if (!commit) return;
+    // Notion-style: drag past the threshold MOVES the block; a plain click on the
+    // ⠿ handle (no movement) OPENS the block's options menu.
+    if (d.started && d.target) onDrop(d.id, d.target);
+    else if (!d.started) onHandleClick(d.id);
   };
 
   // ---- column gutter (widths) ----
   const onGutterDown = (e: PointerEvent, rowIndex: number, leftIndex: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
     const row = docRef.current!.rows[rowIndex]!;
     const totalWeight = row.blocks.reduce((s, b) => s + b.width, 0);
     const usable = geometry.rows[rowIndex]!.w - geometry.gap * (row.blocks.length - 1);
@@ -143,7 +151,7 @@ export function Overlay({
   const onRowDown = (e: PointerEvent, rowIndex: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
     rowDrag.current = { rowIndex, h0: docRef.current!.rows[rowIndex]!.h, startY: e.clientY };
     rootRef.current?.classList.add("resizing");
     dispatch({ type: "gestureStart" });
@@ -167,18 +175,12 @@ export function Overlay({
   const onBackgroundDown = (e: PointerEvent) => {
     if (e.target === rootRef.current) dispatch({ type: "select", id: null });
   };
-  const onBackgroundDbl = (e: MouseEvent) => {
-    if (e.target !== rootRef.current) return;
-    const t = hitTest(docRef.current!, geometry, toPage(e).x, toPage(e).y);
-    onInsertTextAt(t.kind === "row" ? t.index : t.rowIndex + 1);
-  };
 
   return (
     <div
       ref={rootRef}
       class="studio-overlay"
       onPointerDown={(e) => onBackgroundDown(e as unknown as PointerEvent)}
-      onDblClick={(e) => onBackgroundDbl(e as unknown as MouseEvent)}
     >
       {geometry.blocks.map((b) => {
         const widget = doc.rows[b.rowIndex]!.blocks[b.blockIndex]!;
@@ -208,17 +210,17 @@ export function Overlay({
           >
             <span class="widget-tag">{blockFor(widget.type).label}</span>
             <span
-              class="drag-handle"
-              title="Drag to move"
+              class={`drag-handle${menuId === b.id ? " has-menu" : ""}`}
+              title="Drag to move · click for options"
               onPointerDown={(e) => {
                 const node = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
-                onHandleDown(e as unknown as PointerEvent, b.id, blockFor(widget.type).label, node);
+                onHandleDown(e as unknown as PointerEvent, b.id, blockFor(widget.type).label, blockFor(widget.type).glyph, node);
               }}
               onPointerMove={(e) => onHandleMove(e as unknown as PointerEvent)}
               onPointerUp={() => endHandle(true)}
               onPointerCancel={() => endHandle(false)}
             >
-              ⠿
+              <Icon.grip />
             </span>
           </div>
         );

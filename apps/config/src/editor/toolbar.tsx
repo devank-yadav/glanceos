@@ -1,9 +1,9 @@
 import type { BlockBox } from "./geometry";
+import { Icon } from "./icons";
 
-// A floating contextual toolbar that anchors to the selected block using the
-// editor's own scaled geometry (no layout math). Single-click a block → this
-// appears just above it; the ⠿ handle still moves the block. It is the primary
-// way to edit a block on the board, replacing trips to the side panel.
+// A Notion-style block options menu. It opens only when the ⠿ handle is CLICKED
+// (drag still moves the block) and anchors just below the handle — it is not a
+// permanent toolbar on every selection.
 
 interface Props {
   box: BlockBox;
@@ -19,24 +19,23 @@ interface Props {
   onDelete: () => void;
 }
 
-const BAR_H = 34;
+const MENU_W = 188;
 
-export function BlockToolbar({ box, scale, stageW, canEdit, canBind, bound, onEdit, onConvert, onData, onOptions, onDelete }: Props) {
-  const x = box.x * scale;
-  const yAbove = box.y * scale - BAR_H - 6;
-  const top = yAbove < 2 ? box.y * scale + 6 : yAbove; // flip below when near the top edge
-  const left = Math.min(Math.max(2, x), Math.max(2, stageW - 196));
-  // Keep clicks off the overlay so the block stays selected.
+export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, onEdit, onConvert, onData, onOptions, onDelete }: Props) {
+  const left = Math.min(Math.max(2, box.x * scale), Math.max(2, stageW - MENU_W));
+  const top = Math.max(4, box.y * scale + 6);
   const stop = (e: Event) => e.stopPropagation();
   return (
-    <div class="block-toolbar" style={{ left: `${left}px`, top: `${top}px` }} onPointerDown={stop} onMouseDown={stop}>
-      {canEdit && <button class="bt-btn" title="Edit content" onClick={onEdit}>✎</button>}
-      <button class="bt-btn" title="Change block type" onClick={onConvert}>⤳</button>
-      {canBind && (
-        <button class={`bt-btn${bound ? " bt-on" : ""}`} title={bound ? "Edit data source" : "Connect live data"} onClick={onData}>⟿</button>
+    <ul class="block-menu" style={{ left: `${left}px`, top: `${top}px` }} onPointerDown={stop} onMouseDown={stop}>
+      {canEdit && (
+        <li><button class="bm-item" onClick={onEdit}><Icon.pencil /> Edit text</button></li>
       )}
-      <button class="bt-btn" title="Options & style" onClick={onOptions}>⚙</button>
-      <button class="bt-btn bt-danger" title="Delete block" onClick={onDelete}>⌫</button>
-    </div>
+      <li><button class="bm-item" onClick={onConvert}><Icon.convert /> Change type</button></li>
+      {canBind && (
+        <li><button class={`bm-item${bound ? " bm-on" : ""}`} onClick={onData}><Icon.link /> {bound ? "Edit data source" : "Connect data"}</button></li>
+      )}
+      <li><button class="bm-item" onClick={onOptions}><Icon.settings /> Options &amp; style</button></li>
+      <li><button class="bm-item bm-danger" onClick={onDelete}><Icon.trash /> Delete</button></li>
+    </ul>
   );
 }

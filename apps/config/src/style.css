@@ -447,6 +447,9 @@ input[type="checkbox"] {
 
 .chip {
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border-radius: 999px;
   padding: 3px 11px;
   border: 1px solid var(--rule);
@@ -454,14 +457,21 @@ input[type="checkbox"] {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.chip svg {
+  width: 13px;
+  height: 13px;
+}
+
 .chip.save-saved {
   color: var(--ok);
   border-color: rgba(26, 127, 55, 0.4);
+  background: rgba(26, 127, 55, 0.08);
 }
 
 .chip.save-error {
   color: var(--bad);
   border-color: rgba(192, 57, 43, 0.4);
+  background: rgba(192, 57, 43, 0.08);
 }
 
 /* ---------- topbar ---------- */
@@ -1165,6 +1175,48 @@ ul.tasks li:last-child {
   color: var(--fg);
 }
 
+.studio-bar .icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.studio-bar .icon-btn:hover {
+  color: var(--fg);
+}
+
+.studio-bar .icon-btn.on {
+  color: var(--indigo);
+  background: rgba(35, 131, 226, 0.12);
+}
+
+.studio-bar .icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.studio-bar select {
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.size-select {
+  max-width: 200px;
+}
+
+@media (max-width: 980px) {
+  .studio-bar .hide-narrow { display: none; }
+  .size-select { max-width: 150px; }
+}
+
+@media (max-width: 720px) {
+  .studio-bar { flex-wrap: wrap; gap: 7px; padding: 8px 10px; }
+  .title-input { max-width: 140px; }
+}
+
 .title-input {
   font-weight: 650;
   font-size: 15px;
@@ -1237,17 +1289,19 @@ ul.tasks li:last-child {
 }
 
 .widget-box.selected {
-  border: 1.5px solid var(--fg);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--indigo);
+  box-shadow: 0 0 0 4px rgba(35, 131, 226, 0.12);
 }
 
-/* during a drag, every block shows its boundary; the one being moved dims */
+/* during a drag, the rest of the board fades back; the block being moved fades
+   further and goes dashed — so the drag preview is clearly the thing moving */
 .studio-overlay.dragging .widget-box {
   border-color: var(--rule);
+  opacity: 0.5;
 }
 
 .studio-overlay.dragging .widget-box.is-dragging-source {
-  opacity: 0.35;
+  opacity: 0.15;
   border-style: dashed;
   border-color: var(--muted);
 }
@@ -1316,6 +1370,19 @@ ul.tasks li:last-child {
 
 .drag-handle:active {
   cursor: grabbing;
+  transform: translateX(-50%) scale(0.95);
+}
+
+.drag-handle svg {
+  width: 16px;
+  height: 12px;
+}
+
+.drag-handle.has-menu {
+  opacity: 1;
+  color: var(--indigo);
+  background: rgba(35, 131, 226, 0.16);
+  border-color: rgba(35, 131, 226, 0.4);
 }
 
 /* the blue drop line */
@@ -1342,22 +1409,45 @@ ul.tasks li:last-child {
   transition: left 0.08s var(--ease), top 0.08s var(--ease), width 0.08s var(--ease), height 0.08s var(--ease);
 }
 
-/* the chip that follows the cursor while dragging */
+/* the block-like card that follows the cursor while dragging */
 .drag-chip {
   position: fixed;
   left: 0;
   top: 0;
   display: none;
   z-index: 100;
-  background: rgba(17, 17, 17, 0.92);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  font-size: 12px;
-  padding: 5px 11px;
-  border-radius: 8px;
   pointer-events: none;
+}
+
+.drag-card {
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
   box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  transform: rotate(-1.5deg);
+}
+
+.drag-card-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.drag-card-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg);
 }
 
 /* inline text editing, positioned over the block */
@@ -1387,8 +1477,8 @@ ul.tasks li:last-child {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--faint);
-  font-size: 15px;
+  color: var(--muted);
+  font-size: 16px;
   pointer-events: none;
 }
 
@@ -1494,47 +1584,66 @@ ul.tasks li:last-child {
 
 /* ---------- on-board block toolbar + popovers ---------- */
 
-.block-toolbar {
+/* the block options menu — opens on a ⠿-handle click, vertical like Notion */
+.block-menu {
   position: absolute;
   z-index: 40;
+  list-style: none;
+  margin: 0;
   display: flex;
+  flex-direction: column;
   gap: 2px;
-  padding: 3px;
+  padding: 5px;
+  min-width: 188px;
   background: var(--glass-strong);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2);
-  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
   border: 1px solid var(--glass-border);
-  border-radius: 9px;
-  box-shadow: var(--shadow-md);
+  border-radius: 11px;
+  box-shadow: var(--shadow-lg);
   animation: rise 0.12s var(--ease) both;
 }
 
-.bt-btn {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+.bm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 11px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--fg);
   cursor: pointer;
-  font-size: 14px;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.bm-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex: none;
+}
+
+.bm-item:hover {
+  background: rgba(17, 17, 17, 0.06);
+}
+
+.bm-item:hover svg {
   color: var(--fg);
 }
 
-.bt-btn:hover {
-  background: rgba(17, 17, 17, 0.07);
-}
-
-.bt-btn.bt-on {
+.bm-item.bm-on,
+.bm-item.bm-on svg {
   color: var(--indigo);
-  background: rgba(35, 131, 226, 0.12);
 }
 
-.bt-danger:hover {
-  background: rgba(220, 38, 38, 0.12);
-  color: #b91c1c;
+.bm-item.bm-danger:hover,
+.bm-item.bm-danger:hover svg {
+  background: rgba(192, 57, 43, 0.1);
+  color: var(--bad);
 }
 
 .popover-backdrop {
@@ -1606,17 +1715,135 @@ ul.tasks li:last-child {
 /* ---------- sidebar: palette + properties ---------- */
 
 .studio-side {
-  width: 324px;
+  width: 320px;
   flex: none;
   border-left: 1px solid var(--glass-border);
   background: var(--glass);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
   overflow: hidden;
+  transition: width 0.24s var(--ease);
+}
+
+/* unpinned = a floating panel that slides in over the stage (Notion-style) */
+.studio-side.unpinned {
+  position: fixed;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  z-index: 46;
+  box-shadow: var(--shadow-lg);
+}
+
+.studio-side.unpinned:not(.open) {
+  width: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: rgba(17, 17, 17, 0.06);
+  color: var(--fg);
+}
+
+.icon-btn.on {
+  color: var(--indigo);
+  background: rgba(35, 131, 226, 0.12);
+}
+
+.icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+  justify-content: flex-start;
+}
+
+.settings-toggle:hover {
+  background: rgba(17, 17, 17, 0.04);
+}
+
+.settings-toggle svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.settings-toggle .chevron {
+  margin-left: auto;
+  transition: transform 0.2s var(--ease);
+}
+
+.settings-toggle .chevron.open {
+  transform: rotate(90deg);
+}
+
+.sidebar-reveal {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 44;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+  color: var(--muted);
+}
+
+.sidebar-reveal:hover {
+  color: var(--fg);
+}
+
+.sidebar-reveal svg {
+  width: 18px;
+  height: 18px;
 }
 
 .palette {
@@ -1624,6 +1851,7 @@ ul.tasks li:last-child {
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  padding: 10px 14px 0;
 }
 
 .palette-search {
@@ -1709,9 +1937,8 @@ ul.tasks li:last-child {
 
 .studio-side .properties {
   flex: none;
-  border-top: 1px solid var(--rule);
-  padding-top: 12px;
-  max-height: 42%;
+  padding: 4px 14px 14px;
+  max-height: 40%;
   overflow-y: auto;
 }
 
@@ -1915,4 +2142,30 @@ ul.tasks li:last-child {
 }
 .modal h3 {
   margin: 0 0 8px;
+}
+
+/* ---------- studio: stage size label + focus rings ---------- */
+.stage-size-label {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 6;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 3px 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.14s var(--ease);
+}
+.stage-pane:hover .stage-size-label {
+  opacity: 1;
+}
+button:focus-visible,
+.palette-item:focus-visible,
+.bm-item:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
 }

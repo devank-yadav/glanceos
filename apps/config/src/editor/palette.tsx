@@ -46,7 +46,7 @@ export function Palette({
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { block, target: null, entered: false };
-    dragLayer.show(block.label);
+    dragLayer.show(block.label, block.glyph);
     dragLayer.move(e.clientX, e.clientY);
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -92,9 +92,8 @@ export function Palette({
 
   return (
     <section class="palette">
-      <h3>Blocks</h3>
       <input class="palette-search" placeholder="Search blocks…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
-      <p class="muted palette-hint">Drag onto the page — edges make columns. Click to append, or press <kbd>/</kbd>.</p>
+      <p class="muted palette-hint">Drag onto the board (edges make columns) or click to append. Press <kbd>/</kbd> on the board too.</p>
       <div class="palette-scroll">
         {groups.map((g) => (
           <div key={g.cat} class="palette-group">

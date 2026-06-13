@@ -20,6 +20,7 @@ export function PreviewStage({
   doc,
   data,
   stageRef,
+  sizeLabel,
   children,
 }: {
   W: number;
@@ -28,6 +29,7 @@ export function PreviewStage({
   doc: LayoutT;
   data: Record<string, unknown>;
   stageRef: RefObject<HTMLDivElement>;
+  sizeLabel?: string;
   children: ComponentChildren;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -70,6 +72,7 @@ export function PreviewStage({
         onLoad={() => setReady(true)}
       />
       {children}
+      {sizeLabel && <div class="stage-size-label">{sizeLabel} · {W}×{H}</div>}
     </div>
   );
 }

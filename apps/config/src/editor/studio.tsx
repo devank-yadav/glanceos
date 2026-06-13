@@ -13,16 +13,58 @@ import { PreviewStage } from "./preview";
 import { BlockFields, BoardSettings } from "./properties";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
-import { BlockToolbar } from "./toolbar";
+import { BlockMenu } from "./toolbar";
+import { Icon } from "./icons";
 import { editorReducer, initialEditor, primaryId } from "./state";
 
-const SIZES: Record<string, [number, number]> = {
-  "1920×1080": [1920, 1080],
-  "1280×800": [1280, 800],
-  "800×480": [800, 480],
-  "1080×1920": [1080, 1920],
-};
+interface ScreenPreset { id: string; label: string; w: number; h: number; category: string }
+const SIZE_CATEGORIES = ["TV", "Monitor", "Laptop", "Tablet", "Phone", "E-Paper", "Signage"];
+const SIZES: ScreenPreset[] = [
+  { id: "tv-720p", label: "720p TV", w: 1280, h: 720, category: "TV" },
+  { id: "tv-1080p", label: "1080p TV (16:9)", w: 1920, h: 1080, category: "TV" },
+  { id: "tv-1440p", label: "1440p TV (16:9)", w: 2560, h: 1440, category: "TV" },
+  { id: "tv-4k", label: "4K UHD TV", w: 3840, h: 2160, category: "TV" },
+  { id: "tv-1080p-portrait", label: "1080p TV (Portrait)", w: 1080, h: 1920, category: "TV" },
+  { id: "tv-4k-portrait", label: "4K UHD TV (Portrait)", w: 2160, h: 3840, category: "TV" },
+  { id: "monitor-1080p", label: "1080p Monitor", w: 1920, h: 1080, category: "Monitor" },
+  { id: "monitor-1200p", label: "1200p (16:10)", w: 1920, h: 1200, category: "Monitor" },
+  { id: "monitor-1440p", label: "1440p (QHD)", w: 2560, h: 1440, category: "Monitor" },
+  { id: "monitor-1600p", label: "1600p (16:10)", w: 2560, h: 1600, category: "Monitor" },
+  { id: "monitor-4k", label: "4K Monitor", w: 3840, h: 2160, category: "Monitor" },
+  { id: "monitor-uw-1440", label: "Ultrawide 1440p (21:9)", w: 3440, h: 1440, category: "Monitor" },
+  { id: "monitor-uw-2160", label: "Ultrawide 4K (21:9)", w: 5120, h: 2160, category: "Monitor" },
+  { id: "monitor-square", label: "Square 1440", w: 1440, h: 1440, category: "Monitor" },
+  { id: "laptop-1280", label: "Laptop 1280×800", w: 1280, h: 800, category: "Laptop" },
+  { id: "laptop-1366", label: "Laptop 1366×768 (HD)", w: 1366, h: 768, category: "Laptop" },
+  { id: "laptop-1440", label: "Laptop 1440×900", w: 1440, h: 900, category: "Laptop" },
+  { id: "laptop-mba-13", label: 'MacBook Air 13"', w: 1280, h: 832, category: "Laptop" },
+  { id: "laptop-mbp-14", label: 'MacBook Pro 14"', w: 1512, h: 982, category: "Laptop" },
+  { id: "laptop-mbp-16", label: 'MacBook Pro 16"', w: 1728, h: 1117, category: "Laptop" },
+  { id: "ipad-pro-land", label: 'iPad Pro 12.9" (Landscape)', w: 2048, h: 1536, category: "Tablet" },
+  { id: "ipad-pro-port", label: 'iPad Pro 12.9" (Portrait)', w: 1536, h: 2048, category: "Tablet" },
+  { id: "ipad-air-land", label: 'iPad Air (Landscape)', w: 1640, h: 1080, category: "Tablet" },
+  { id: "ipad-air-port", label: 'iPad Air (Portrait)', w: 1080, h: 1640, category: "Tablet" },
+  { id: "ipad-mini-port", label: 'iPad mini (Portrait)', w: 1024, h: 1488, category: "Tablet" },
+  { id: "android-tab-land", label: "Android Tablet (Landscape)", w: 2560, h: 1600, category: "Tablet" },
+  { id: "android-tab-port", label: "Android Tablet (Portrait)", w: 1600, h: 2560, category: "Tablet" },
+  { id: "iphone-15-pro", label: "iPhone 15 Pro", w: 1179, h: 2556, category: "Phone" },
+  { id: "iphone-14", label: "iPhone 14", w: 1170, h: 2532, category: "Phone" },
+  { id: "iphone-se", label: "iPhone SE", w: 750, h: 1334, category: "Phone" },
+  { id: "galaxy-s24", label: "Samsung Galaxy S24", w: 1080, h: 2340, category: "Phone" },
+  { id: "pixel-8", label: "Google Pixel 8", w: 1080, h: 2400, category: "Phone" },
+  { id: "eink-trmnl", label: "TRMNL (Landscape)", w: 800, h: 480, category: "E-Paper" },
+  { id: "eink-paperwhite", label: "Kindle Paperwhite", w: 1072, h: 1448, category: "E-Paper" },
+  { id: "eink-scribe", label: "Kindle Scribe", w: 1200, h: 1600, category: "E-Paper" },
+  { id: "eink-inky-73", label: 'Inky Impression 7.3"', w: 800, h: 480, category: "E-Paper" },
+  { id: "eink-ws-75", label: 'Waveshare 7.5"', w: 800, h: 480, category: "E-Paper" },
+  { id: "eink-ws-103", label: 'Waveshare 10.3"', w: 1872, h: 1404, category: "E-Paper" },
+  { id: "signage-vertical", label: "Vertical Signage (9:16)", w: 1080, h: 1920, category: "Signage" },
+];
+const SIZES_BY_ID: Record<string, [number, number]> = Object.fromEntries(SIZES.map((s) => [s.id, [s.w, s.h]]));
+const SIZE_LABEL: Record<string, string> = Object.fromEntries(SIZES.map((s) => [s.id, s.label]));
+const SIZES_LEGACY: Record<string, string> = { "1920×1080": "tv-1080p", "1280×800": "laptop-1280", "800×480": "eink-trmnl", "1080×1920": "tv-1080p-portrait" };
 const SIZE_KEY = "glanceos.previewSize";
+const SIDEBAR_PIN_KEY = "glanceos.sidebarPinned";
 const CLIP_KEY = "glanceos.clipboard";
 const ZOOMS: Array<{ label: string; value: number | null }> = [
   { label: "Fit", value: null },
@@ -36,7 +78,7 @@ const PLACEHOLDER: LayoutT = { schemaVersion: 3, name: "Loading…", theme: { mo
 const KNOWN = new Set(BLOCKS.map((b) => b.type));
 
 export interface DragLayer {
-  show(label: string): void;
+  show(label: string, glyph: string): void;
   move(clientX: number, clientY: number): void;
   indicate(box: { x: number; y: number; w: number; h: number } | null): void;
   halo(box: { x: number; y: number; w: number; h: number } | null): void;
@@ -59,7 +101,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [liveOn, setLiveOn] = useState(0);
   const [sizeKey, setSizeKey] = useState(() => {
     const s = localStorage.getItem(SIZE_KEY);
-    return s && SIZES[s] ? s : "1920×1080";
+    if (s && SIZES_BY_ID[s]) return s;
+    if (s && SIZES_LEGACY[s]) { localStorage.setItem(SIZE_KEY, SIZES_LEGACY[s]!); return SIZES_LEGACY[s]!; }
+    return "tv-1080p";
   });
   const [zoom, setZoom] = useState<number | null>(null);
   const [slashRow, setSlashRow] = useState<number | null>(null);
@@ -69,6 +113,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [convertId, setConvertId] = useState<string | null>(null);
+  // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    const s = localStorage.getItem(SIDEBAR_PIN_KEY);
+    return s ? (JSON.parse(s) as boolean) : true;
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -85,8 +137,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   primaryRef.current = primaryId(state);
   const slashRef = useRef<number | null>(slashRow);
   slashRef.current = slashRow;
-  const overlayRef = useRef({ presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: false });
-  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: optionsOpen || dataOpen || convertId !== null };
+  const overlayRef = useRef({ presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: false, menuOpen: false });
+  overlayRef.current = { presenting, showHelp, slashOpen: slashRow !== null, editing: !!editing, popover: optionsOpen || dataOpen || convertId !== null, menuOpen: menuId !== null };
   const lastSavedRef = useRef("");
   const typingTimer = useRef<number | undefined>(undefined);
 
@@ -105,15 +157,22 @@ export function Studio({ layoutId }: { layoutId: number }) {
       el.style.height = `${box.h}px`;
     };
     return {
-      show(label) {
+      show(label, glyph) {
         const g = ghostRef.current;
-        if (g) {
-          g.textContent = label;
-          g.style.display = "block";
-        }
+        if (!g) return;
+        g.innerHTML = "";
+        const gl = document.createElement("span");
+        gl.className = "drag-card-glyph";
+        gl.textContent = glyph;
+        const lb = document.createElement("span");
+        lb.className = "drag-card-label";
+        lb.textContent = label;
+        g.append(gl, lb);
+        g.style.display = "flex";
       },
       move(x, y) {
-        if (ghostRef.current) ghostRef.current.style.transform = `translate(${x + 14}px, ${y + 10}px)`;
+        const g = ghostRef.current;
+        if (g) g.style.transform = `translate(${x - g.offsetWidth / 2}px, ${y - g.offsetHeight - 12}px)`;
       },
       indicate: (box) => place(indicatorRef, box),
       halo: (box) => place(haloRef, box),
@@ -145,7 +204,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
     return () => obs.disconnect();
   }, []);
 
-  const [W, H] = SIZES[sizeKey] ?? [1920, 1080];
+  const [W, H] = SIZES_BY_ID[sizeKey] ?? [1920, 1080];
   const fitScale = Math.min(paneSize.w / W, paneSize.h / H);
   const scale = zoom ?? fitScale;
   const geometry = useMemo(() => pageGeometry(state.present, W, H), [state.present, W, H]);
@@ -316,11 +375,18 @@ export function Studio({ layoutId }: { layoutId: number }) {
 
   // Close the toolbar's popovers whenever the selection changes.
   const selectedKey = state.selectedIds.length === 1 ? state.selectedIds[0]! : "";
+  // Close the side popovers when the selection changes. NOT menuId — the handle
+  // click both selects and opens the menu; the `menuId === primary` render gate
+  // already hides a menu left over on a different block.
   useEffect(() => {
     setOptionsOpen(false);
     setDataOpen(false);
     setConvertId(null);
   }, [selectedKey]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_PIN_KEY, JSON.stringify(sidebarPinned));
+  }, [sidebarPinned]);
 
   // Point a block at (or unbind it from) a live data source.
   const setSource = (id: string, src: unknown) =>
@@ -343,20 +409,40 @@ export function Studio({ layoutId }: { layoutId: number }) {
     });
     startEditing(id);
   };
+  // Birth a fresh text line carrying the first character, in ONE commit, and
+  // open it for editing. (Insert-then-append would race: the append re-reads a
+  // docRef that hasn't seen the insert yet and would clobber it.)
+  const insertTextWith = (rowIndex: number, ch: string) => {
+    const block = makeBlock("text");
+    (block.props as Record<string, unknown>).content = ch;
+    const next = applyDrop(docRef.current, block, { kind: "row", index: rowIndex }, undefined, blockFor("text").defaultH);
+    if (!next) return;
+    commitDoc(next);
+    dispatch({ type: "select", id: block.id });
+    setEditing({ id: block.id, prop: "content", multiline: true });
+  };
   const typeChar = (ch: string): boolean => {
     const id = primaryRef.current;
     const block = id ? docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === id) : undefined;
     const prop = block && TEXT_PROP[block.type];
+    // a text block is focused → keep typing into it
     if (id && prop) {
       appendChar(id, prop, ch);
       return true;
     }
-    if (docRef.current.rows.length === 0) {
-      const newId = insertBlock("text", 0);
-      if (newId) appendChar(newId, "content", ch);
+    // nothing focused on a non-empty board → continue the trailing text line.
+    const all = docRef.current.rows.flatMap((r) => r.blocks);
+    const last = all[all.length - 1];
+    const lastProp = last && TEXT_PROP[last.type];
+    if (last && lastProp) {
+      appendChar(last.id, lastProp, ch);
+      dispatch({ type: "select", id: last.id });
       return true;
     }
-    return false;
+    // empty board, or the last block isn't text → start a new text line. Text is
+    // part of the document, never an inserted "object".
+    insertTextWith(docRef.current.rows.length, ch);
+    return true;
   };
 
   // Backspace on an empty line: drop it and put the cursor at the line above.
@@ -372,17 +458,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
       else dispatch({ type: "select", id: prev.id });
     }
   };
-
-  // A fresh board opens with a heading on the first line, cursor ready — type
-  // a title and keep going, like a new note. (Notion's "Untitled" line.)
-  const initedRef = useRef(false);
-  useEffect(() => {
-    if (loaded && !initedRef.current) {
-      initedRef.current = true;
-      if (docRef.current.rows.length === 0) insertBlock("heading", 0, true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
 
   const openSlash = (index?: number) => {
     if (index !== undefined) {
@@ -400,9 +475,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
       const meta = e.metaKey || e.ctrlKey;
       const o = overlayRef.current;
       const has = selectedRef.current.length > 0;
-      const pid = primaryRef.current;
-      const pblock = pid ? docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === pid) : undefined;
-      const canType = (!!pblock && TEXT_PROP[pblock.type] !== undefined) || docRef.current.rows.length === 0;
 
       if (o.presenting) {
         if (e.key === "Escape") setPresenting(false);
@@ -427,17 +499,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
       } else if (e.key === "/") {
         e.preventDefault();
         openSlash();
-      } else if (!meta && e.key.length === 1 && canType) {
-        // type-first: a printable key starts editing the selected text block
-        // (so "p" and "?" type into text instead of firing global shortcuts)
+      } else if (!meta && e.key.length === 1) {
+        // type-first, exactly like a document: any printable key types into the
+        // focused text line, the trailing line, or a fresh one. Text is never an
+        // inserted object. ("/" is handled above; present & help are buttons.)
         e.preventDefault();
         typeChar(e.key);
-      } else if (e.key === "?") {
-        e.preventDefault();
-        setShowHelp((v) => !v);
-      } else if (e.key === "p" && !meta) {
-        e.preventDefault();
-        setPresenting(true);
       } else if (e.key === "Enter" && has) {
         e.preventDefault();
         if (primaryRef.current) startEditing(primaryRef.current);
@@ -446,6 +513,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         removeSelected();
       } else if (e.key === "Escape") {
         if (o.showHelp) setShowHelp(false);
+        else if (o.menuOpen) setMenuId(null);
         else if (o.popover) { setOptionsOpen(false); setDataOpen(false); setConvertId(null); }
         else if (o.slashOpen) setSlashRow(null);
         else dispatch({ type: "select", id: null });
@@ -498,6 +566,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
     ? { x: Math.min(Math.max(8, primaryBox.x * scale), Math.max(8, stageW - 280)), y: Math.min(Math.max(8, primaryBox.y * scale + 28), Math.max(8, stageH - 360)) }
     : null;
 
+  // Sidebar visibility: pinned = docked & always shown; unpinned = a floating
+  // panel toggled open/closed (Notion-style).
+  const sideShown = sidebarPinned || sidebarOpen;
+  const toggleSidebar = () => {
+    if (sideShown) { setSidebarOpen(false); setSidebarPinned(false); }
+    else setSidebarOpen(true);
+  };
+
   return (
     <div class="studio">
       <header class="studio-bar">
@@ -506,22 +582,26 @@ export function Studio({ layoutId }: { layoutId: number }) {
         {saveLabel && <span class={`chip save-${saveState}`}>{saveLabel}</span>}
         <span class="spacer" />
         <span class="muted hide-narrow">{liveOn > 0 ? `Live on ${liveOn}` : "Not attached"}</span>
-        <select value={sizeKey} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setSizeKey(v); localStorage.setItem(SIZE_KEY, v); }}>
-          {Object.keys(SIZES).map((k) => <option key={k} value={k}>{k}</option>)}
+        <select class="size-select" title="Screen size" value={sizeKey} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setSizeKey(v); localStorage.setItem(SIZE_KEY, v); }}>
+          {SIZE_CATEGORIES.map((cat) => (
+            <optgroup key={cat} label={cat}>
+              {SIZES.filter((s) => s.category === cat).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </optgroup>
+          ))}
         </select>
         <select value={String(zoom)} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setZoom(v === "null" ? null : Number(v)); }} title="Zoom">
           {ZOOMS.map((z) => <option key={z.label} value={String(z.value)}>{z.label}</option>)}
         </select>
-        <button class="ghost" disabled={state.past.length === 0} title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}>↶</button>
-        <button class="ghost" disabled={state.future.length === 0} title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}>↷</button>
-        <button class="ghost" title="Keyboard shortcuts (?)" onClick={() => setShowHelp(true)}>?</button>
-        <button class="ghost" title="Present (P)" onClick={() => setPresenting(true)}>▶</button>
-        <button onClick={() => openSlash()}>+ Block</button>
+        <button class="ghost icon-btn" disabled={state.past.length === 0} title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}><Icon.undo /></button>
+        <button class="ghost icon-btn" disabled={state.future.length === 0} title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
+        <button class="ghost icon-btn" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
+        <button class="ghost icon-btn" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
+        <button class={`ghost icon-btn${sideShown ? " on" : ""}`} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
       </header>
       {saveState === "error" && saveError && <p class="issues studio-issues">{saveError}</p>}
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>
-          <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef}>
+          <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}>
             <div class="drag-halo" ref={haloRef} />
             <Overlay
               doc={state.present}
@@ -533,7 +613,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
               dragLayer={dragLayer}
               onDrop={(id, target) => performDrop({ kind: "existing", id }, target)}
               onEdit={startEditing}
-              onInsertTextAt={(rowIndex) => insertBlock("text", rowIndex, true)}
+              onHandleClick={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
+              menuId={menuId}
             />
             {state.present.rows.length === 0 && !editing && (
               <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
@@ -574,20 +655,23 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 onBlur={() => setEditing(null)}
               />
             )}
-            {singleSel && primaryBox && primaryBlock && !presenting && slashRow === null && (
-              <BlockToolbar
-                box={primaryBox}
-                scale={scale}
-                stageW={stageW}
-                canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
-                canBind={BINDABLE.has(primaryBlock.type)}
-                bound={!!primaryBlock.source}
-                onEdit={() => primary && startEditing(primary)}
-                onConvert={() => { setOptionsOpen(false); setDataOpen(false); setConvertId(primary); }}
-                onData={() => { setConvertId(null); setOptionsOpen(false); setDataOpen((v) => !v); }}
-                onOptions={() => { setConvertId(null); setDataOpen(false); setOptionsOpen((v) => !v); }}
-                onDelete={removeSelected}
-              />
+            {menuId === primary && primaryBox && primaryBlock && !presenting && slashRow === null && (
+              <>
+                <div class="popover-backdrop" onPointerDown={() => setMenuId(null)} />
+                <BlockMenu
+                  box={primaryBox}
+                  scale={scale}
+                  stageW={stageW}
+                  canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
+                  canBind={BINDABLE.has(primaryBlock.type)}
+                  bound={!!primaryBlock.source}
+                  onEdit={() => { if (primary) startEditing(primary); setMenuId(null); }}
+                  onConvert={() => { setOptionsOpen(false); setDataOpen(false); setMenuId(null); setConvertId(primary); }}
+                  onData={() => { setConvertId(null); setOptionsOpen(false); setMenuId(null); setDataOpen(true); }}
+                  onOptions={() => { setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
+                  onDelete={() => { setMenuId(null); removeSelected(); }}
+                />
+              </>
             )}
             {optionsOpen && optionsPos && primaryBlock && (
               <>
@@ -621,7 +705,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
             )}
           </PreviewStage>
         </div>
-        <aside class="studio-side">
+        <aside class={`studio-side ${sidebarPinned ? "pinned" : "unpinned"}${sideShown ? " open" : ""}`}>
+          <div class="sidebar-header">
+            <h3>Blocks</h3>
+            <span class="spacer" />
+            <button class={`icon-btn${sidebarPinned ? " on" : ""}`} title={sidebarPinned ? "Unpin" : "Pin open"} onClick={() => { setSidebarPinned((p) => !p); setSidebarOpen(true); }}><Icon.pin /></button>
+            <button class="icon-btn" title="Hide panel" onClick={() => { setSidebarOpen(false); setSidebarPinned(false); }}><Icon.panelToggle /></button>
+          </div>
           <Palette
             stageRef={stageRef}
             geometry={geometry}
@@ -631,10 +721,15 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type])}
           />
-          <BoardSettings doc={state.present} commitDoc={commitDoc} />
+          <button class="settings-toggle" onClick={() => setBoardSettingsOpen((v) => !v)}>
+            <Icon.settings /> <span>Board settings</span>
+            <Icon.chevron class={`chevron${boardSettingsOpen ? " open" : ""}`} />
+          </button>
+          {boardSettingsOpen && <BoardSettings doc={state.present} commitDoc={commitDoc} />}
         </aside>
       </div>
-      <div class="drag-chip" ref={ghostRef} />
+      {!sideShown && <button class="sidebar-reveal" title="Show blocks panel" onClick={() => setSidebarOpen(true)}><Icon.panelToggle /></button>}
+      <div class="drag-chip drag-card" ref={ghostRef} />
       {presenting && <Present doc={state.present} data={data} W={W} H={H} onClose={() => setPresenting(false)} />}
       {showHelp && <Shortcuts onClose={() => setShowHelp(false)} />}
     </div>

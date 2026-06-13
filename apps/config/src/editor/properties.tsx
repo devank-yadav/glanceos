@@ -1,5 +1,7 @@
 import type { LayoutT, WidgetT } from "@glanceos/schema";
+import type { VNode } from "preact";
 import { blockFor, type WidgetType } from "./blocks";
+import { Icon } from "./icons";
 
 // The right-hand panel: props of the selected block, or board settings when
 // nothing is selected. Position is structural (lines and columns), so there
@@ -279,14 +281,14 @@ export function BlockFields({
           <input type="checkbox" checked={style.invert} onChange={(e) => editStyle({ invert: (e.currentTarget as HTMLInputElement).checked })} />
           <span>Invert (black)</span>
         </label>
-        <Segmented label="Align" value={style.align} options={["start", "center", "end"]} icons={["⤙", "≡", "⤚"]} onChange={(v) => editStyle({ align: v })} />
-        <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={["⤒", "─", "⤓"]} onChange={(v) => editStyle({ valign: v })} />
+        <Segmented label="Align" value={style.align} options={["start", "center", "end"]} icons={[<Icon.alignLeft />, <Icon.alignCenter />, <Icon.alignRight />]} onChange={(v) => editStyle({ align: v })} />
+        <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={[<Icon.alignTop />, <Icon.alignMiddle />, <Icon.alignBottom />]} onChange={(v) => editStyle({ valign: v })} />
       </div>
     </div>
   );
 }
 
-function Segmented({ label, value, options, icons, onChange }: { label: string; value: string; options: string[]; icons: string[]; onChange: (v: string) => void }) {
+function Segmented({ label, value, options, icons, onChange }: { label: string; value: string; options: string[]; icons: (string | VNode)[]; onChange: (v: string) => void }) {
   return (
     <div class="field">
       <span>{label}</span>
