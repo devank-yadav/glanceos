@@ -1,26 +1,23 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type HubItem } from "../api";
+import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
+import { StatChip } from "../components/StatChip";
+import { useToast } from "../components/Toast";
+import { Icon } from "../editor/icons";
 import { Thumb } from "../thumb";
 
 export function HubPage() {
   const [items, setItems] = useState<HubItem[] | null>(null);
   const [q, setQ] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const timer = useRef<number | undefined>(undefined);
+  const toast = useToast();
 
   const search = async (query: string) => {
-    try {
-      setItems(await api.get<HubItem[]>(`/api/hub?q=${encodeURIComponent(query)}`));
-      setError("");
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    }
+    try { setItems(await api.get<HubItem[]>(`/api/hub?q=${encodeURIComponent(query)}`)); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
-
-  useEffect(() => {
-    search("");
-  }, []);
+  useEffect(() => { search(""); }, []);
 
   const onSearch = (value: string) => {
     setQ(value);
@@ -29,59 +26,48 @@ export function HubPage() {
   };
 
   const importItem = async (item: HubItem) => {
-    setMessage("");
     try {
       await api.post(`/api/hub/${item.id}/import`);
-      setMessage(`Imported "${item.name}" — it's in your Setups now.`);
-      await search(q); // refresh import counts
-    } catch (e) {
-      setMessage(String(e instanceof Error ? e.message : e));
-    }
+      toast.success(`Imported "${item.name}" — it's in your Setups now.`);
+      await search(q);
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
+
+  const actions = (
+    <label class="search-field">
+      <Icon.search />
+      <input placeholder="Search templates…" value={q} onInput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)} aria-label="Search templates" />
+    </label>
+  );
 
   return (
     <>
-      <h2>Template hub</h2>
-      <p class="muted">
-        Boards shared by everyone on this server. Import one to get your own editable copy —
-        publish your own from the <a href="#/setups">Setups</a> page.
-      </p>
-      <div class="row">
-        <label class="field grow">
-          <span>Search</span>
-          <input
-            placeholder="clinic, desk, welcome…"
-            value={q}
-            onInput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-      </div>
-      {message && <p class="ok">{message}</p>}
-      {error && <p class="issues">{error}</p>}
-      {items === null ? (
-        <p class="muted">Loading…</p>
-      ) : items.length === 0 ? (
-        <p class="muted">Nothing matches.</p>
-      ) : (
-        <div class="cards hub-cards">
-          {items.map((item) => (
-            <div key={item.id} class="card hub-card">
-              <Thumb doc={item.document} />
-              <div class="row spread">
-                <strong>{item.name}</strong>
-                <span class="muted">{item.importCount > 0 ? `${item.importCount}×` : ""}</span>
+      <PageHeader title="Template hub" actions={actions} />
+      <div class="shell-content">
+        <p class="muted page-intro">
+          Boards shared by everyone on this server. Import one for your own editable copy — publish your own from <a href="#/setups">Setups</a>.
+        </p>
+        {items === null ? (
+          <div class="cards hub-cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+        ) : items.length === 0 ? (
+          <EmptyState icon={<Icon.search />} title="No templates found" body={q ? "Try different keywords." : "Be the first — publish a setup to the hub."} />
+        ) : (
+          <div class="cards hub-cards">
+            {items.map((item) => (
+              <div key={item.id} class="card hub-card">
+                <Thumb doc={item.document} />
+                <h3 class="card-title">{item.name}</h3>
+                <p class="muted hub-byline">by {item.author}</p>
+                {item.description && <p class="hub-desc">{item.description}</p>}
+                <div class="row spread hub-foot">
+                  {item.importCount > 0 ? <StatChip icon={<Icon.download />}>{item.importCount}×</StatChip> : <span />}
+                  <button class="primary" onClick={() => importItem(item)}><Icon.download /> Import</button>
+                </div>
               </div>
-              <p class="muted hub-byline">
-                by {item.author}
-                {item.description ? ` — ${item.description}` : ""}
-              </p>
-              <button class="primary" onClick={() => importItem(item)}>
-                Import
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
 }

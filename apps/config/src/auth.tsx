@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "./api";
+import { useToast } from "./components/Toast";
 import { navigate } from "./router";
 
 export function AuthPage({
@@ -14,11 +15,10 @@ export function AuthPage({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
   const register = mode === "register";
+  const toast = useToast();
 
   const submit = async () => {
-    setMessage("");
     try {
       await api.post(
         register ? "/api/auth/register" : "/api/auth/login",
@@ -27,7 +27,7 @@ export function AuthPage({
       navigate("/");
       await onDone();
     } catch (e) {
-      setMessage(String(e instanceof Error ? e.message : e));
+      toast.error(String(e instanceof Error ? e.message : e));
     }
   };
 
@@ -45,13 +45,14 @@ export function AuthPage({
             {register && (
               <label class="field">
                 <span>Name</span>
-                <input value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
+                <input value={name} autoComplete="name" onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
               </label>
             )}
             <label class="field">
               <span>Email</span>
               <input
                 type="email"
+                autoComplete="email"
                 value={email}
                 onInput={(e) => setEmail((e.currentTarget as HTMLInputElement).value)}
               />
@@ -60,6 +61,7 @@ export function AuthPage({
               <span>Password {register && <em>(min 8 characters)</em>}</span>
               <input
                 type="password"
+                autoComplete={register ? "new-password" : "current-password"}
                 value={password}
                 onInput={(e) => setPassword((e.currentTarget as HTMLInputElement).value)}
                 onKeyDown={(e) => e.key === "Enter" && ready && submit()}
@@ -70,7 +72,6 @@ export function AuthPage({
             </button>
           </>
         )}
-        {message && <p class="issues">{message}</p>}
         <p class="muted auth-switch">
           {register ? (
             <>Already have an account? <a href="#/login">Log in</a></>

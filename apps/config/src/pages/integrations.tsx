@@ -1,8 +1,17 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
+import { EmptyState } from "../components/EmptyState";
+import { Modal } from "../components/Modal";
+import { PageHeader } from "../components/PageHeader";
+import { useToast } from "../components/Toast";
+import { Icon } from "../editor/icons";
 
 // Connect apps once here; bind blocks to them from the Studio's ⟿ Data tab.
 // Tokens/URLs are sent once, encrypted server-side, and never returned.
+
+const CAT_LABEL: Record<string, string> = {
+  tasks: "Tasks", issues: "Issues", docs: "Docs & sheets", dev: "Developer", calendar: "Calendar", generic: "Generic", mail: "Mail",
+};
 
 interface ProviderInfo {
   id: string;
@@ -40,8 +49,8 @@ const CONNECT_HELP: Record<string, string> = {
 export function IntegrationsPage() {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
   const [conns, setConns] = useState<Connection[] | null>(null);
-  const [error, setError] = useState("");
   const [adding, setAdding] = useState<ProviderInfo | null>(null);
+  const toast = useToast();
 
   const refresh = async () => {
     try {
@@ -51,106 +60,113 @@ export function IntegrationsPage() {
       ]);
       setProviders(p);
       setConns(c);
-      setError("");
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    }
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   useEffect(() => { refresh(); }, []);
 
   const remove = async (id: string) => {
     await api.del(`/api/connections/${id}`).catch(() => {});
+    toast.success("Disconnected");
     refresh();
   };
 
-  if (providers === null || conns === null) return <p class="muted">Loading…</p>;
-
-  const byCat = [...providers].sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.label.localeCompare(b.label));
+  const cats = [...new Set((providers ?? []).map((p) => p.category))]
+    .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
 
   return (
     <>
-      <h2>Integrations</h2>
-      <p class="muted">
-        Connect an app, then point any chart, stat, list, or calendar at it from the Studio’s ⟿ Data tab.
-        Tokens and secret URLs are encrypted on the server and never leave it.
-      </p>
-      {error && <p class="issues">{error}</p>}
+      <PageHeader title="Integrations" />
+      <div class="shell-content">
+        <p class="muted page-intro">
+          Connect an app, then point any chart, stat, list, or calendar at it from the Studio's ⟿ Data tab.
+          Tokens and secret URLs are encrypted on the server and never leave it.
+        </p>
 
-      {conns.length > 0 && (
-        <>
-          <div class="section-title">Connected</div>
-          <div class="cards">
-            {conns.map((c) => (
-              <div class="card conn-card" key={c.id}>
-                <div class="row spread">
-                  <strong>{c.label}</strong>
-                  <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
+        {providers === null || conns === null ? (
+          <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+        ) : (
+          <>
+            <h2>Connected</h2>
+            {conns.length === 0 ? (
+              <EmptyState icon={<Icon.link />} title="No connections yet" body="Pick an app below to connect it." />
+            ) : (
+              <div class="cards">
+                {conns.map((c) => (
+                  <div class="card conn-card" key={c.id}>
+                    <div class="row spread">
+                      <h3 class="card-title">{c.label}</h3>
+                      <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
+                    </div>
+                    <p class="muted">{c.provider} · {CAT_LABEL[c.category] ?? c.category}</p>
+                    {c.lastError && <p class="conn-error-line">{c.lastError}</p>}
+                    <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <h2>Add a connection</h2>
+            {cats.map((cat) => (
+              <div key={cat} class="provider-cat">
+                <div class="section-title">{CAT_LABEL[cat] ?? cat}</div>
+                <div class="cards provider-grid">
+                  {providers.filter((p) => p.category === cat).sort((a, b) => a.label.localeCompare(b.label)).map((p) => (
+                    <button class="card provider-card" key={p.id} onClick={() => setAdding(p)}>
+                      <strong>{p.label}</strong>
+                      <span class="muted">{p.authKind === "oauth2" ? "OAuth" : p.authKind === "url" ? "URL" : p.authKind === "none" ? "No key" : "Token"}</span>
+                    </button>
+                  ))}
                 </div>
-                <p class="muted">{c.provider} · {c.category}</p>
-                {c.lastError && <p class="issues">{c.lastError}</p>}
-                <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
               </div>
             ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      <div class="section-title">Add a connection</div>
-      <div class="cards provider-grid">
-        {byCat.map((p) => (
-          <button class="card provider-card" key={p.id} onClick={() => setAdding(p)}>
-            <strong>{p.label}</strong>
-            <span class="muted">{p.category}</span>
-          </button>
-        ))}
+        <Modal open={!!adding} onClose={() => setAdding(null)} title={adding ? `Connect ${adding.label}` : ""}>
+          {adding && <AddForm provider={adding} onAdded={() => { setAdding(null); refresh(); }} />}
+        </Modal>
       </div>
-
-      {adding && <AddDialog provider={adding} onClose={() => setAdding(null)} onAdded={() => { setAdding(null); refresh(); }} />}
     </>
   );
 }
 
-function AddDialog({ provider, onClose, onAdded }: { provider: ProviderInfo; onClose: () => void; onAdded: () => void }) {
+function AddForm({ provider, onAdded }: { provider: ProviderInfo; onAdded: () => void }) {
   const [label, setLabel] = useState(provider.label);
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const toast = useToast();
   const needsSecret = provider.authKind === "token" || provider.authKind === "url";
 
   const save = async () => {
     setBusy(true);
-    setErr("");
     try {
       await api.post("/api/connections", { provider: provider.id, label, secret: secret || undefined });
+      toast.success(`Connected ${provider.label}`);
       onAdded();
     } catch (e) {
-      setErr(String(e instanceof Error ? e.message : e));
+      toast.error(String(e instanceof Error ? e.message : e));
       setBusy(false);
     }
   };
 
   return (
-    <div class="modal-backdrop" onClick={onClose}>
-      <div class="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Connect {provider.label}</h3>
-        {CONNECT_HELP[provider.id] && <p class="muted">{CONNECT_HELP[provider.id]}</p>}
-        {provider.authKind === "oauth2" && <p class="issues">OAuth sign-in needs your server admin to register an app first.</p>}
+    <>
+      {CONNECT_HELP[provider.id] && <p class="muted" style={{ marginTop: 0 }}>{CONNECT_HELP[provider.id]}</p>}
+      {provider.authKind === "oauth2" && <p class="conn-error-line">OAuth sign-in needs your server admin to register an app first.</p>}
+      <label class="field grow">
+        <span>Label</span>
+        <input value={label} maxLength={60} onInput={(e) => setLabel((e.currentTarget as HTMLInputElement).value)} />
+      </label>
+      {needsSecret && (
         <label class="field grow">
-          <span>Label</span>
-          <input value={label} onInput={(e) => setLabel((e.currentTarget as HTMLInputElement).value)} />
+          <span>{provider.authKind === "url" ? "URL" : "Token"}</span>
+          <input type={provider.authKind === "url" ? "text" : "password"} value={secret} placeholder={SECRET_HINT[provider.authKind]} onInput={(e) => setSecret((e.currentTarget as HTMLInputElement).value)} />
         </label>
-        {needsSecret && (
-          <label class="field grow">
-            <span>{provider.authKind === "url" ? "URL" : "Token"}</span>
-            <input type={provider.authKind === "url" ? "text" : "password"} value={secret} placeholder={SECRET_HINT[provider.authKind]} onInput={(e) => setSecret((e.currentTarget as HTMLInputElement).value)} />
-          </label>
-        )}
-        {err && <p class="issues">{err}</p>}
-        <div class="row spread" style={{ marginTop: "12px" }}>
-          <button class="ghost" onClick={onClose}>Cancel</button>
-          <button disabled={busy || (needsSecret && !secret)} onClick={save}>{busy ? "Connecting…" : "Connect"}</button>
-        </div>
+      )}
+      <div class="row spread" style={{ marginTop: "4px" }}>
+        <span />
+        <button class="primary" disabled={busy || (needsSecret && !secret)} onClick={save}>{busy ? "Connecting…" : "Connect"}</button>
       </div>
-    </div>
+    </>
   );
 }

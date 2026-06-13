@@ -1,47 +1,84 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { api, type LayoutRecord, type SetupSummary } from "../api";
+import { useConfirm } from "../components/ConfirmDialog";
+import { EmptyState } from "../components/EmptyState";
+import { Menu } from "../components/Menu";
+import { Modal } from "../components/Modal";
+import { PageHeader } from "../components/PageHeader";
+import { StatChip } from "../components/StatChip";
+import { useToast } from "../components/Toast";
+import { Icon } from "../editor/icons";
 import { navigate } from "../router";
 
 export function SetupsPage() {
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
-  const [error, setError] = useState("");
+  const [q, setQ] = useState("");
+  const [importing, setImporting] = useState(false);
+  const toast = useToast();
 
   const refresh = async () => {
-    try {
-      setSetups(await api.get<SetupSummary[]>("/api/layouts"));
-      setError("");
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    }
+    try { setSetups(await api.get<SetupSummary[]>("/api/layouts")); }
+    catch (e) { toast.error(`Couldn't load setups: ${e instanceof Error ? e.message : e}`); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  const newSetup = async () => {
+    try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  const filtered = useMemo(
+    () => (setups ?? []).filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase())),
+    [setups, q],
+  );
 
-  if (setups === null) return <p class="muted">Loading…</p>;
+  const actions = (
+    <>
+      <label class="search-field">
+        <Icon.search />
+        <input placeholder="Search setups…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search setups" />
+      </label>
+      <button class="ghost" onClick={() => setImporting(true)}><Icon.upload /> Import</button>
+      <button class="primary" onClick={newSetup}><Icon.plus /> New setup</button>
+    </>
+  );
 
   return (
     <>
-      <h2>Setups</h2>
-      <p class="muted">
-        A setup is a screen customization that lives independently of any screen — disconnect a
-        screen and its setup survives; attach one setup to many screens and they stay in step.
-      </p>
-      {error && <p class="issues">{error}</p>}
-      <div class="cards">
-        {setups.map((s) => (
-          <SetupCard key={s.id} setup={s} onChanged={refresh} />
-        ))}
-        <ImportCard onImported={refresh} />
+      <PageHeader title="Setups" actions={actions} />
+      <div class="shell-content">
+        <p class="muted page-intro">
+          A setup is a screen customization that lives independently of any screen — disconnect a screen and its setup survives;
+          attach one setup to many screens and they stay in step.
+        </p>
+        {setups === null ? (
+          <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<Icon.pencil />}
+            title={q ? "No setups match" : "No setups yet"}
+            body={q ? "Try a different search." : "Create your first board, or import one you exported."}
+            action={q ? undefined : { label: "New setup", onClick: newSetup }}
+          />
+        ) : (
+          <div class="cards">
+            {filtered.map((s) => <SetupCard key={s.id} setup={s} onChanged={refresh} />)}
+          </div>
+        )}
+        <Modal open={importing} onClose={() => setImporting(false)} title="Import a setup">
+          <ImportForm onImported={async () => { setImporting(false); await refresh(); }} />
+        </Modal>
       </div>
     </>
   );
 }
 
 function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () => Promise<void> }) {
-  const [description, setDescription] = useState(setup.description);
   const [busy, setBusy] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [description, setDescription] = useState(setup.description);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const exportJson = async () => {
     const record = await api.get<LayoutRecord>(`/api/layouts/${setup.id}`);
@@ -51,100 +88,98 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
     a.download = `${setup.name.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}.glanceos.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+    toast.success("Exported");
   };
 
   const togglePublish = async () => {
     setBusy(true);
     try {
       await api.patch(`/api/layouts/${setup.id}`, { published: !setup.published, description });
+      toast.success(setup.published ? "Removed from hub" : "Published to hub");
+      setPublishing(false);
       await onChanged();
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+    finally { setBusy(false); }
   };
 
   const remove = async () => {
-    if (setup.usedBy > 0 && !confirm(`"${setup.name}" is live on ${setup.usedBy} screen(s). They will fall back to "pick a setup". Delete anyway?`)) return;
+    const ok = await confirm({
+      title: `Delete "${setup.name}"?`,
+      body: setup.usedBy > 0 ? `It is live on ${setup.usedBy} screen(s); they'll fall back to "pick a setup".` : "This can't be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     await api.del(`/api/layouts/${setup.id}`);
+    toast.success("Setup deleted");
     await onChanged();
   };
 
   return (
-    <div class="card">
+    <div class="card setup-card">
       <div class="row spread">
-        <strong>{setup.name}</strong>
-        {setup.published && <span class="badge published">in hub</span>}
+        <h3 class="card-title">{setup.name}</h3>
+        <Menu
+          trigger={<Icon.list />}
+          items={[
+            { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
+            { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
+            { label: setup.published ? "Hub settings" : "Publish to hub…", icon: <Icon.upload />, onClick: () => setPublishing((v) => !v) },
+            { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
+          ]}
+        />
       </div>
-      <p class="muted setup-line">
-        {setup.widgetCount} blocks · {setup.rowCount} lines
-        {setup.usedBy > 0 ? <> · live on <strong>{setup.deviceNames.join(", ")}</strong></> : " · not attached"}
-        {setup.importCount > 0 && <> · imported {setup.importCount}×</>}
-      </p>
+      <div class="chip-row">
+        <StatChip>{setup.widgetCount} blocks</StatChip>
+        <StatChip>{setup.rowCount} lines</StatChip>
+        {setup.usedBy > 0 ? <StatChip icon={<Icon.monitor />} title={setup.deviceNames.join(", ")}>live on {setup.usedBy}</StatChip> : <span class="chip subtle">not attached</span>}
+        {setup.published && <span class="chip published">in hub</span>}
+        {setup.importCount > 0 && <StatChip>imported {setup.importCount}×</StatChip>}
+      </div>
       <div class="row wrap">
-        <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}>Open studio</button>
-        <button onClick={() => api.post(`/api/layouts/${setup.id}/duplicate`).then(onChanged)}>Duplicate</button>
-        <button onClick={exportJson}>Export</button>
-        <button class="danger" onClick={remove}>Delete</button>
+        <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}><Icon.pencil /> Open studio</button>
       </div>
-      <div class="row wrap publish-row">
-        <label class="field grow">
-          <span>Hub description</span>
-          <input
-            value={description}
-            placeholder="What is this board for?"
-            onInput={(e) => setDescription((e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <button disabled={busy} onClick={togglePublish}>
-          {setup.published ? "Unpublish" : "Publish to hub"}
-        </button>
-      </div>
+      {publishing && (
+        <div class="publish-row">
+          <label class="field grow">
+            <span>Hub description</span>
+            <input value={description} placeholder="What is this board for?" onInput={(e) => setDescription((e.currentTarget as HTMLInputElement).value)} />
+          </label>
+          <button disabled={busy} onClick={togglePublish}>{setup.published ? "Unpublish" : "Publish"}</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function ImportCard({ onImported }: { onImported: () => Promise<void> }) {
+function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
   const [text, setText] = useState("");
-  const [message, setMessage] = useState("");
+  const toast = useToast();
 
   const importJson = async (raw: string) => {
-    setMessage("");
     try {
-      // The server validates the document (and migrates old versions);
-      // keeping zod out of this page keeps the first load tiny.
       const parsed = JSON.parse(raw) as { name?: string };
       await api.post("/api/layouts", { name: parsed?.name ?? "Imported setup", document: parsed });
-      setText("");
-      setMessage("Imported.");
+      toast.success("Setup imported");
       await onImported();
     } catch (e) {
-      setMessage(e instanceof SyntaxError ? "That isn't valid JSON." : String(e instanceof Error ? e.message : e));
+      toast.error(e instanceof SyntaxError ? "That isn't valid JSON." : String(e instanceof Error ? e.message : e));
     }
   };
 
   const onFile = (e: Event) => {
     const file = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (!file) return;
-    file.text().then(importJson);
+    if (file) file.text().then(importJson);
   };
 
   return (
-    <div class="card import-card">
-      <h3>Import a setup</h3>
-      <p class="muted">Paste exported JSON, or pick a <code>.glanceos.json</code> file.</p>
-      <textarea
-        rows={4}
-        placeholder='{"schemaVersion":1, …}'
-        value={text}
-        onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
-      />
+    <>
+      <p class="muted" style={{ marginTop: 0 }}>Paste exported JSON, or pick a <code>.glanceos.json</code> file.</p>
+      <textarea rows={5} placeholder='{"schemaVersion":3, …}' value={text} onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)} />
       <div class="row spread">
-        <input type="file" accept=".json,application/json" onChange={onFile} />
-        <button class="primary" disabled={!text.trim()} onClick={() => importJson(text)}>
-          Import
-        </button>
+        <input type="file" accept=".json,application/json" onChange={onFile} aria-label="Choose a setup file" />
+        <button class="primary" disabled={!text.trim()} onClick={() => importJson(text)}>Import</button>
       </div>
-      {message && <p class="muted">{message}</p>}
-    </div>
+    </>
   );
 }

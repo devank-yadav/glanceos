@@ -1,5 +1,13 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type Playlist, type QueueState, type SetupSummary, type TaskItem } from "../api";
+import { useConfirm } from "../components/ConfirmDialog";
+import { EmptyState } from "../components/EmptyState";
+import { Menu } from "../components/Menu";
+import { Modal } from "../components/Modal";
+import { PageHeader } from "../components/PageHeader";
+import { StatChip } from "../components/StatChip";
+import { useToast } from "../components/Toast";
+import { Icon } from "../editor/icons";
 import { navigate } from "../router";
 
 export function ScreensPage() {
@@ -7,17 +15,15 @@ export function ScreensPage() {
   const [setups, setSetups] = useState<SetupSummary[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const toast = useToast();
 
   const refresh = async () => {
     try {
       setDevices(await api.get<DeviceSummary[]>("/api/devices"));
       setSetups(await api.get<SetupSummary[]>("/api/layouts"));
       setPlaylists(await api.get<Playlist[]>("/api/playlists"));
-      setError("");
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    }
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
   useEffect(() => {
@@ -26,117 +32,100 @@ export function ScreensPage() {
     return () => clearInterval(t);
   }, []);
 
-  if (devices === null) return <p class="muted">Loading…</p>;
+  const onClaimed = async (id: string) => { setClaiming(false); await refresh(); setPickerFor(id); };
+
+  const actions = <button class="primary" onClick={() => setClaiming(true)}><Icon.plus /> Connect screen</button>;
 
   return (
     <>
-      {error && <p class="issues">{error}</p>}
-      {devices.length === 0 ? (
-        <EmptyState onClaimed={async (id) => { await refresh(); setPickerFor(id); }} />
-      ) : (
-        <>
-          <h2>Screens</h2>
+      <PageHeader title="Screens" actions={devices && devices.length > 0 ? actions : undefined} />
+      <div class="shell-content">
+        {devices === null ? (
+          <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+        ) : devices.length === 0 ? (
+          <FirstScreen onClaim={() => setClaiming(true)} />
+        ) : (
           <div class="cards">
             {devices.map((d) => (
-              <DeviceCard
-                key={d.id}
-                device={d}
-                playlists={playlists}
-                onChanged={refresh}
-                onPick={() => setPickerFor(d.id)}
-              />
+              <DeviceCard key={d.id} device={d} playlists={playlists} onChanged={refresh} onPick={() => setPickerFor(d.id)} />
             ))}
-            <ClaimCard compact onClaimed={async (id) => { await refresh(); setPickerFor(id); }} />
           </div>
-        </>
-      )}
-      {pickerFor && (
-        <SetupPicker
-          deviceId={pickerFor}
-          setups={setups}
-          playlists={playlists}
-          onClose={() => setPickerFor(null)}
-          onDone={refresh}
-        />
-      )}
-      <DataPanels />
+        )}
+
+        <DataPanels />
+
+        <Modal open={claiming} onClose={() => setClaiming(false)} title="Connect a screen">
+          <ClaimForm onClaimed={onClaimed} />
+        </Modal>
+        {pickerFor && (
+          <SetupPicker deviceId={pickerFor} setups={setups} playlists={playlists} onClose={() => setPickerFor(null)} onDone={refresh} />
+        )}
+      </div>
     </>
   );
 }
 
-function EmptyState({ onClaimed }: { onClaimed: (deviceId: string) => Promise<void> }) {
+function FirstScreen({ onClaim }: { onClaim: () => void }) {
   return (
-    <div class="empty-state">
-      <h1>Connect your first screen</h1>
-      <ol class="muted steps">
-        <li>Open the screen app on any display with a browser — <code>http://&lt;this-server&gt;/screen</code> (or <code>http://localhost:5173</code> in dev).</li>
-        <li>The screen registers itself and shows a short claim code.</li>
-        <li>Type the code here and the screen becomes yours.</li>
+    <div class="empty-state first-screen">
+      <span class="empty-icon"><Icon.monitor /></span>
+      <h2 class="empty-title">Connect your first screen</h2>
+      <ol class="steps-list">
+        <li><span class="step-n">1</span> Open <code>http://&lt;this-server&gt;/screen</code> on any display with a browser (or <code>localhost:5173</code> in dev).</li>
+        <li><span class="step-n">2</span> It registers itself and shows a short claim code.</li>
+        <li><span class="step-n">3</span> Enter the code here and the screen becomes yours.</li>
       </ol>
-      <ClaimCard onClaimed={onClaimed} />
+      <button class="primary" onClick={onClaim}><Icon.plus /> Enter a claim code</button>
     </div>
   );
 }
 
-function ClaimCard({ compact, onClaimed }: { compact?: boolean; onClaimed: (deviceId: string) => Promise<void> }) {
+function ClaimForm({ onClaimed }: { onClaimed: (deviceId: string) => Promise<void> }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const toast = useToast();
 
   const claim = async () => {
-    setMessage("");
     try {
-      const device = await api.post<DeviceSummary>("/api/devices/claim", {
-        code,
-        name: name.trim() || undefined,
-      });
-      setCode("");
-      setName("");
+      const device = await api.post<DeviceSummary>("/api/devices/claim", { code, name: name.trim() || undefined });
+      toast.success("Screen connected");
       await onClaimed(device.id);
-    } catch (e) {
-      setMessage(String(e instanceof Error ? e.message : e));
-    }
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
   return (
-    <div class={compact ? "card claim-card" : "card"}>
-      {compact && <h3>Connect another screen</h3>}
-      <div class="row wrap">
-        <label class="field">
-          <span>Claim code</span>
-          <input placeholder="7QK-D2F" value={code} onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)} />
-        </label>
-        <label class="field">
-          <span>Screen name</span>
-          <input placeholder="Desk monitor" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
-        </label>
-        <button class="primary" disabled={code.trim().length < 4} onClick={claim}>
-          Claim
-        </button>
+    <>
+      <label class="field grow">
+        <span>Claim code</span>
+        <input placeholder="7QK-D2F" value={code} autoFocus onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => e.key === "Enter" && code.trim().length >= 4 && claim()} />
+      </label>
+      <label class="field grow">
+        <span>Screen name <span class="muted">(optional)</span></span>
+        <input placeholder="Desk monitor" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
+      </label>
+      <div class="row spread" style={{ marginTop: "4px" }}>
+        <span />
+        <button class="primary" disabled={code.trim().length < 4} onClick={claim}>Claim screen</button>
       </div>
-      {message && <p class="issues">{message}</p>}
-    </div>
+    </>
   );
 }
 
-function DeviceCard({
-  device,
-  playlists,
-  onChanged,
-  onPick,
-}: {
-  device: DeviceSummary;
-  playlists: Playlist[];
-  onChanged: () => Promise<void>;
-  onPick: () => void;
-}) {
-  const [renaming, setRenaming] = useState(false);
+function DeviceCard({ device, playlists, onChanged, onPick }: { device: DeviceSummary; playlists: Playlist[]; onChanged: () => Promise<void>; onPick: () => void }) {
+  const [editing, setEditing] = useState(false);
   const [name, setName] = useState(device.name ?? "");
   const [previewing, setPreviewing] = useState(false);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
   const rename = async () => {
+    setEditing(false);
+    if (name === (device.name ?? "")) return;
     await api.patch(`/api/devices/${device.id}`, { name });
-    setRenaming(false);
+    toast.success("Renamed");
     await onChanged();
   };
   const setRefresh = async (seconds: number) => {
@@ -144,7 +133,9 @@ function DeviceCard({
     await onChanged();
   };
   const disconnect = async () => {
+    if (!(await confirm({ title: `Disconnect "${device.name ?? "this screen"}"?`, body: "Its content is kept and can be reattached later.", confirmLabel: "Disconnect" }))) return;
     await api.del(`/api/devices/${device.id}`);
+    toast.success("Screen disconnected");
     await onChanged();
   };
 
@@ -153,33 +144,36 @@ function DeviceCard({
   return (
     <div class="card device-card">
       <div class="row spread">
-        <div class="row">
-          <span class={device.online ? "dot online" : "dot"} title={device.online ? "online" : "offline"} />
-          {renaming ? (
-            <input value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => e.key === "Enter" && rename()} />
+        <div class="row device-id">
+          <span class={device.online ? "dot online" : "dot"} aria-label={device.online ? "Online" : "Offline"} title={device.online ? "Online" : "Offline"} />
+          {editing ? (
+            <input ref={inputRef} class="rename-input" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(device.name ?? ""); setEditing(false); } }} onBlur={rename} />
           ) : (
-            <strong>{device.name ?? "Unnamed screen"}</strong>
+            <h3 class="card-title device-name" tabIndex={0} title="Click to rename" onClick={() => setEditing(true)} onKeyDown={(e) => e.key === "Enter" && setEditing(true)}>{device.name ?? "Unnamed screen"}</h3>
           )}
         </div>
-        {renaming ? <button onClick={rename}>Save</button> : <button class="ghost" onClick={() => setRenaming(true)}>Rename</button>}
+        <Menu
+          trigger={<Icon.list />}
+          items={[
+            { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
+            { label: "Rename", icon: <Icon.pencil />, onClick: () => setEditing(true) },
+            { label: "Disconnect", icon: <Icon.x />, danger: true, onClick: disconnect },
+          ]}
+        />
       </div>
 
       <p class="muted setup-line">
-        {playlist ? (
-          <>Playing <strong>{playlist.name}</strong> · {playlist.items.length} setups</>
-        ) : device.layoutName ? (
-          <>Showing <strong>{device.layoutName}</strong></>
-        ) : (
-          <>No setup yet — choose one</>
-        )}
+        {playlist ? <>Playing <strong>{playlist.name}</strong> · {playlist.items.length} setups</>
+          : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
+            : <>No setup yet — choose one</>}
       </p>
 
-      <div class="telemetry muted">
-        <span title="Resolution">▦ {device.resolution}</span>
-        <span title="Refresh interval">⟳ {fmtDuration(device.refreshSeconds)}</span>
-        {device.battery !== null && <span title="Battery">🔋 {device.battery}%</span>}
-        {device.rssi !== null && <span title="Wi-Fi signal">📶 {device.rssi} dBm</span>}
-        {device.lastSeen && <span title="Last device contact">⌁ {fmtAgo(device.lastSeen)}</span>}
+      <div class="chip-row">
+        <StatChip icon={<Icon.monitor />} title="Resolution">{device.resolution}</StatChip>
+        <StatChip icon={<Icon.convert />} title="Refresh interval">{fmtDuration(device.refreshSeconds)}</StatChip>
+        {device.battery !== null && <StatChip title="Battery">{device.battery}%</StatChip>}
+        {device.rssi !== null && <StatChip title="Wi-Fi signal">{device.rssi} dBm</StatChip>}
+        {device.lastSeen && <StatChip title="Last contact">{fmtAgo(device.lastSeen)}</StatChip>}
       </div>
 
       {previewing && (
@@ -189,19 +183,15 @@ function DeviceCard({
         </div>
       )}
 
-      <div class="row wrap">
-        {device.layoutId !== null && (
-          <button class="primary" onClick={() => navigate(`/edit/${device.layoutId}`)}>Open studio</button>
-        )}
+      <div class="row wrap device-actions">
+        {device.layoutId !== null && <button class="primary" onClick={() => navigate(`/edit/${device.layoutId}`)}><Icon.pencil /> Open studio</button>}
         <button onClick={onPick}>Change content</button>
-        <button class="ghost" onClick={() => setPreviewing((v) => !v)}>{previewing ? "Hide preview" : "E-ink preview"}</button>
         <label class="field refresh-field">
           <span>Refresh</span>
           <select value={String(device.refreshSeconds)} onChange={(e) => setRefresh(Number((e.currentTarget as HTMLSelectElement).value))}>
             {[60, 300, 900, 1800, 3600, 21600].map((s) => <option key={s} value={String(s)}>{fmtDuration(s)}</option>)}
           </select>
         </label>
-        <button class="danger" title="Content is kept and can be reattached" onClick={disconnect}>Disconnect</button>
       </div>
     </div>
   );
@@ -221,20 +211,9 @@ function fmtAgo(ms: number): string {
 }
 
 /** Post-claim (and change-setup) picker: existing setup, new blank, or the hub. */
-function SetupPicker({
-  deviceId,
-  setups,
-  playlists,
-  onClose,
-  onDone,
-}: {
-  deviceId: string;
-  setups: SetupSummary[];
-  playlists: Playlist[];
-  onClose: () => void;
-  onDone: () => Promise<void>;
-}) {
+function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceId: string; setups: SetupSummary[]; playlists: Playlist[]; onClose: () => void; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const assign = async (layoutId: number, thenEdit = false) => {
     setBusy(true);
@@ -243,86 +222,59 @@ function SetupPicker({
       await onDone();
       onClose();
       if (thenEdit) navigate(`/edit/${layoutId}`);
-    } finally {
-      setBusy(false);
-    }
+      else toast.success("Setup attached");
+    } finally { setBusy(false); }
   };
-
   const assignPlaylist = async (playlistId: number) => {
     setBusy(true);
-    try {
-      await api.patch(`/api/devices/${deviceId}`, { playlistId });
-      await onDone();
-      onClose();
-    } finally {
-      setBusy(false);
-    }
+    try { await api.patch(`/api/devices/${deviceId}`, { playlistId }); await onDone(); onClose(); toast.success("Playlist attached"); }
+    finally { setBusy(false); }
   };
-
   const createBlank = async () => {
     setBusy(true);
-    try {
-      const layout = await api.post<{ id: number }>("/api/layouts", { name: "New setup" });
-      await assign(layout.id, true);
-    } finally {
-      setBusy(false);
-    }
+    try { const layout = await api.post<{ id: number }>("/api/layouts", { name: "New setup" }); await assign(layout.id, true); }
+    finally { setBusy(false); }
   };
 
   return (
-    <div class="sheet-backdrop" onClick={onClose}>
-      <div class="sheet" onClick={(e) => e.stopPropagation()}>
-        <div class="row spread">
-          <h3>Choose a setup for this screen</h3>
-          <button class="ghost" onClick={onClose}>✕</button>
-        </div>
-        <button class="primary wide" disabled={busy} onClick={createBlank}>
-          Start blank — open the studio
-        </button>
-        {setups.length > 0 && (
-          <>
-            <p class="muted">…or attach an existing setup (screens can share one):</p>
-            <ul class="picker-list">
-              {setups.map((s) => (
-                <li key={s.id} class="row spread">
-                  <span>
-                    <strong>{s.name}</strong>{" "}
-                    <span class="muted">
-                      {s.widgetCount} blocks{s.usedBy > 0 ? ` · live on ${s.usedBy}` : ""}
-                    </span>
-                  </span>
-                  <button disabled={busy} onClick={() => assign(s.id)}>Attach</button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {playlists.length > 0 && (
-          <>
-            <p class="muted">…or play a rotating <a href="#/playlists" onClick={onClose}>playlist</a>:</p>
-            <ul class="picker-list">
-              {playlists.map((p) => (
-                <li key={p.id} class="row spread">
-                  <span><strong>{p.name}</strong> <span class="muted">{p.items.length} setups · every {fmtDuration(p.intervalSeconds)}</span></span>
-                  <button disabled={busy || p.items.length === 0} onClick={() => assignPlaylist(p.id)}>Play</button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        <p class="muted">
-          Want a starting point instead? <a href="#/hub" onClick={onClose}>Import from the hub</a>, then attach it here.
-        </p>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title="Choose a setup for this screen">
+      <button class="primary wide" disabled={busy} onClick={createBlank}>Start blank — open the studio</button>
+      {setups.length > 0 && (
+        <>
+          <p class="muted">…or attach an existing setup (screens can share one):</p>
+          <ul class="picker-list">
+            {setups.map((s) => (
+              <li key={s.id} class="row spread">
+                <span><strong>{s.name}</strong> <span class="muted">{s.widgetCount} blocks{s.usedBy > 0 ? ` · live on ${s.usedBy}` : ""}</span></span>
+                <button disabled={busy} onClick={() => assign(s.id)}>Attach</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {playlists.length > 0 && (
+        <>
+          <p class="muted">…or play a rotating <a href="#/playlists" onClick={onClose}>playlist</a>:</p>
+          <ul class="picker-list">
+            {playlists.map((p) => (
+              <li key={p.id} class="row spread">
+                <span><strong>{p.name}</strong> <span class="muted">{p.items.length} setups · every {fmtDuration(p.intervalSeconds)}</span></span>
+                <button disabled={busy || p.items.length === 0} onClick={() => assignPlaylist(p.id)}>Play</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p class="muted">Want a starting point? <a href="#/hub" onClick={onClose}>Import from the hub</a>, then attach it here.</p>
+    </Modal>
   );
 }
 
-/** The data behind tasks/queue widgets — relocated from the v0.1 panels. */
+/** The data behind tasks/queue widgets. */
 function DataPanels() {
   return (
     <details class="data-panels">
-      <summary>Widget data: tasks & queue</summary>
+      <summary><Icon.chevron class="data-chevron" /> Widget data · tasks &amp; queue</summary>
       <div class="cards">
         <TasksPanel />
         <QueuePanel />
@@ -336,9 +288,7 @@ function TasksPanel() {
   const [text, setText] = useState("");
 
   const refresh = async () => setItems(await api.get<TaskItem[]>("/api/tasks?listId=default"));
-  useEffect(() => {
-    refresh().catch(() => {});
-  }, []);
+  useEffect(() => { refresh().catch(() => {}); }, []);
 
   const add = async () => {
     if (!text.trim()) return;
@@ -353,11 +303,7 @@ function TasksPanel() {
       <div class="row">
         <label class="field grow">
           <span>New task</span>
-          <input
-            value={text}
-            onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-          />
+          <input value={text} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         </label>
         <button onClick={add}>Add</button>
       </div>
@@ -365,14 +311,10 @@ function TasksPanel() {
         {items.map((item) => (
           <li key={item.id} class="row spread">
             <label class="field checkbox">
-              <input
-                type="checkbox"
-                checked={item.done}
-                onChange={() => api.patch(`/api/tasks/${item.id}`, { done: !item.done }).then(refresh)}
-              />
+              <input type="checkbox" checked={item.done} onChange={() => api.patch(`/api/tasks/${item.id}`, { done: !item.done }).then(refresh)} />
               <span class={item.done ? "done" : ""}>{item.text}</span>
             </label>
-            <button class="ghost" onClick={() => api.del(`/api/tasks/${item.id}`).then(refresh)}>✕</button>
+            <button class="ghost" onClick={() => api.del(`/api/tasks/${item.id}`).then(refresh)} aria-label="Delete task"><Icon.x /></button>
           </li>
         ))}
       </ul>
@@ -395,9 +337,7 @@ function QueuePanel() {
   return (
     <div class="card">
       <h3>Queue operator</h3>
-      <p class="muted">
-        Now serving: <strong>{queue?.now_serving ?? "—"}</strong> · waiting: {queue?.waiting ?? "—"}
-      </p>
+      <p class="muted">Now serving: <strong>{queue?.now_serving ?? "—"}</strong> · waiting: {queue?.waiting ?? "—"}</p>
       <div class="row wrap">
         <button class="primary" onClick={() => act("/api/queues/default/advance")}>Next +1</button>
         <button onClick={() => act("/api/queues/default/waiting", { delta: 1 })}>Waiting +1</button>

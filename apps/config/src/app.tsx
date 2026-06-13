@@ -1,14 +1,19 @@
 import type { ComponentType } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { api, type AuthStatus } from "./api";
 import { AuthPage } from "./auth";
+import { CommandPalette, type Command } from "./components/CommandPalette";
+import { ShellCtx } from "./components/PageHeader";
+import { Sidebar } from "./components/Sidebar";
+import { Icon } from "./editor/icons";
+import { useTheme } from "./hooks/useTheme";
 import { HubPage } from "./pages/hub";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
-import { useRoute } from "./router";
+import { navigate, useRoute } from "./router";
 
 // The Studio (and zod with it) lives in its own chunk: the shell loads tiny,
 // and we warm the chunk during idle time so opening a board feels instant.
@@ -19,12 +24,8 @@ function StudioRoute({ layoutId }: { layoutId: number }) {
   const [Studio, setStudio] = useState<ComponentType<{ layoutId: number }> | null>(null);
   useEffect(() => {
     let mounted = true;
-    loadStudio().then((m) => {
-      if (mounted) setStudio(() => m.Studio);
-    });
-    return () => {
-      mounted = false;
-    };
+    loadStudio().then((m) => { if (mounted) setStudio(() => m.Studio); });
+    return () => { mounted = false; };
   }, []);
   return Studio ? <Studio layoutId={layoutId} /> : <Splash />;
 }
@@ -37,83 +38,97 @@ function Splash() {
   );
 }
 
+const SIDEBAR_KEY = "glanceos.sidebar";
+
 export function App() {
   const route = useRoute();
   const [status, setStatus] = useState<AuthStatus | null>(null);
+  const [theme, , cycleTheme] = useTheme();
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(SIDEBAR_KEY) === "1"; } catch { return false; }
+  });
+  const [drawer, setDrawer] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const refreshAuth = async () => {
-    try {
-      setStatus(await api.get<AuthStatus>("/api/auth/status"));
-    } catch {
-      setStatus({ authed: false, user: null, registrationOpen: true });
-    }
+    try { setStatus(await api.get<AuthStatus>("/api/auth/status")); }
+    catch { setStatus({ authed: false, user: null, registrationOpen: true }); }
   };
 
-  useEffect(() => {
-    refreshAuth();
-  }, []);
+  useEffect(() => { refreshAuth(); }, []);
 
-  // Warm the Studio chunk once the user is in.
   useEffect(() => {
     if (!status?.authed) return;
     const t = window.setTimeout(loadStudio, 1200);
     return () => window.clearTimeout(t);
   }, [status?.authed]);
 
+  // ⌘K opens the palette; close the mobile drawer whenever the route changes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => { setDrawer(false); }, [route.name]);
+
+  const toggleCollapse = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem(SIDEBAR_KEY, n ? "1" : "0"); } catch { /* ignore */ } return n; });
+
+  const logout = () => api.post("/api/auth/logout").then(refreshAuth);
+
+  const commands = useMemo<Command[]>(() => [
+    { id: "nav-screens", label: "Go to Screens", hint: "Page", icon: <Icon.grid />, run: () => navigate("/") },
+    { id: "nav-setups", label: "Go to Setups", hint: "Page", icon: <Icon.pencil />, run: () => navigate("/setups") },
+    { id: "nav-playlists", label: "Go to Playlists", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
+    { id: "nav-hub", label: "Go to Hub", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
+    { id: "nav-integrations", label: "Go to Integrations", hint: "Page", icon: <Icon.link />, run: () => navigate("/integrations") },
+    { id: "new-setup", label: "New setup", hint: "Action", icon: <Icon.plus />, run: async () => {
+        try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); } catch { navigate("/setups"); }
+      } },
+    { id: "theme", label: "Toggle theme", hint: "Appearance", icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, run: cycleTheme },
+    { id: "logout", label: "Log out", hint: "Account", icon: <Icon.x />, run: logout },
+  ], [theme]);
+
   if (!status) return <Splash />;
 
   if (!status.authed) {
     if (route.name === "login" || route.name === "register") {
-      return (
-        <AuthPage
-          mode={route.name}
-          registrationOpen={status.registrationOpen}
-          onDone={refreshAuth}
-        />
-      );
+      return <AuthPage mode={route.name} registrationOpen={status.registrationOpen} onDone={refreshAuth} />;
     }
     return <Landing registrationOpen={status.registrationOpen} />;
   }
 
   const page = route.name === "login" || route.name === "register" ? ({ name: "screens" } as const) : route;
 
-  // The studio is a full-screen surface with its own header.
+  // The studio is a full-screen surface with its own chrome.
   if (page.name === "edit") return <StudioRoute layoutId={page.layoutId} />;
 
   return (
-    <main class="shell page-enter">
-      <header class="topbar glass">
-        <a class="brand" href="#/">
-          glanceos
-        </a>
-        <nav>
-          <a href="#/" class={page.name === "screens" ? "active" : ""}>
-            Screens
-          </a>
-          <a href="#/setups" class={page.name === "setups" ? "active" : ""}>
-            Setups
-          </a>
-          <a href="#/playlists" class={page.name === "playlists" ? "active" : ""}>
-            Playlists
-          </a>
-          <a href="#/hub" class={page.name === "hub" ? "active" : ""}>
-            Hub
-          </a>
-          <a href="#/integrations" class={page.name === "integrations" ? "active" : ""}>
-            Integrations
-          </a>
-        </nav>
-        <span class="spacer" />
-        <span class="muted">{status.user!.name}</span>
-        <button class="ghost" onClick={() => api.post("/api/auth/logout").then(refreshAuth)}>
-          Log out
-        </button>
-      </header>
-      {page.name === "screens" && <ScreensPage />}
-      {page.name === "setups" && <SetupsPage />}
-      {page.name === "playlists" && <PlaylistsPage />}
-      {page.name === "hub" && <HubPage />}
-      {page.name === "integrations" && <IntegrationsPage />}
-    </main>
+    <ShellCtx.Provider value={{ openDrawer: () => setDrawer(true) }}>
+      <div class={`app-shell${collapsed ? " collapsed" : ""}${drawer ? " drawer-open" : ""}`}>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <Sidebar
+          page={page.name}
+          collapsed={collapsed}
+          onToggle={toggleCollapse}
+          userName={status.user!.name}
+          onLogout={logout}
+          theme={theme}
+          onCycleTheme={cycleTheme}
+          onOpenPalette={() => setPaletteOpen(true)}
+          onNavigate={() => setDrawer(false)}
+        />
+        {drawer && <div class="sidebar-scrim" onClick={() => setDrawer(false)} />}
+        <main id="main" class="shell-main page-enter">
+          {page.name === "screens" && <ScreensPage />}
+          {page.name === "setups" && <SetupsPage />}
+          {page.name === "playlists" && <PlaylistsPage />}
+          {page.name === "hub" && <HubPage />}
+          {page.name === "integrations" && <IntegrationsPage />}
+        </main>
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
+      </div>
+    </ShellCtx.Provider>
   );
 }
