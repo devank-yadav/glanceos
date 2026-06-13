@@ -240,6 +240,76 @@ export const OpenSignProps = z.object({ open: z.boolean().default(true), label: 
 export const NowPlayingProps = z.object({ title: line(80).default("Quiet Song"), artist: line(60).default("Someone") });
 export const SplitFlapProps = z.object({ text: line(40).default("DEPARTURES") });
 
+// ===== v0.9 blocks: 60 more (all computed/prop, offline-safe) =====
+// text & structure
+export const EpigraphProps = z.object({ content: line(300).default("We shape our tools, and thereafter our tools shape us."), author: line(80).default("M. McLuhan") });
+export const KickerProps = z.object({ kicker: line(60).default("FEATURED"), title: line(120).default("The headline goes here") });
+export const TickerProps = z.object({ content: line(200).default("Calm news · quiet updates · nothing urgent") });
+export const GlossaryProps = z.object({ items: line(1000).default("Glance | a two-second read\nCalm | no notifications\nBoard | one screen's layout") });
+export const FootnotesProps = z.object({ items: line(800).default("Prices include tax.\nSubject to availability.\nMIT licensed.") });
+export const HighlightProps = z.object({ content: line(300).default("The one thing worth remembering today.") });
+export const LetterheadProps = z.object({ name: line(60).default("Your Name"), tagline: line(80).default("Calm by design") });
+export const FieldRowProps = z.object({ label: line(60).default("Status"), value: line(120).default("On track") });
+export const ContentsProps = z.object({ items: line(1000).default("Introduction\nThe idea\nHow it works\nRunning it") });
+export const AsideProps = z.object({ content: line(300).default("A quiet note set off to the side.") });
+export const PostscriptProps = z.object({ content: line(200).default("One more small thing worth knowing.") });
+export const MantraProps = z.object({ content: line(120).default("Look, understand, move on.") });
+// media & identity
+export const EmojiStatProps = z.object({ emoji: z.string().max(8).default("✨"), label: line(60).default("") });
+export const MonogramProps = z.object({ letters: line(8).default("GO"), label: line(60).default("") });
+export const FlagProps = z.object({ emoji: z.string().max(8).default("🏳"), label: line(60).default("Country") });
+export const LogoTextProps = z.object({ text: line(40).default("GLANCE") });
+export const ProfileCardProps = z.object({ name: line(60).default("Your Name"), role: line(60).default("Title"), detail: line(120).default("A short line about you.") });
+export const PeopleListProps = z.object({ items: line(600).default("Dr. Rao | Cardiology\nA. Smith | Reception\nJ. Lee | Pharmacy") });
+// numbers
+export const BigNumberProps = z.object({ value: line(20).default("42"), caption: line(60).default("the answer") });
+export const PercentBigProps = z.object({ value: z.number().min(0).max(100).default(72), label: line(60).default("") });
+export const DeltaStatProps = z.object({ value: line(20).default("1,284"), delta: line(16).default("+12%"), label: line(60).default("Visitors") });
+export const MoneyStatProps = z.object({ amount: line(20).default("12,500"), currency: line(8).default("₹"), label: line(60).default("Revenue") });
+export const CounterPairProps = z.object({ leftLabel: line(30).default("In"), leftValue: line(12).default("24"), rightLabel: line(30).default("Out"), rightValue: line(12).default("18") });
+export const TargetMeterProps = z.object({ value: z.number().default(72), target: z.number().default(100), unit: line(8).default(""), label: line(60).default("Goal") });
+export const UnitStatProps = z.object({ value: line(20).default("36.6"), unit: line(12).default("°C"), label: line(60).default("Temperature") });
+export const ProgressBarsProps = z.object({ items: line(600).default("Design | 80\nDev | 55\nQA | 30") });
+// charts
+export const LollipopChartProps = z.object({ items: line(600).default("Mon | 8\nTue | 5\nWed | 9\nThu | 6") });
+export const WinLossBarProps = z.object({ values: line(400).default("1,1,-1,1,0,-1,1,1"), label: line(60).default("") });
+export const DotMatrixProps = z.object({ value: z.number().int().min(0).max(100).default(36), total: z.number().int().min(1).max(100).default(50), label: line(60).default("") });
+export const RangeBarProps = z.object({ min: z.number().default(0), max: z.number().default(100), value: z.number().default(64), label: line(60).default("") });
+export const BubbleScaleProps = z.object({ items: line(400).default("A | 8\nB | 4\nC | 6\nD | 2") });
+export const StarBarProps = z.object({ value: z.number().min(0).max(20).default(7), max: z.number().int().min(1).max(20).default(10), label: line(60).default("") });
+export const ColumnLabelsProps = z.object({ items: line(600).default("Q1 | 12\nQ2 | 18\nQ3 | 9\nQ4 | 21") });
+export const DeltaListProps = z.object({ items: line(600).default("Sales | +12\nCosts | -4\nUsers | +8") });
+export const GaugeMiniProps = z.object({ value: z.number().min(0).max(100).default(64), label: line(60).default("") });
+export const HistogramProps = z.object({ values: line(400).default("2,4,7,9,6,3,5,8,4,2"), label: line(60).default("") });
+// time (computed)
+export const FullDateProps = z.object({ label: line(40).default("") });
+export const MonthNameProps = z.object({ label: line(40).default("") });
+export const TimeOfDayProps = z.object({ label: line(40).default("") });
+export const QuarterProgressProps = z.object({ label: line(60).default("Quarter") });
+export const DaysLeftMonthProps = z.object({ label: line(60).default("") });
+export const UnixClockProps = z.object({ label: line(40).default("Unix") });
+export const TzPairProps = z.object({ labelA: line(40).default("NYC"), tzA: line(64).default("America/New_York"), labelB: line(40).default("Tokyo"), tzB: line(64).default("Asia/Tokyo") });
+export const NextWeekdayProps = z.object({ weekday: z.number().int().min(0).max(6).default(1), label: line(60).default("") });
+// nature (computed)
+export const DaylightProps = z.object({ ...geo });
+export const MoonProgressProps = z.object({ label: line(40).default("") });
+export const SeasonProgressProps = z.object({ hemisphere: z.enum(["north", "south"]).default("north"), label: line(40).default("Season") });
+export const GoldenHourProps = z.object({ ...geo });
+// trackers
+export const GoalProgressProps = z.object({ value: z.number().default(6), target: z.number().default(10), unit: line(8).default(""), label: line(60).default("Goal") });
+export const StepsTodayProps = z.object({ value: z.number().default(6400), goal: z.number().default(10000), label: line(60).default("Steps") });
+export const StreakPairProps = z.object({ current: z.number().int().min(0).max(99999).default(12), best: z.number().int().min(0).max(99999).default(48), label: line(60).default("Streak") });
+export const BookListProps = z.object({ items: line(600).default("A Calm Book | Anon\nDeep Work | C. Newport\nSilence | E. Prochnik") });
+export const MoodTodayProps = z.object({ emoji: z.string().max(8).default("🙂"), label: line(60).default("Today") });
+export const BudgetLineProps = z.object({ spent: z.number().default(6500), budget: z.number().default(10000), unit: line(8).default("₹"), label: line(60).default("Budget") });
+// info & signage
+export const WelcomeSignProps = z.object({ name: line(60).default("Guest"), message: line(80).default("Welcome") });
+export const PriceTagProps = z.object({ item: line(60).default("Espresso"), price: line(16).default("120"), unit: line(8).default("₹") });
+export const TodaySpecialProps = z.object({ title: line(80).default("Today's Special"), detail: line(120).default("Saffron risotto · 320") });
+export const PhoneNumberProps = z.object({ label: line(40).default("Reception"), number: line(40).default("+91 98765 43210") });
+export const SocialHandleProps = z.object({ platform: line(40).default("Instagram"), handle: line(60).default("@glanceos") });
+export const WayfindingProps = z.object({ items: line(600).default("Reception | → Floor 1\nPharmacy | → Floor 2\nExit | ← Left") });
+
 const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}) };
 
 export const Widget = z.discriminatedUnion("type", [
@@ -393,6 +463,74 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("openSign"), props: OpenSignProps }),
   z.object({ ...b, type: z.literal("nowPlaying"), props: NowPlayingProps }),
   z.object({ ...b, type: z.literal("splitFlap"), props: SplitFlapProps }),
+  // v0.9 text & structure
+  z.object({ ...b, type: z.literal("epigraph"), props: EpigraphProps }),
+  z.object({ ...b, type: z.literal("kicker"), props: KickerProps }),
+  z.object({ ...b, type: z.literal("ticker"), props: TickerProps }),
+  z.object({ ...b, type: z.literal("glossary"), props: GlossaryProps }),
+  z.object({ ...b, type: z.literal("footnotes"), props: FootnotesProps }),
+  z.object({ ...b, type: z.literal("highlight"), props: HighlightProps }),
+  z.object({ ...b, type: z.literal("letterhead"), props: LetterheadProps }),
+  z.object({ ...b, type: z.literal("fieldRow"), props: FieldRowProps }),
+  z.object({ ...b, type: z.literal("contents"), props: ContentsProps }),
+  z.object({ ...b, type: z.literal("aside"), props: AsideProps }),
+  z.object({ ...b, type: z.literal("postscript"), props: PostscriptProps }),
+  z.object({ ...b, type: z.literal("mantra"), props: MantraProps }),
+  // v0.9 media & identity
+  z.object({ ...b, type: z.literal("emojiStat"), props: EmojiStatProps }),
+  z.object({ ...b, type: z.literal("monogram"), props: MonogramProps }),
+  z.object({ ...b, type: z.literal("flag"), props: FlagProps }),
+  z.object({ ...b, type: z.literal("logoText"), props: LogoTextProps }),
+  z.object({ ...b, type: z.literal("profileCard"), props: ProfileCardProps }),
+  z.object({ ...b, type: z.literal("peopleList"), props: PeopleListProps }),
+  // v0.9 numbers
+  z.object({ ...b, type: z.literal("bigNumber"), props: BigNumberProps }),
+  z.object({ ...b, type: z.literal("percentBig"), props: PercentBigProps }),
+  z.object({ ...b, type: z.literal("deltaStat"), props: DeltaStatProps }),
+  z.object({ ...b, type: z.literal("moneyStat"), props: MoneyStatProps }),
+  z.object({ ...b, type: z.literal("counterPair"), props: CounterPairProps }),
+  z.object({ ...b, type: z.literal("targetMeter"), props: TargetMeterProps }),
+  z.object({ ...b, type: z.literal("unitStat"), props: UnitStatProps }),
+  z.object({ ...b, type: z.literal("progressBars"), props: ProgressBarsProps }),
+  // v0.9 charts
+  z.object({ ...b, type: z.literal("lollipopChart"), props: LollipopChartProps }),
+  z.object({ ...b, type: z.literal("winLossBar"), props: WinLossBarProps }),
+  z.object({ ...b, type: z.literal("dotMatrix"), props: DotMatrixProps }),
+  z.object({ ...b, type: z.literal("rangeBar"), props: RangeBarProps }),
+  z.object({ ...b, type: z.literal("bubbleScale"), props: BubbleScaleProps }),
+  z.object({ ...b, type: z.literal("starBar"), props: StarBarProps }),
+  z.object({ ...b, type: z.literal("columnLabels"), props: ColumnLabelsProps }),
+  z.object({ ...b, type: z.literal("deltaList"), props: DeltaListProps }),
+  z.object({ ...b, type: z.literal("gaugeMini"), props: GaugeMiniProps }),
+  z.object({ ...b, type: z.literal("histogram"), props: HistogramProps }),
+  // v0.9 time computed
+  z.object({ ...b, type: z.literal("fullDate"), props: FullDateProps }),
+  z.object({ ...b, type: z.literal("monthName"), props: MonthNameProps }),
+  z.object({ ...b, type: z.literal("timeOfDay"), props: TimeOfDayProps }),
+  z.object({ ...b, type: z.literal("quarterProgress"), props: QuarterProgressProps }),
+  z.object({ ...b, type: z.literal("daysLeftMonth"), props: DaysLeftMonthProps }),
+  z.object({ ...b, type: z.literal("unixClock"), props: UnixClockProps }),
+  z.object({ ...b, type: z.literal("tzPair"), props: TzPairProps }),
+  z.object({ ...b, type: z.literal("nextWeekday"), props: NextWeekdayProps }),
+  // v0.9 nature computed
+  z.object({ ...b, type: z.literal("daylight"), props: DaylightProps }),
+  z.object({ ...b, type: z.literal("moonProgress"), props: MoonProgressProps }),
+  z.object({ ...b, type: z.literal("seasonProgress"), props: SeasonProgressProps }),
+  z.object({ ...b, type: z.literal("goldenHour"), props: GoldenHourProps }),
+  // v0.9 trackers
+  z.object({ ...b, type: z.literal("goalProgress"), props: GoalProgressProps }),
+  z.object({ ...b, type: z.literal("stepsToday"), props: StepsTodayProps }),
+  z.object({ ...b, type: z.literal("streakPair"), props: StreakPairProps }),
+  z.object({ ...b, type: z.literal("bookList"), props: BookListProps }),
+  z.object({ ...b, type: z.literal("moodToday"), props: MoodTodayProps }),
+  z.object({ ...b, type: z.literal("budgetLine"), props: BudgetLineProps }),
+  // v0.9 info & signage
+  z.object({ ...b, type: z.literal("welcomeSign"), props: WelcomeSignProps }),
+  z.object({ ...b, type: z.literal("priceTag"), props: PriceTagProps }),
+  z.object({ ...b, type: z.literal("todaySpecial"), props: TodaySpecialProps }),
+  z.object({ ...b, type: z.literal("phoneNumber"), props: PhoneNumberProps }),
+  z.object({ ...b, type: z.literal("socialHandle"), props: SocialHandleProps }),
+  z.object({ ...b, type: z.literal("wayfinding"), props: WayfindingProps }),
 ]);
 
 export const Row = z.object({

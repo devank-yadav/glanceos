@@ -171,6 +171,74 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   openSign: [B("open", "Open"), S("label", "Label")],
   nowPlaying: [S("title", "Track"), S("artist", "Artist")],
   splitFlap: [S("text", "Text")],
+  // v0.9 text & structure
+  epigraph: [T("content", "Quote"), S("author", "Author")],
+  kicker: [S("kicker", "Eyebrow"), S("title", "Title")],
+  ticker: [S("content", "Text")],
+  glossary: [T("items", "Lines (term | meaning)")],
+  footnotes: [T("items", "Notes (one per line)")],
+  highlight: [T("content", "Text")],
+  letterhead: [S("name", "Name"), S("tagline", "Tagline")],
+  fieldRow: [S("label", "Label"), S("value", "Value")],
+  contents: [T("items", "Entries (one per line)")],
+  aside: [T("content", "Text")],
+  postscript: [S("content", "Text")],
+  mantra: [S("content", "Text")],
+  // v0.9 media & identity
+  emojiStat: [S("emoji", "Emoji"), S("label", "Label")],
+  monogram: [S("letters", "Letters"), S("label", "Label")],
+  flag: [S("emoji", "Flag emoji"), S("label", "Label")],
+  logoText: [S("text", "Text")],
+  profileCard: [S("name", "Name"), S("role", "Role"), S("detail", "Detail")],
+  peopleList: [T("items", "Lines (name | role)")],
+  // v0.9 numbers
+  bigNumber: [S("value", "Value"), S("caption", "Caption")],
+  percentBig: [N("value", "Percent"), S("label", "Label")],
+  deltaStat: [S("value", "Value"), S("delta", "Delta (e.g. +12%)"), S("label", "Label")],
+  moneyStat: [S("amount", "Amount"), S("currency", "Currency symbol"), S("label", "Label")],
+  counterPair: [S("leftLabel", "Left"), S("leftValue", "Left value"), S("rightLabel", "Right"), S("rightValue", "Right value")],
+  targetMeter: [N("value", "Value"), N("target", "Target"), S("unit", "Unit"), S("label", "Label")],
+  unitStat: [S("value", "Value"), S("unit", "Unit"), S("label", "Label")],
+  progressBars: [T("items", "Lines (label | percent)")],
+  // v0.9 charts
+  lollipopChart: [T("items", "Lines (label | number)")],
+  winLossBar: [T("values", "1 win, -1 loss, 0 tie"), S("label", "Label")],
+  dotMatrix: [N("value", "Filled"), N("total", "Total"), S("label", "Label")],
+  rangeBar: [N("min", "Min"), N("max", "Max"), N("value", "Value"), S("label", "Label")],
+  bubbleScale: [T("items", "Lines (label | number)")],
+  starBar: [N("value", "Filled"), N("max", "Out of"), S("label", "Label")],
+  columnLabels: [T("items", "Lines (label | number)")],
+  deltaList: [T("items", "Lines (label | +/-n)")],
+  gaugeMini: [N("value", "Percent"), S("label", "Label")],
+  histogram: [T("values", "Numbers (comma-separated)"), S("label", "Label")],
+  // v0.9 time computed
+  fullDate: [S("label", "Label")],
+  monthName: [S("label", "Label")],
+  timeOfDay: [S("label", "Label")],
+  quarterProgress: [S("label", "Label")],
+  daysLeftMonth: [S("label", "Label")],
+  unixClock: [S("label", "Label")],
+  tzPair: [S("labelA", "Left label"), S("tzA", "Left time zone"), S("labelB", "Right label"), S("tzB", "Right time zone")],
+  nextWeekday: [Sel("weekday", "Weekday", ["0", "1", "2", "3", "4", "5", "6"], true), S("label", "Label")],
+  // v0.9 nature computed
+  daylight: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
+  moonProgress: [S("label", "Label")],
+  seasonProgress: [Sel("hemisphere", "Hemisphere", ["north", "south"]), S("label", "Label")],
+  goldenHour: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
+  // v0.9 trackers
+  goalProgress: [N("value", "Value"), N("target", "Target"), S("unit", "Unit"), S("label", "Label")],
+  stepsToday: [N("value", "Steps"), N("goal", "Goal"), S("label", "Label")],
+  streakPair: [N("current", "Current"), N("best", "Best"), S("label", "Label")],
+  bookList: [T("items", "Lines (title | author)")],
+  moodToday: [S("emoji", "Emoji"), S("label", "Label")],
+  budgetLine: [N("spent", "Spent"), N("budget", "Budget"), S("unit", "Unit"), S("label", "Label")],
+  // v0.9 info & signage
+  welcomeSign: [S("message", "Message"), S("name", "Name")],
+  priceTag: [S("item", "Item"), S("price", "Price"), S("unit", "Currency symbol")],
+  todaySpecial: [S("title", "Title"), S("detail", "Detail")],
+  phoneNumber: [S("label", "Label"), S("number", "Number")],
+  socialHandle: [S("platform", "Platform"), S("handle", "Handle")],
+  wayfinding: [T("items", "Lines (place | direction)")],
 };
 
 export function PropertiesPanel({
@@ -223,7 +291,7 @@ function BlockProperties({
         <h3>{blockFor(block.type).label}</h3>
         <button class="danger" onClick={onDelete}>Delete</button>
       </div>
-      <p class="muted">Move with the ⠿ handle or arrow keys; double-click to type. Drag a seam to resize.</p>
+      <p class="muted">Click a text block to type; move with the ⠿ handle or arrow keys. Drag a seam to resize.</p>
       <div class="row wrap">
         {fields.map((f) => (
           <PropField key={f.key} field={f} value={props[f.key]} onChange={(v) => editProp(f.key, v)} />

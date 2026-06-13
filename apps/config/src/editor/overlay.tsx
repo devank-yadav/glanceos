@@ -192,7 +192,14 @@ export function Overlay({
             onPointerDown={(e) => {
               const ev = e as unknown as PointerEvent;
               ev.stopPropagation();
-              dispatch(ev.shiftKey || ev.metaKey || ev.ctrlKey ? { type: "selectToggle", id: b.id } : { type: "select", id: b.id });
+              if (ev.shiftKey || ev.metaKey || ev.ctrlKey) {
+                dispatch({ type: "selectToggle", id: b.id });
+              } else {
+                dispatch({ type: "select", id: b.id });
+                // Notion semantics: a single click on a text block drops the
+                // cursor in — you just type. Non-text blocks only select.
+                if (editable) onEdit(b.id);
+              }
             }}
             onDblClick={(e) => {
               (e as unknown as MouseEvent).stopPropagation();

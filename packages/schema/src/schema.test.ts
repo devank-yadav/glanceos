@@ -24,7 +24,7 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     if (h.type === "heading") expect(h.props.level).toBe(1);
   });
 
-  it("knows all 46 block types", () => {
+  it("knows all 199 block types", () => {
     const types = [
       "clock", "weather", "calendar", "tasks", "text", "queue", "heading", "divider", "image", "callout",
       "subheading", "quote", "bulletList", "numberedList", "checklist", "code", "label", "keyValue", "table",
@@ -48,6 +48,17 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       "monthCalendar", "weekStrip", "nowNext", "ageCounter", "anniversary", "timeBlocks", "shiftStatus", "pomodoro",
       "monthHabit", "savingsGoal", "readingNow", "weightTrend", "moodWeek", "checklistProgress",
       "roomStatus", "directory", "eventBanner", "openSign", "nowPlaying", "splitFlap",
+      // v0.9
+      "epigraph", "kicker", "ticker", "glossary", "footnotes", "highlight", "letterhead", "fieldRow",
+      "contents", "aside", "postscript", "mantra",
+      "emojiStat", "monogram", "flag", "logoText", "profileCard", "peopleList",
+      "bigNumber", "percentBig", "deltaStat", "moneyStat", "counterPair", "targetMeter", "unitStat", "progressBars",
+      "lollipopChart", "winLossBar", "dotMatrix", "rangeBar", "bubbleScale", "starBar", "columnLabels", "deltaList",
+      "gaugeMini", "histogram",
+      "fullDate", "monthName", "timeOfDay", "quarterProgress", "daysLeftMonth", "unixClock", "tzPair", "nextWeekday",
+      "daylight", "moonProgress", "seasonProgress", "goldenHour",
+      "goalProgress", "stepsToday", "streakPair", "bookList", "moodToday", "budgetLine",
+      "welcomeSign", "priceTag", "todaySpecial", "phoneNumber", "socialHandle", "wayfinding",
     ];
     // Types whose props have required fields with no default.
     const sampleProps: Record<string, unknown> = {
@@ -64,7 +75,7 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       const result = Layout.safeParse({ schemaVersion: 3, name: "n", rows: [{ id: "r", blocks }] });
       expect(result.success, `${type} should parse`).toBe(true);
     }
-    expect(new Set(types).size).toBe(139);
+    expect(new Set(types).size).toBe(199);
   });
 
   it("defaults block style and board align (v0.6, additive)", () => {

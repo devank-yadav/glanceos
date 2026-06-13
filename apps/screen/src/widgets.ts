@@ -1583,6 +1583,546 @@ const splitFlap: Render = (el, w) => {
   el.appendChild(wrap);
 };
 
+// ================= v0.9 — 60 more (computed / prop, offline-safe) =================
+
+const pctBar = (pct: number): HTMLDivElement => {
+  const wrap = div("bar");
+  const fill = div("bar-fill");
+  fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  wrap.appendChild(fill);
+  return wrap;
+};
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DOWFULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// ---- text & structure ----
+const epigraph: Render = (el, w) => {
+  if (w.type !== "epigraph") return;
+  el.appendChild(div("epigraph-text", w.props.content));
+  if (w.props.author) el.appendChild(div("epigraph-by", `— ${w.props.author}`));
+};
+const kicker: Render = (el, w) => {
+  if (w.type !== "kicker") return;
+  el.appendChild(div("kicker-eyebrow", w.props.kicker));
+  el.appendChild(div("kicker-title", w.props.title));
+};
+const ticker: Render = (el, w) => {
+  if (w.type !== "ticker") return;
+  el.appendChild(div("ticker", w.props.content));
+};
+const glossary: Render = (el, w) => {
+  if (w.type !== "glossary") return;
+  const list = div("kv");
+  for (const [term, def] of pipes(w.props.items)) {
+    const row = div("gloss-row");
+    row.append(div("gloss-term", term), div("gloss-def", def));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+const footnotes: Render = (el, w) => {
+  if (w.type !== "footnotes") return;
+  const list = div("footnotes");
+  lines(w.props.items).forEach((t, i) => {
+    const row = div("fn-row");
+    row.append(div("fn-num", `${i + 1}`), div("fn-text", t));
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+};
+const highlight: Render = (el, w) => {
+  if (w.type !== "highlight") return;
+  el.appendChild(div("highlight", w.props.content));
+};
+const letterhead: Render = (el, w) => {
+  if (w.type !== "letterhead") return;
+  el.appendChild(div("lh-name", w.props.name));
+  el.appendChild(div("lh-tagline", w.props.tagline));
+  el.appendChild(div("divider-rule"));
+};
+const fieldRow: Render = (el, w) => {
+  if (w.type !== "fieldRow") return;
+  el.appendChild(div("field-label", w.props.label));
+  el.appendChild(div("field-value", w.props.value));
+};
+const contents: Render = (el, w) => {
+  if (w.type !== "contents") return;
+  const list = div("contents");
+  lines(w.props.items).forEach((t, i) => {
+    const row = div("toc-row");
+    row.append(div("toc-text", t), div("toc-leader"), div("toc-num", `${i + 1}`));
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+};
+const aside: Render = (el, w) => {
+  if (w.type !== "aside") return;
+  el.appendChild(div("aside", w.props.content));
+};
+const postscript: Render = (el, w) => {
+  if (w.type !== "postscript") return;
+  const p = div("postscript");
+  p.append(div("ps-mark", "P.S."), div("ps-text", w.props.content));
+  el.appendChild(p);
+};
+const mantra: Render = (el, w) => {
+  if (w.type !== "mantra") return;
+  el.appendChild(div("mantra", w.props.content));
+};
+
+// ---- media & identity ----
+const emojiStat: Render = (el, w) => {
+  if (w.type !== "emojiStat") return;
+  el.appendChild(div("emoji-stat", w.props.emoji));
+  if (w.props.label) el.appendChild(div("stat-label", w.props.label));
+};
+const monogram: Render = (el, w) => {
+  if (w.type !== "monogram") return;
+  el.appendChild(div("monogram", w.props.letters.toUpperCase().slice(0, 3)));
+  if (w.props.label) el.appendChild(div("stat-label", w.props.label));
+};
+const flag: Render = (el, w) => {
+  if (w.type !== "flag") return;
+  el.appendChild(div("flag-emoji", w.props.emoji));
+  el.appendChild(div("flag-label", w.props.label));
+};
+const logoText: Render = (el, w) => {
+  if (w.type !== "logoText") return;
+  el.appendChild(div("logo-text", w.props.text));
+};
+const profileCard: Render = (el, w) => {
+  if (w.type !== "profileCard") return;
+  el.appendChild(div("pc-name", w.props.name));
+  el.appendChild(div("pc-role", w.props.role));
+  el.appendChild(div("pc-detail", w.props.detail));
+};
+const peopleList: Render = (el, w) => {
+  if (w.type !== "peopleList") return;
+  const list = div("kv");
+  for (const [name, role] of pipes(w.props.items)) {
+    const row = div("kv-row");
+    row.append(div("kv-key", name), div("kv-val", role));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+
+// ---- numbers ----
+const bigNumber: Render = (el, w) => {
+  if (w.type !== "bigNumber") return;
+  el.appendChild(div("stat-value", w.props.value));
+  if (w.props.caption) el.appendChild(div("stat-label", w.props.caption));
+};
+const percentBig: Render = (el, w) => {
+  if (w.type !== "percentBig") return;
+  if (w.props.label) heading2(el, w.props.label);
+  el.appendChild(div("stat-value", `${Math.round(w.props.value)}%`));
+  el.appendChild(pctBar(w.props.value));
+};
+const deltaStat: Render = (el, w) => {
+  if (w.type !== "deltaStat") return;
+  if (w.props.label) heading2(el, w.props.label);
+  el.appendChild(div("stat-value", w.props.value));
+  const up = w.props.delta.trim().startsWith("-") ? "▾" : "▴";
+  el.appendChild(div("delta", `${up} ${w.props.delta}`));
+};
+const moneyStat: Render = (el, w) => {
+  if (w.type !== "moneyStat") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const row = div("metric-row");
+  row.append(div("money-cur", w.props.currency), div("stat-value", w.props.amount));
+  el.appendChild(row);
+};
+const counterPair: Render = (el, w) => {
+  if (w.type !== "counterPair") return;
+  const wrap = div("counter-pair");
+  [[w.props.leftValue, w.props.leftLabel], [w.props.rightValue, w.props.rightLabel]].forEach(([v, l]) => {
+    const c = div("cp-cell");
+    c.append(div("cp-value", v), div("cp-label", l));
+    wrap.appendChild(c);
+  });
+  el.appendChild(wrap);
+};
+const targetMeter: Render = (el, w) => {
+  if (w.type !== "targetMeter") return;
+  if (w.props.label) heading2(el, w.props.label);
+  el.appendChild(div("stat-value", `${w.props.value}${w.props.unit} / ${w.props.target}${w.props.unit}`));
+  el.appendChild(pctBar((w.props.value / (w.props.target || 1)) * 100));
+};
+const unitStat: Render = (el, w) => {
+  if (w.type !== "unitStat") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const row = div("metric-row");
+  row.append(div("metric-value", w.props.value), div("metric-unit", w.props.unit));
+  el.appendChild(row);
+};
+const progressBars: Render = (el, w) => {
+  if (w.type !== "progressBars") return;
+  const list = div("progress-bars");
+  for (const [label, val] of pipes(w.props.items)) {
+    const row = div("pb-row");
+    row.append(div("pb-label", label), pctBar(Number(val) || 0), div("pb-val", `${Number(val) || 0}%`));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+
+// ---- charts ----
+const lollipopChart: Render = (el, w) => {
+  if (w.type !== "lollipopChart") return;
+  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const max = Math.max(1, ...data.map((d) => d.n));
+  const list = div("lollipop");
+  for (const d of data) {
+    const row = div("lp-row");
+    const track = div("lp-track");
+    const stick = div("lp-stick");
+    stick.style.width = `${(d.n / max) * 100}%`;
+    track.appendChild(stick);
+    track.appendChild(div("lp-dot"));
+    row.append(div("lp-label", d.l), track, div("lp-val", String(d.n)));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+const winLossBar: Render = (el, w) => {
+  if (w.type !== "winLossBar") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const wrap = div("winloss");
+  nums(w.props.values).slice(0, 40).forEach((v) => {
+    const cls = v > 0 ? " win" : v < 0 ? " loss" : " tie";
+    wrap.appendChild(div(`wl-cell${cls}`));
+  });
+  el.appendChild(wrap);
+};
+const dotMatrix: Render = (el, w) => {
+  if (w.type !== "dotMatrix") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const grid = div("dotmatrix");
+  for (let i = 0; i < w.props.total; i++) grid.appendChild(div(`dm-dot${i < w.props.value ? " on" : ""}`));
+  el.appendChild(grid);
+  el.appendChild(div("stat-label", `${w.props.value} / ${w.props.total}`));
+};
+const rangeBar: Render = (el, w) => {
+  if (w.type !== "rangeBar") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const pct = Math.max(0, Math.min(100, ((w.props.value - w.props.min) / ((w.props.max - w.props.min) || 1)) * 100));
+  const track = div("rangebar");
+  const dot = div("rb-dot");
+  dot.style.left = `${pct}%`;
+  track.appendChild(dot);
+  el.appendChild(track);
+  const ends = div("rb-ends");
+  ends.append(div("rb-end", String(w.props.min)), div("rb-cur", String(w.props.value)), div("rb-end", String(w.props.max)));
+  el.appendChild(ends);
+};
+const bubbleScale: Render = (el, w) => {
+  if (w.type !== "bubbleScale") return;
+  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const max = Math.max(1, ...data.map((d) => d.n));
+  const wrap = div("bubbles");
+  for (const d of data) {
+    const col = div("bb-col");
+    const b = div("bb-circle");
+    const size = 20 + (d.n / max) * 60;
+    b.style.width = `${size}%`;
+    b.style.paddingBottom = `${size}%`;
+    col.append(b, div("bb-label", d.l));
+    wrap.appendChild(col);
+  }
+  el.appendChild(wrap);
+};
+const starBar: Render = (el, w) => {
+  if (w.type !== "starBar") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const row = div("starbar");
+  const n = Math.round(w.props.value);
+  for (let i = 0; i < w.props.max; i++) row.appendChild(div("sb-star", i < n ? "★" : "☆"));
+  el.appendChild(row);
+};
+const columnLabels: Render = (el, w) => {
+  if (w.type !== "columnLabels") return;
+  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const max = Math.max(1, ...data.map((d) => d.n));
+  const wrap = div("collabels");
+  for (const d of data) {
+    const col = div("cl-col");
+    const b = div("cl-bar");
+    b.style.height = `${(d.n / max) * 100}%`;
+    const stack = div("cl-stack");
+    stack.appendChild(b);
+    col.append(div("cl-val", String(d.n)), stack, div("cl-label", d.l));
+    wrap.appendChild(col);
+  }
+  el.appendChild(wrap);
+};
+const deltaList: Render = (el, w) => {
+  if (w.type !== "deltaList") return;
+  const list = div("kv");
+  for (const [label, d] of pipes(w.props.items)) {
+    const row = div("kv-row");
+    const down = d.trim().startsWith("-");
+    const val = div("kv-val", `${down ? "▾" : "▴"} ${d}`);
+    val.classList.add(down ? "is-down" : "is-up");
+    row.append(div("kv-key", label), val);
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+const gaugeMini: Render = (el, w) => {
+  if (w.type !== "gaugeMini") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const ring = div("ring");
+  ring.innerHTML = ringSvg(w.props.value);
+  ring.appendChild(div("ring-label", `${Math.round(w.props.value)}%`));
+  el.appendChild(ring);
+};
+const histogram: Render = (el, w) => {
+  if (w.type !== "histogram") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const sp = div("spark");
+  sp.innerHTML = barSvg(nums(w.props.values));
+  el.appendChild(sp);
+};
+
+// ---- time computed ----
+const fullDate: Render = (el, w) => {
+  if (w.type !== "fullDate") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const weekday = div("fd-weekday");
+  const date = div("fd-date");
+  el.append(weekday, date);
+  return every(30_000, () => {
+    const now = new Date();
+    weekday.textContent = DOWFULL[now.getDay()];
+    date.textContent = now.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+  });
+};
+const monthName: Render = (el, w) => {
+  if (w.type !== "monthName") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const big = div("month-name");
+  el.appendChild(big);
+  return every(60_000, () => { big.textContent = MONTHS[new Date().getMonth()]; });
+};
+const timeOfDay: Render = (el, w) => {
+  if (w.type !== "timeOfDay") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const big = div("stat-value");
+  el.appendChild(big);
+  return every(60_000, () => {
+    const h = new Date().getHours();
+    big.textContent = h < 5 ? "Night" : h < 12 ? "Morning" : h < 17 ? "Afternoon" : h < 21 ? "Evening" : "Night";
+  });
+};
+const quarterProgress: Render = (el, w) => {
+  if (w.type !== "quarterProgress") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const label = div("stat-label");
+  const b = pctBar(0);
+  el.append(b, label);
+  return every(60_000, () => {
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3);
+    const start = new Date(now.getFullYear(), q * 3, 1).getTime();
+    const end = new Date(now.getFullYear(), q * 3 + 3, 1).getTime();
+    const pct = ((now.getTime() - start) / (end - start)) * 100;
+    (b.firstChild as HTMLElement).style.width = `${pct}%`;
+    label.textContent = `Q${q + 1} · ${Math.round(pct)}%`;
+  });
+};
+const daysLeftMonth: Render = (el, w) => {
+  if (w.type !== "daysLeftMonth") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const big = div("stat-value");
+  const sub = div("stat-label");
+  el.append(big, sub);
+  return every(60_000, () => {
+    const now = new Date();
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    big.textContent = String(last - now.getDate());
+    sub.textContent = "days left this month";
+  });
+};
+const unixClock: Render = (el, w) => {
+  if (w.type !== "unixClock") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const big = div("unix");
+  el.appendChild(big);
+  return every(1000, () => { big.textContent = String(Math.floor(Date.now() / 1000)); });
+};
+const tzPair: Render = (el, w) => {
+  if (w.type !== "tzPair") return;
+  const wrap = div("tzpair");
+  const a = div("tz-time");
+  const b = div("tz-time");
+  const cellA = div("tz-cell");
+  cellA.append(div("tz-label", w.props.labelA), a);
+  const cellB = div("tz-cell");
+  cellB.append(div("tz-label", w.props.labelB), b);
+  wrap.append(cellA, cellB);
+  el.appendChild(wrap);
+  return every(1000, () => {
+    const now = new Date();
+    a.textContent = fmtTime(now, { hour: "2-digit", minute: "2-digit", timeZone: w.props.tzA });
+    b.textContent = fmtTime(now, { hour: "2-digit", minute: "2-digit", timeZone: w.props.tzB });
+  });
+};
+const nextWeekday: Render = (el, w) => {
+  if (w.type !== "nextWeekday") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const big = div("countdown-value");
+  const sub = div("stat-label");
+  el.append(big, sub);
+  return every(60_000, () => {
+    const now = new Date();
+    const today = now.getDay();
+    let delta = (w.props.weekday - today + 7) % 7;
+    if (delta === 0) delta = 7;
+    big.textContent = delta === 1 ? "Tomorrow" : `in ${delta} days`;
+    sub.textContent = DOWFULL[w.props.weekday];
+  });
+};
+
+// ---- nature computed ----
+const fmtDur = (ms: number): string => {
+  const m = Math.max(0, Math.round(ms / 60000));
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+};
+const daylight: Render = (el, w) => {
+  if (w.type !== "daylight") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const t = sunTimes(new Date(), w.props.latitude, w.props.longitude);
+  if (!t) return placeholder(el, "no daylight data");
+  el.appendChild(div("stat-value", fmtDur(t.sunset.getTime() - t.sunrise.getTime())));
+  el.appendChild(div("stat-label", "of daylight"));
+};
+const moonProgress: Render = (el, w) => {
+  if (w.type !== "moonProgress") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const m = moonPhase(new Date());
+  const row = div("metric-row");
+  row.append(div("moon-emoji", m.emoji), div("stat-value", `${m.illumination}%`));
+  el.appendChild(row);
+  el.appendChild(div("stat-label", m.name));
+};
+const seasonProgress: Render = (el, w) => {
+  if (w.type !== "seasonProgress") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const now = new Date();
+  const s = seasonOf(now.getMonth(), w.props.hemisphere);
+  // season starts roughly on the 21st of Mar/Jun/Sep/Dec
+  const doy = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86_400_000);
+  const pct = Math.round((((doy + 10) % 91.3) / 91.3) * 100);
+  const row = div("metric-row");
+  row.append(div("moon-emoji", s.emoji), div("stat-value", s.name));
+  el.appendChild(row);
+  el.appendChild(pctBar(pct));
+};
+const goldenHour: Render = (el, w) => {
+  if (w.type !== "goldenHour") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const t = sunTimes(new Date(), w.props.latitude, w.props.longitude);
+  if (!t) return placeholder(el, "no sun data");
+  const am = new Date(t.sunrise.getTime() + 3_600_000);
+  const pm = new Date(t.sunset.getTime() - 3_600_000);
+  const list = div("kv");
+  [["Morning", t.sunrise, am], ["Evening", pm, t.sunset]].forEach(([lbl, a, b]) => {
+    const row = div("kv-row");
+    row.append(div("kv-key", lbl as string), div("kv-val", `${fmtTime(a as Date, { hour: "2-digit", minute: "2-digit" })}–${fmtTime(b as Date, { hour: "2-digit", minute: "2-digit" })}`));
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+};
+
+// ---- trackers ----
+const goalProgress: Render = (el, w) => {
+  if (w.type !== "goalProgress") return;
+  if (w.props.label) heading2(el, w.props.label);
+  el.appendChild(div("stat-value", `${w.props.value}${w.props.unit} / ${w.props.target}${w.props.unit}`));
+  el.appendChild(pctBar((w.props.value / (w.props.target || 1)) * 100));
+};
+const stepsToday: Render = (el, w) => {
+  if (w.type !== "stepsToday") return;
+  heading2(el, w.props.label);
+  el.appendChild(div("stat-value", w.props.value.toLocaleString()));
+  el.appendChild(pctBar((w.props.value / (w.props.goal || 1)) * 100));
+  el.appendChild(div("stat-label", `goal ${w.props.goal.toLocaleString()}`));
+};
+const streakPair: Render = (el, w) => {
+  if (w.type !== "streakPair") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const wrap = div("counter-pair");
+  [[String(w.props.current), "current"], [String(w.props.best), "best"]].forEach(([v, l]) => {
+    const c = div("cp-cell");
+    c.append(div("cp-value", v), div("cp-label", l));
+    wrap.appendChild(c);
+  });
+  el.appendChild(wrap);
+};
+const bookList: Render = (el, w) => {
+  if (w.type !== "bookList") return;
+  const list = div("kv");
+  for (const [title, author] of pipes(w.props.items)) {
+    const row = div("book-row");
+    row.append(div("book-title", title), div("book-author", author));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+const moodToday: Render = (el, w) => {
+  if (w.type !== "moodToday") return;
+  el.appendChild(div("mood-big", w.props.emoji));
+  if (w.props.label) el.appendChild(div("stat-label", w.props.label));
+};
+const budgetLine: Render = (el, w) => {
+  if (w.type !== "budgetLine") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const left = w.props.budget - w.props.spent;
+  el.appendChild(div("stat-value", `${w.props.unit}${left.toLocaleString()}`));
+  el.appendChild(div("stat-label", "left"));
+  el.appendChild(pctBar((w.props.spent / (w.props.budget || 1)) * 100));
+};
+
+// ---- info & signage ----
+const welcomeSign: Render = (el, w) => {
+  if (w.type !== "welcomeSign") return;
+  el.appendChild(div("welcome-msg", w.props.message));
+  el.appendChild(div("welcome-name", w.props.name));
+};
+const priceTag: Render = (el, w) => {
+  if (w.type !== "priceTag") return;
+  el.appendChild(div("pt-item", w.props.item));
+  const row = div("metric-row");
+  row.append(div("pt-unit", w.props.unit), div("pt-price", w.props.price));
+  el.appendChild(row);
+};
+const todaySpecial: Render = (el, w) => {
+  if (w.type !== "todaySpecial") return;
+  el.appendChild(div("ts-title", w.props.title));
+  el.appendChild(div("ts-detail", w.props.detail));
+};
+const phoneNumber: Render = (el, w) => {
+  if (w.type !== "phoneNumber") return;
+  if (w.props.label) heading2(el, w.props.label);
+  el.appendChild(div("phone", w.props.number));
+};
+const socialHandle: Render = (el, w) => {
+  if (w.type !== "socialHandle") return;
+  el.appendChild(div("social-platform", w.props.platform));
+  el.appendChild(div("social-handle", w.props.handle));
+};
+const wayfinding: Render = (el, w) => {
+  if (w.type !== "wayfinding") return;
+  const list = div("kv");
+  for (const [place, dir] of pipes(w.props.items)) {
+    const row = div("kv-row");
+    row.append(div("kv-key", place), div("wf-dir", dir));
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+
 export const WIDGETS: Record<WidgetT["type"], Render> = {
   clock, weather, calendar, tasks, text, queue, heading, divider, image, callout,
   subheading, quote, bulletList, numberedList, checklist, code, label, keyValue, table,
@@ -1601,4 +2141,13 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   weekStrip, nowNext, ageCounter, anniversary, timeBlocks, shiftStatus, pomodoro, monthHabit,
   savingsGoal, readingNow, weightTrend, moodWeek, checklistProgress, roomStatus, directory,
   eventBanner, openSign, nowPlaying, splitFlap,
+  // v0.9
+  epigraph, kicker, ticker, glossary, footnotes, highlight, letterhead, fieldRow, contents,
+  aside, postscript, mantra, emojiStat, monogram, flag, logoText, profileCard, peopleList,
+  bigNumber, percentBig, deltaStat, moneyStat, counterPair, targetMeter, unitStat, progressBars,
+  lollipopChart, winLossBar, dotMatrix, rangeBar, bubbleScale, starBar, columnLabels, deltaList,
+  gaugeMini, histogram, fullDate, monthName, timeOfDay, quarterProgress, daysLeftMonth, unixClock,
+  tzPair, nextWeekday, daylight, moonProgress, seasonProgress, goldenHour, goalProgress, stepsToday,
+  streakPair, bookList, moodToday, budgetLine, welcomeSign, priceTag, todaySpecial, phoneNumber,
+  socialHandle, wayfinding,
 };

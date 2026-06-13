@@ -193,6 +193,82 @@ export const BLOCKS: BlockDef[] = [
   { type: "openSign", label: "Open sign", glyph: "⊙", category: "Info", defaultH: 6, description: "OPEN / CLOSED", keywords: "open closed sign shop", defaultProps: { open: true, label: "" } },
   { type: "nowPlaying", label: "Now playing", glyph: "♪", category: "Info", defaultH: 5, description: "Track + artist", keywords: "music now playing song", defaultProps: { title: "Quiet Song", artist: "Someone" } },
   { type: "splitFlap", label: "Split-flap", glyph: "❑", category: "Info", defaultH: 4, description: "A departures-board word", keywords: "splitflap board departures retro", defaultProps: { text: "DEPARTURES" } },
+
+  // ===== v0.9 — text & structure =====
+  { type: "epigraph", label: "Epigraph", glyph: "❛", category: "Text", defaultH: 4, description: "An opening quotation", keywords: "epigraph quote opening italic", defaultProps: { content: "We shape our tools, and thereafter our tools shape us.", author: "M. McLuhan" } },
+  { type: "kicker", label: "Kicker", glyph: "‹", category: "Text", defaultH: 3, description: "Eyebrow over a title", keywords: "kicker eyebrow headline", defaultProps: { kicker: "FEATURED", title: "The headline goes here" } },
+  { type: "ticker", label: "Ticker", glyph: "▸", category: "Text", defaultH: 2, description: "A single scrolling-style line", keywords: "ticker marquee news strip", defaultProps: { content: "Calm news · quiet updates · nothing urgent" } },
+  { type: "glossary", label: "Glossary", glyph: "𝐆", category: "Text", defaultH: 6, description: "Terms and meanings", keywords: "glossary terms definitions", defaultProps: { items: "Glance | a two-second read\nCalm | no notifications\nBoard | one screen's layout" } },
+  { type: "footnotes", label: "Footnotes", glyph: "†", category: "Text", defaultH: 4, description: "Numbered small notes", keywords: "footnotes notes references", defaultProps: { items: "Prices include tax.\nSubject to availability.\nMIT licensed." } },
+  { type: "highlight", label: "Highlight", glyph: "▮", category: "Text", defaultH: 4, description: "One emphasized line", keywords: "highlight emphasis key", defaultProps: { content: "The one thing worth remembering today." } },
+  { type: "letterhead", label: "Letterhead", glyph: "✒", category: "Text", defaultH: 4, description: "Name + tagline + rule", keywords: "letterhead header brand name", defaultProps: { name: "Your Name", tagline: "Calm by design" } },
+  { type: "fieldRow", label: "Field", glyph: "≔", category: "Text", defaultH: 3, description: "A label and a value", keywords: "field label value status", defaultProps: { label: "Status", value: "On track" } },
+  { type: "contents", label: "Contents", glyph: "☰", category: "Text", defaultH: 6, description: "A table of contents", keywords: "contents toc index outline", defaultProps: { items: "Introduction\nThe idea\nHow it works\nRunning it" } },
+  { type: "aside", label: "Aside", glyph: "❘", category: "Text", defaultH: 4, description: "A side note", keywords: "aside note margin", defaultProps: { content: "A quiet note set off to the side." } },
+  { type: "postscript", label: "Postscript", glyph: "℘", category: "Text", defaultH: 2, description: "A P.S. note", keywords: "postscript ps note", defaultProps: { content: "One more small thing worth knowing." } },
+  { type: "mantra", label: "Mantra", glyph: "✺", category: "Text", defaultH: 4, description: "A short centered phrase", keywords: "mantra motto phrase", defaultProps: { content: "Look, understand, move on." } },
+
+  // ===== v0.9 — media & identity =====
+  { type: "emojiStat", label: "Emoji stat", glyph: "✨", category: "Media", defaultH: 5, description: "A huge emoji + label", keywords: "emoji big symbol stat", defaultProps: { emoji: "✨", label: "" } },
+  { type: "monogram", label: "Monogram", glyph: "◉", category: "Media", defaultH: 5, description: "Initials in a circle", keywords: "monogram initials brand", defaultProps: { letters: "GO", label: "" } },
+  { type: "flag", label: "Flag", glyph: "⚑", category: "Media", defaultH: 4, description: "A flag + label", keywords: "flag country emoji", defaultProps: { emoji: "🏳", label: "Country" } },
+  { type: "logoText", label: "Logo text", glyph: "Ⓛ", category: "Media", defaultH: 4, description: "Letter-spaced brand text", keywords: "logo brand wordmark text", defaultProps: { text: "GLANCE" } },
+  { type: "profileCard", label: "Profile", glyph: "☻", category: "Media", defaultH: 6, description: "Name, role and a line", keywords: "profile person card bio", defaultProps: { name: "Your Name", role: "Title", detail: "A short line about you." } },
+  { type: "peopleList", label: "People", glyph: "≡", category: "Media", defaultH: 6, description: "Names → roles", keywords: "people staff directory roles", defaultProps: { items: "Dr. Rao | Cardiology\nA. Smith | Reception\nJ. Lee | Pharmacy" } },
+
+  // ===== v0.9 — numbers =====
+  { type: "bigNumber", label: "Big number", glyph: "№", category: "Numbers", defaultH: 5, description: "A giant number + caption", keywords: "number big stat hero", defaultProps: { value: "42", caption: "the answer" } },
+  { type: "percentBig", label: "Percent", glyph: "%", category: "Numbers", defaultH: 4, description: "Big percent + bar", keywords: "percent big progress", defaultProps: { value: 72, label: "" } },
+  { type: "deltaStat", label: "Delta stat", glyph: "▴", category: "Numbers", defaultH: 5, description: "Value with up/down delta", keywords: "delta change trend stat", defaultProps: { value: "1,284", delta: "+12%", label: "Visitors" } },
+  { type: "moneyStat", label: "Money", glyph: "¤", category: "Numbers", defaultH: 5, description: "A currency amount", keywords: "money currency revenue amount", defaultProps: { amount: "12,500", currency: "₹", label: "Revenue" } },
+  { type: "counterPair", label: "Counter pair", glyph: "⊞", category: "Numbers", defaultH: 5, description: "Two side-by-side counts", keywords: "counter pair in out two", defaultProps: { leftLabel: "In", leftValue: "24", rightLabel: "Out", rightValue: "18" } },
+  { type: "targetMeter", label: "Target meter", glyph: "◎", category: "Numbers", defaultH: 4, description: "Value vs target + bar", keywords: "target meter goal progress", defaultProps: { value: 72, target: 100, unit: "", label: "Goal" } },
+  { type: "unitStat", label: "Unit stat", glyph: "±", category: "Numbers", defaultH: 5, description: "A value with a unit", keywords: "unit value measurement stat", defaultProps: { value: "36.6", unit: "°C", label: "Temperature" } },
+  { type: "progressBars", label: "Progress bars", glyph: "▤", category: "Numbers", defaultH: 6, description: "Several labeled % bars", keywords: "progress bars percent multiple", defaultProps: { items: "Design | 80\nDev | 55\nQA | 30" } },
+
+  // ===== v0.9 — charts =====
+  { type: "lollipopChart", label: "Lollipop", glyph: "⊶", category: "Charts", defaultH: 6, description: "Lollipop bar chart", keywords: "lollipop chart bars", defaultProps: { items: "Mon | 8\nTue | 5\nWed | 9\nThu | 6" } },
+  { type: "winLossBar", label: "Win / loss", glyph: "▪", category: "Charts", defaultH: 4, description: "Win/loss/tie ticks", keywords: "win loss streak record sports", defaultProps: { values: "1,1,-1,1,0,-1,1,1", label: "" } },
+  { type: "dotMatrix", label: "Dot matrix", glyph: "⣏", category: "Charts", defaultH: 6, description: "Filled dots out of N", keywords: "dots matrix count grid", defaultProps: { value: 36, total: 50, label: "" } },
+  { type: "rangeBar", label: "Range", glyph: "⊢", category: "Charts", defaultH: 4, description: "A value within a range", keywords: "range min max value slider", defaultProps: { min: 0, max: 100, value: 64, label: "" } },
+  { type: "bubbleScale", label: "Bubbles", glyph: "◌", category: "Charts", defaultH: 6, description: "Circles sized by value", keywords: "bubble circles scale sizes", defaultProps: { items: "A | 8\nB | 4\nC | 6\nD | 2" } },
+  { type: "starBar", label: "Star bar", glyph: "★", category: "Charts", defaultH: 3, description: "Filled stars out of N", keywords: "stars score rating bar", defaultProps: { value: 7, max: 10, label: "" } },
+  { type: "columnLabels", label: "Columns", glyph: "▥", category: "Charts", defaultH: 6, description: "Labeled vertical bars", keywords: "columns bars labels chart", defaultProps: { items: "Q1 | 12\nQ2 | 18\nQ3 | 9\nQ4 | 21" } },
+  { type: "deltaList", label: "Delta list", glyph: "↕", category: "Charts", defaultH: 6, description: "Rows with up/down deltas", keywords: "delta list change arrows", defaultProps: { items: "Sales | +12\nCosts | -4\nUsers | +8" } },
+  { type: "gaugeMini", label: "Mini gauge", glyph: "◔", category: "Charts", defaultH: 5, description: "A small ring gauge", keywords: "gauge ring percent mini", defaultProps: { value: 64, label: "" } },
+  { type: "histogram", label: "Histogram", glyph: "▆", category: "Charts", defaultH: 6, description: "Many vertical bars", keywords: "histogram distribution bars", defaultProps: { values: "2,4,7,9,6,3,5,8,4,2", label: "" } },
+
+  // ===== v0.9 — time computed =====
+  { type: "fullDate", label: "Full date", glyph: "▦", category: "Time", defaultH: 5, description: "Weekday + full date", keywords: "date today weekday full", defaultProps: { label: "" } },
+  { type: "monthName", label: "Month", glyph: "M", category: "Time", defaultH: 4, description: "The current month name", keywords: "month name current", defaultProps: { label: "" } },
+  { type: "timeOfDay", label: "Time of day", glyph: "◐", category: "Time", defaultH: 4, description: "Morning / Afternoon / Evening", keywords: "time of day part morning", defaultProps: { label: "" } },
+  { type: "quarterProgress", label: "Quarter", glyph: "◔", category: "Time", defaultH: 3, description: "Percent through the quarter", keywords: "quarter progress q1 fiscal", defaultProps: { label: "Quarter" } },
+  { type: "daysLeftMonth", label: "Days left", glyph: "⌛", category: "Time", defaultH: 4, description: "Days left this month", keywords: "days left month remaining", defaultProps: { label: "" } },
+  { type: "unixClock", label: "Unix time", glyph: "⊡", category: "Time", defaultH: 4, description: "Epoch seconds, live", keywords: "unix epoch timestamp geek", defaultProps: { label: "Unix" } },
+  { type: "tzPair", label: "Two zones", glyph: "⊗", category: "Time", defaultH: 5, description: "Two timezones at once", keywords: "timezone pair world clock two", defaultProps: { labelA: "NYC", tzA: "America/New_York", labelB: "Tokyo", tzB: "Asia/Tokyo" } },
+  { type: "nextWeekday", label: "Next weekday", glyph: "▷", category: "Time", defaultH: 4, description: "Days to the next given day", keywords: "next weekday until monday friday", defaultProps: { weekday: 1, label: "" } },
+
+  // ===== v0.9 — nature computed =====
+  { type: "daylight", label: "Daylight", glyph: "☀", category: "Nature", defaultH: 5, description: "Length of today's daylight", keywords: "daylight day length sun hours", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "moonProgress", label: "Moon %", glyph: "☽", category: "Nature", defaultH: 5, description: "Tonight's illumination", keywords: "moon illumination percent phase", defaultProps: { label: "" } },
+  { type: "seasonProgress", label: "Season %", glyph: "❅", category: "Nature", defaultH: 5, description: "Percent through the season", keywords: "season progress percent", defaultProps: { hemisphere: "north", label: "Season" } },
+  { type: "goldenHour", label: "Golden hour", glyph: "◑", category: "Nature", defaultH: 5, description: "Morning & evening golden hours", keywords: "golden hour photography sun light", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+
+  // ===== v0.9 — trackers =====
+  { type: "goalProgress", label: "Goal", glyph: "◎", category: "Trackers", defaultH: 5, description: "Value vs target + bar", keywords: "goal progress target tracker", defaultProps: { value: 6, target: 10, unit: "", label: "Goal" } },
+  { type: "stepsToday", label: "Steps", glyph: "👣", category: "Trackers", defaultH: 5, description: "Steps vs a daily goal", keywords: "steps walk fitness goal", defaultProps: { value: 6400, goal: 10000, label: "Steps" } },
+  { type: "streakPair", label: "Streak pair", glyph: "✶", category: "Trackers", defaultH: 5, description: "Current vs best streak", keywords: "streak current best record", defaultProps: { current: 12, best: 48, label: "Streak" } },
+  { type: "bookList", label: "Reading list", glyph: "▤", category: "Trackers", defaultH: 6, description: "Books → authors", keywords: "books reading list shelf", defaultProps: { items: "A Calm Book | Anon\nDeep Work | C. Newport\nSilence | E. Prochnik" } },
+  { type: "moodToday", label: "Mood today", glyph: "☺", category: "Trackers", defaultH: 5, description: "One big mood face", keywords: "mood today face feeling", defaultProps: { emoji: "🙂", label: "Today" } },
+  { type: "budgetLine", label: "Budget", glyph: "▰", category: "Trackers", defaultH: 5, description: "Spent vs budget left", keywords: "budget spent money left", defaultProps: { spent: 6500, budget: 10000, unit: "₹", label: "Budget" } },
+
+  // ===== v0.9 — info & signage =====
+  { type: "welcomeSign", label: "Welcome", glyph: "✦", category: "Info", defaultH: 6, description: "A big welcome + name", keywords: "welcome greeting reception sign", defaultProps: { name: "Guest", message: "Welcome" } },
+  { type: "priceTag", label: "Price tag", glyph: "¤", category: "Info", defaultH: 5, description: "An item and a big price", keywords: "price tag item cost menu", defaultProps: { item: "Espresso", price: "120", unit: "₹" } },
+  { type: "todaySpecial", label: "Special", glyph: "✸", category: "Info", defaultH: 5, description: "Today's special + detail", keywords: "special today menu feature", defaultProps: { title: "Today's Special", detail: "Saffron risotto · 320" } },
+  { type: "phoneNumber", label: "Phone", glyph: "☎", category: "Info", defaultH: 4, description: "A big phone number", keywords: "phone number call contact", defaultProps: { label: "Reception", number: "+91 98765 43210" } },
+  { type: "socialHandle", label: "Social", glyph: "@", category: "Info", defaultH: 4, description: "A platform and handle", keywords: "social handle instagram twitter", defaultProps: { platform: "Instagram", handle: "@glanceos" } },
+  { type: "wayfinding", label: "Wayfinding", glyph: "➜", category: "Info", defaultH: 7, description: "Places with directions", keywords: "wayfinding directions signage arrows", defaultProps: { items: "Reception | → Floor 1\nPharmacy | → Floor 2\nExit | ← Left" } },
 ];
 
 export const CATEGORIES: BlockCategory[] = ["Text", "Media", "Numbers", "Charts", "Time", "Nature", "Trackers", "Info", "Live", "Smart home"];
@@ -260,11 +336,33 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   nowPlaying: "title",
   splitFlap: "text",
   roomStatus: "room",
+  // v0.9
+  epigraph: "content",
+  kicker: "title",
+  ticker: "content",
+  highlight: "content",
+  letterhead: "name",
+  fieldRow: "value",
+  aside: "content",
+  postscript: "content",
+  mantra: "content",
+  logoText: "text",
+  profileCard: "name",
+  bigNumber: "value",
+  moneyStat: "amount",
+  unitStat: "value",
+  welcomeSign: "name",
+  priceTag: "item",
+  todaySpecial: "title",
+  phoneNumber: "number",
+  socialHandle: "handle",
 };
 
 // Single-line types: never hold their own newlines.
 export const SINGLE_LINE = new Set<WidgetType>([
   "heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading",
+  // v0.9
+  "kicker", "ticker", "mantra", "logoText",
 ]);
 
 // Prose types where pressing Enter starts a NEW text line below (Notion-style),
@@ -272,4 +370,6 @@ export const SINGLE_LINE = new Set<WidgetType>([
 // Everything else editable (lists, code, callout, tables…) keeps Enter = newline.
 export const ENTER_BREAKS = new Set<WidgetType>([
   "text", "heading", "subheading", "lead", "pullquote", "quote", "label", "banner", "numberedHeading",
+  // v0.9
+  "epigraph", "highlight", "aside", "kicker", "mantra", "ticker", "logoText",
 ]);

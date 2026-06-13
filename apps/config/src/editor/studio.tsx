@@ -188,7 +188,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   useEffect(() => {
     if (editing && editRef.current) {
       editRef.current.focus();
-      editRef.current.select();
+      const len = editRef.current.value.length;
+      editRef.current.setSelectionRange(len, len);
     }
   }, [editing?.id]);
 
@@ -287,6 +288,34 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (prop) setEditing({ id, prop, multiline: !SINGLE_LINE.has(block!.type) });
   };
 
+  // Just start typing — like Notion. A printable key with a text block selected
+  // appends to it and opens the editor; on a blank board it births a text line.
+  const appendChar = (id: string, prop: string, ch: string) => {
+    stageEdit((d) => {
+      const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
+      if (blk) {
+        const cur = String((blk.props as Record<string, unknown>)[prop] ?? "");
+        (blk.props as Record<string, unknown>)[prop] = cur + ch;
+      }
+    });
+    startEditing(id);
+  };
+  const typeChar = (ch: string): boolean => {
+    const id = primaryRef.current;
+    const block = id ? docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === id) : undefined;
+    const prop = block && TEXT_PROP[block.type];
+    if (id && prop) {
+      appendChar(id, prop, ch);
+      return true;
+    }
+    if (docRef.current.rows.length === 0) {
+      const newId = insertBlock("text", 0);
+      if (newId) appendChar(newId, "content", ch);
+      return true;
+    }
+    return false;
+  };
+
   // Backspace on an empty line: drop it and put the cursor at the line above.
   const deleteAndFocusPrev = (id: string) => {
     const all = docRef.current.rows.flatMap((r) => r.blocks);
@@ -328,6 +357,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
       const meta = e.metaKey || e.ctrlKey;
       const o = overlayRef.current;
       const has = selectedRef.current.length > 0;
+      const pid = primaryRef.current;
+      const pblock = pid ? docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === pid) : undefined;
+      const canType = (!!pblock && TEXT_PROP[pblock.type] !== undefined) || docRef.current.rows.length === 0;
 
       if (o.presenting) {
         if (e.key === "Escape") setPresenting(false);
@@ -349,12 +381,17 @@ export function Studio({ layoutId }: { layoutId: number }) {
       } else if (meta && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         e.preventDefault();
         moveSelectedRow(e.key === "ArrowUp" ? "up" : "down");
-      } else if (e.key === "?") {
-        e.preventDefault();
-        setShowHelp((v) => !v);
       } else if (e.key === "/") {
         e.preventDefault();
         openSlash();
+      } else if (!meta && e.key.length === 1 && canType) {
+        // type-first: a printable key starts editing the selected text block
+        // (so "p" and "?" type into text instead of firing global shortcuts)
+        e.preventDefault();
+        typeChar(e.key);
+      } else if (e.key === "?") {
+        e.preventDefault();
+        setShowHelp((v) => !v);
       } else if (e.key === "p" && !meta) {
         e.preventDefault();
         setPresenting(true);
