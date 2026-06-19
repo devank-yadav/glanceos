@@ -2664,3 +2664,8 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .le-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .le-toolbar .ghost { font-size: 13px; padding: 5px 9px; }
 .le-toolbar .ghost svg { width: 13px; height: 13px; }
+
+/* ---------- studio breadcrumb ---------- */
+.studio-crumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.studio-crumbs .crumb-sep { color: var(--faint); font-size: 15px; flex: none; }
+.studio-crumbs .title-input.crumb-current { min-width: 0; }

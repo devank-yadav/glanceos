@@ -1,6 +1,7 @@
 import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
+import { editorOrigin } from "../router";
 import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
 import { DataPanel } from "./databind";
 import {
@@ -583,8 +584,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
   return (
     <div class="studio">
       <header class="studio-bar">
-        <a class="back" href="#/">← Screens</a>
-        <input class="title-input" value={state.present.name} onInput={(e) => stageEdit((d) => { d.name = (e.currentTarget as HTMLInputElement).value || "Untitled"; })} />
+        <nav class="studio-crumbs" aria-label="Breadcrumb">
+          <a class="back" href={editorOrigin().path} title={`Back to ${editorOrigin().label}`}>← {editorOrigin().label}</a>
+          <span class="crumb-sep" aria-hidden="true">/</span>
+          <input class="title-input crumb-current" aria-label="Board name" value={state.present.name} onInput={(e) => stageEdit((d) => { d.name = (e.currentTarget as HTMLInputElement).value || "Untitled"; })} />
+        </nav>
         {saveLabel && <span class={`chip save-${saveState}`}>{saveLabel}</span>}
         <span class="spacer" />
         <span class="muted hide-narrow">{liveOn > 0 ? `Live on ${liveOn}` : "Not attached"}</span>
