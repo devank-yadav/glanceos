@@ -3,12 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#fafafa" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="GlanceOS turns any screen into a calm, glanceable dashboard you compose like a document — open source, self-hosted, black and white." />
     <title>GlanceOS — calm dashboards for any screen</title>
     <style>
-      /* paint the backdrop before the bundle arrives — no white flash */
+      /* paint the backdrop before the bundle arrives — no flash, scheme-aware */
       html { background: #fafafa; }
+      @media (prefers-color-scheme: dark) { html { background: #191919; } }
     </style>
   </head>
   <body>
