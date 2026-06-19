@@ -56,8 +56,37 @@ function bootScreen(): void {
   });
 }
 
-if (new URLSearchParams(location.search).has("preview")) {
+/**
+ * Public share mode: a read-only board viewable with no login at
+ * /screen/?share=<token>. Polls the public endpoint (no SSE), painting the last
+ * good frame from cache first so a reload never blanks the wall.
+ */
+function bootShare(token: string): void {
+  const cacheKey = `glanceos.share.${token}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try { renderPayload(JSON.parse(cached) as StreamPayloadT); markStale(); } catch { localStorage.removeItem(cacheKey); }
+  }
+  const load = async () => {
+    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}`);
+    if (!res.ok) throw new Error(String(res.status));
+    const payload = (await res.json()) as StreamPayloadT;
+    localStorage.setItem(cacheKey, JSON.stringify(payload));
+    renderPayload(payload);
+    markFresh();
+  };
+  load().catch(() => {
+    if (!cached) renderMessage("This board isn't available", "The share link may have been turned off.");
+    markStale();
+  });
+  setInterval(() => { load().catch(() => markStale()); }, 60_000);
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has("preview")) {
   bootPreview();
+} else if (params.get("share")) {
+  bootShare(params.get("share")!);
 } else {
   bootScreen();
 }

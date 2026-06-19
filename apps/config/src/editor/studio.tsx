@@ -118,6 +118,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [showHelp, setShowHelp] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [convertId, setConvertId] = useState<string | null>(null);
   // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -581,6 +585,23 @@ export function Studio({ layoutId }: { layoutId: number }) {
     else setSidebarOpen(true);
   };
 
+  const openShare = () => {
+    setShareOpen(true); setShareCopied(false);
+    api.get<{ token: string | null; url: string | null }>(`/api/layouts/${layoutId}/share`).then((r) => setShareUrl(r.url)).catch(() => {});
+  };
+  const createShare = async () => {
+    setShareBusy(true);
+    try { const r = await api.post<{ url: string }>(`/api/layouts/${layoutId}/share`); setShareUrl(r.url); } catch { /* keep popover open */ } finally { setShareBusy(false); }
+  };
+  const revokeShare = async () => {
+    setShareBusy(true);
+    try { await api.del(`/api/layouts/${layoutId}/share`); setShareUrl(null); setShareCopied(false); } catch { /* noop */ } finally { setShareBusy(false); }
+  };
+  const copyShare = () => {
+    if (!shareUrl) return;
+    navigator.clipboard?.writeText(shareUrl).then(() => setShareCopied(true)).catch(() => {});
+  };
+
   return (
     <div class="studio">
       <header class="studio-bar">
@@ -606,8 +627,35 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <button class="ghost icon-btn" disabled={state.future.length === 0} title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
         <button class="ghost icon-btn" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
         <button class="ghost icon-btn" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
+        <button class={`ghost icon-btn${shareOpen ? " on" : ""}`} title="Share" onClick={() => (shareOpen ? setShareOpen(false) : openShare())}><Icon.link /></button>
         <button class={`ghost icon-btn${sideShown ? " on" : ""}`} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
       </header>
+      {shareOpen && (
+        <>
+          <div class="popover-backdrop" onPointerDown={() => setShareOpen(false)} />
+          <div class="share-popover card" role="dialog" aria-label="Share board">
+            <h3>Share this board</h3>
+            {shareUrl ? (
+              <>
+                <p class="muted">Anyone with the link can view it live — no login needed.</p>
+                <input class="share-url" readOnly value={shareUrl} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
+                <div class="row spread share-actions">
+                  <button class="ghost danger" onClick={revokeShare} disabled={shareBusy}>Turn off</button>
+                  <span class="row share-right">
+                    <a class="ghost" href={shareUrl} target="_blank" rel="noopener noreferrer">Open</a>
+                    <button class="primary" onClick={copyShare}>{shareCopied ? "Copied ✓" : "Copy link"}</button>
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <p class="muted">Create a public, read-only link to this board.</p>
+                <button class="primary" onClick={createShare} disabled={shareBusy}>{shareBusy ? "Creating…" : "Create link"}</button>
+              </>
+            )}
+          </div>
+        </>
+      )}
       {saveState === "error" && saveError && <p class="issues studio-issues">{saveError}</p>}
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>

@@ -2673,3 +2673,31 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 /* small hint under a form field */
 .field-hint { font-size: 12px; margin-top: 3px; display: block; }
 .field-hint code { font-size: 11px; padding: 1px 4px; background: var(--soft); border-radius: 4px; }
+
+/* ---------- studio share popover ---------- */
+.share-popover {
+  position: fixed;
+  top: 54px;
+  right: 14px;
+  z-index: 60;
+  width: 340px;
+  max-width: calc(100vw - 28px);
+  padding: 16px;
+  animation: rise 0.14s var(--ease) both;
+}
+.share-popover h3 { margin: 0 0 6px; font-size: 15px; }
+.share-popover p { margin: 0 0 12px; font-size: 13px; }
+.share-url {
+  width: 100%;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 8px 9px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--input-bg);
+  margin-bottom: 12px;
+}
+.share-actions { gap: 8px; }
+.share-right { gap: 8px; }
+.share-popover .ghost.danger { color: var(--bad); }
+.share-popover a.ghost { text-decoration: none; display: inline-flex; align-items: center; }

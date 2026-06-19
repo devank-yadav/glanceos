@@ -248,6 +248,33 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(playlists.find((p: { id: number }) => p.id === pl.id).items).toHaveLength(2);
   });
 
+  it("shares a board by public read-only link, gated and revocable", async () => {
+    const layout = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Shared", document: LOCAL_LAYOUT }) })).json();
+
+    // not shared yet
+    expect(await (await app.request(`/api/layouts/${layout.id}/share`, { headers: { cookie: cookieA } })).json()).toMatchObject({ token: null });
+
+    // user B cannot share user A's board
+    expect((await app.request(`/api/layouts/${layout.id}/share`, { method: "POST", ...authed(cookieB, {}) })).status).toBe(404);
+
+    // A creates a public link
+    const share = await (await app.request(`/api/layouts/${layout.id}/share`, { method: "POST", ...authed(cookieA, {}) })).json();
+    expect(share.token).toBeTruthy();
+    expect(share.url).toContain(`share=${share.token}`);
+
+    // the public endpoint serves the board with NO auth, resolving live data under the owner
+    const pub = await app.request(`/api/public/board/${share.token}`);
+    expect(pub.status).toBe(200);
+    const payload = await pub.json();
+    expect(payload.state.layout.name).toBe("Shared");
+    expect(payload.state.data.wt.items.length).toBeGreaterThan(0);
+
+    // revoking turns the link off (404), and a bogus token never resolves
+    expect((await app.request(`/api/layouts/${layout.id}/share`, { method: "DELETE", headers: { cookie: cookieA } })).status).toBe(200);
+    expect((await app.request(`/api/public/board/${share.token}`)).status).toBe(404);
+    expect((await app.request("/api/public/board/nope")).status).toBe(404);
+  });
+
   it("logs out and re-locks the config plane", async () => {
     await app.request("/api/auth/logout", { method: "POST", headers: { cookie: cookieA } });
     expect((await app.request("/api/devices", { headers: { cookie: cookieA } })).status).toBe(401);

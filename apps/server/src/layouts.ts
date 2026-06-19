@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Layout, parseDocument, type LayoutT } from "@glanceos/schema";
 import { db } from "./db";
 
@@ -68,6 +69,34 @@ export function getLayout(id: number): LayoutRecord | undefined {
 export function getOwnedLayout(id: number, userId: string): LayoutRecord | undefined {
   const layout = getLayout(id);
   return layout && layout.userId === userId ? layout : undefined;
+}
+
+// ---- public read-only share links ----
+
+/** Current share token for an owned layout (null if not shared). */
+export function getShareToken(id: number, userId: string): string | null {
+  const row = db.prepare("SELECT share_token FROM layouts WHERE id = ? AND user_id = ?").get(id, userId) as { share_token: string | null } | undefined;
+  return row?.share_token ?? null;
+}
+
+/** Enable sharing (idempotent — returns the existing token if already shared). */
+export function setShareToken(id: number, userId: string): string | null {
+  if (!getOwnedLayout(id, userId)) return null;
+  const existing = getShareToken(id, userId);
+  if (existing) return existing;
+  const token = randomBytes(18).toString("base64url");
+  db.prepare("UPDATE layouts SET share_token = ? WHERE id = ? AND user_id = ?").run(token, id, userId);
+  return token;
+}
+
+export function clearShareToken(id: number, userId: string): boolean {
+  return db.prepare("UPDATE layouts SET share_token = NULL WHERE id = ? AND user_id = ?").run(id, userId).changes > 0;
+}
+
+/** Resolve a public share token → the board + its owner (for data resolution). */
+export function getLayoutByShareToken(token: string): { record: LayoutRecord; ownerId: string | null } | undefined {
+  const row = db.prepare("SELECT * FROM layouts WHERE share_token = ?").get(token) as LayoutRow | undefined;
+  return row ? { record: toRecord(row), ownerId: row.user_id } : undefined;
 }
 
 export function listSetups(userId: string): SetupSummary[] {

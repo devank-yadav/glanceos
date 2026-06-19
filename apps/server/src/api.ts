@@ -18,8 +18,9 @@ import {
 } from "./devices";
 import { isConnected, subscribe } from "./hub";
 import {
-  blankDocument, createLayout, deleteLayout, duplicateLayout, getLayout, getOwnedLayout,
-  importFromHub, listPublished, listSetups, updateLayout, updateLayoutMeta,
+  blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
+  getLayoutByShareToken, getOwnedLayout, getShareToken, importFromHub, listPublished, listSetups,
+  setShareToken, updateLayout, updateLayoutMeta,
 } from "./layouts";
 import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
@@ -131,7 +132,7 @@ export function buildApp(): Hono<Env> {
 
   app.use("/api/*", async (c, next) => {
     const path = c.req.path;
-    if (path.startsWith("/api/auth/") || DEVICE_PLANE.has(path)) return next();
+    if (path.startsWith("/api/auth/") || path.startsWith("/api/public/") || DEVICE_PLANE.has(path)) return next();
     const userId = sessionUserId(getCookie(c, SESSION_COOKIE));
     if (!userId) return c.json({ error: "unauthorized" }, 401);
     c.set("userId", userId);
@@ -510,6 +511,34 @@ export function buildApp(): Hono<Env> {
     const affected = deleteLayout(id);
     await pushDeviceIds(affected); // those screens fall back to "pick a setup"
     return c.json({ ok: true });
+  });
+
+  // ---- public read-only share links ----
+  const shareLink = (c: Context, token: string) => `${publicBase(c)}/screen/?share=${token}`;
+
+  app.get("/api/layouts/:id/share", (c) => {
+    const token = getShareToken(Number(c.req.param("id")), c.get("userId"));
+    return c.json({ token, url: token ? shareLink(c, token) : null });
+  });
+
+  app.post("/api/layouts/:id/share", (c) => {
+    const token = setShareToken(Number(c.req.param("id")), c.get("userId"));
+    if (!token) return c.json({ error: "not found" }, 404);
+    return c.json({ token, url: shareLink(c, token) });
+  });
+
+  app.delete("/api/layouts/:id/share", (c) => {
+    clearShareToken(Number(c.req.param("id")), c.get("userId"));
+    return c.json({ ok: true });
+  });
+
+  // Public board state (no auth) — resolves live data under the OWNER's connections.
+  app.get("/api/public/board/:token", async (c) => {
+    const found = getLayoutByShareToken(c.req.param("token"));
+    if (!found) return c.json({ error: "not found" }, 404);
+    const { record, ownerId } = found;
+    const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
+    return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });
   });
 
   // ---- template hub ----
