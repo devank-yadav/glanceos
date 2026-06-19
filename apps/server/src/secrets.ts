@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,20 @@ function readOrCreateInstallKey(): string {
   return k;
 }
 
-const KEY = scryptSync(process.env.GLANCEOS_SECRET_KEY ?? readOrCreateInstallKey(), "glanceos.connections", 32);
+const BASE_SECRET = process.env.GLANCEOS_SECRET_KEY ?? readOrCreateInstallKey();
+const KEY = scryptSync(BASE_SECRET, "glanceos.connections", 32);
+// Separate derived key for signing (not encrypting) short-lived OAuth `state`.
+const HMAC_KEY = scryptSync(BASE_SECRET, "glanceos.hmac", 32);
+
+/** HMAC-SHA256 (base64url) for integrity-protected, non-secret tokens like OAuth state. */
+export function hmacSign(data: string): string {
+  return createHmac("sha256", HMAC_KEY).update(data).digest("base64url");
+}
+export function hmacVerify(data: string, sig: string): boolean {
+  const a = Buffer.from(sig);
+  const b = Buffer.from(hmacSign(data));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 /** Encrypt → Buffer laid out as iv(12) | authTag(16) | ciphertext. */
 export function seal(plain: string): Buffer {

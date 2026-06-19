@@ -22,6 +22,15 @@ export interface ProviderResource {
   shape: "series" | "scalar" | "list" | "events" | "table";
 }
 
+// Authorization-code + refresh spec for an oauth2 provider. The self-hoster
+// supplies the client id/secret (oauth_apps); this is the public endpoint shape.
+export interface OAuthSpec {
+  authorizeUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  authParams?: Record<string, string>; // extra authorize params (e.g. access_type=offline)
+}
+
 export interface Provider {
   id: string;
   label: string;
@@ -30,6 +39,7 @@ export interface Provider {
   defaultTtlMs: number;
   minRefreshMs: number;
   resources: ProviderResource[];
+  oauth?: OAuthSpec; // present only for authKind "oauth2"
   resolve(ctx: ResolveCtx): Promise<unknown>;
 }
 
@@ -197,5 +207,62 @@ reg({
     if (!ctx.secret) return null;
     const query = ctx.query.gqlQuery || "{ issues(first: 20) { nodes { title state { name } } } }";
     return postJSON("https://api.linear.app/graphql", { query }, { authorization: ctx.secret });
+  },
+});
+
+// ---- OAuth provider: Google Calendar (read-only). Needs a Google Cloud OAuth
+// app (the self-hoster's client id/secret in oauth_apps); ctx.secret is the
+// access token the resolver gets after connLookupFor refreshes it if expired.
+export interface GEvent { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }
+/** Shape Google Calendar API items into the {title,start,end} events the calendar renderer reads. */
+export function mapGoogleEvents(items: GEvent[]): { events: { title: string; start: string; end?: string }[] } {
+  const events = items
+    .map((e) => ({ title: e.summary || "(busy)", start: e.start?.dateTime || e.start?.date || "", end: e.end?.dateTime || e.end?.date }))
+    .filter((e) => e.start);
+  return { events };
+}
+reg({
+  id: "google", label: "Google Calendar", category: "calendar", authKind: "oauth2",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+    authParams: { access_type: "offline", prompt: "consent" }, // ensures a refresh_token
+  },
+  resources: [{ id: "google.calendar", label: "Calendar events", shape: "events" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const cal = encodeURIComponent(ctx.query.calendarId || "primary");
+    const max = Number(ctx.query.max) || 8;
+    const timeMin = new Date().toISOString();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${cal}/events`
+      + `?singleEvents=true&orderBy=startTime&maxResults=${max}&timeMin=${encodeURIComponent(timeMin)}`;
+    const raw = (await getJSON(url, { authorization: `Bearer ${ctx.secret}` })) as { items?: GEvent[] } | null;
+    if (!raw?.items) return null;
+    return mapGoogleEvents(raw.items);
+  },
+});
+
+// ---- Token provider: Home Assistant (long-lived access token). Self-hosted →
+// usually a private IP, so it needs GLANCEOS_ALLOW_PRIVATE_EGRESS=1 (SSRF opt-out).
+reg({
+  id: "homeassistant", label: "Home Assistant", category: "smart-home", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [
+    { id: "homeassistant.entity", label: "Entity state", shape: "scalar" },
+    { id: "homeassistant.history", label: "Entity history", shape: "series" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = String(ctx.config.baseUrl || "").replace(/\/+$/, "");
+    const entity = ctx.query.entity;
+    if (!base || !entity) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "homeassistant.history") {
+      const hist = (await getJSON(`${base}/api/history/period?filter_entity_id=${encodeURIComponent(entity)}&minimal_response`, h)) as unknown[][] | null;
+      return hist?.[0] ?? null; // [{ state, last_changed }, …]
+    }
+    return getJSON(`${base}/api/states/${encodeURIComponent(entity)}`, h); // { state, attributes, … }
   },
 });

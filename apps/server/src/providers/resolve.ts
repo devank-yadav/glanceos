@@ -13,7 +13,8 @@ export interface ConnContext {
   secret: string | null;
   config: Record<string, unknown>;
 }
-export type ConnLookup = (connectionId: string) => ConnContext | null;
+// May be async (oauth connections refresh their access token on read).
+export type ConnLookup = (connectionId: string) => ConnContext | null | Promise<ConnContext | null>;
 
 const stableHash = (q: Record<string, string>): string =>
   Object.keys(q).sort().map((k) => `${k}=${q[k]}`).join("&");
@@ -69,7 +70,7 @@ export async function resolveSource(src: BlockSourceT, lookup?: ConnLookup): Pro
   let secret: string | null = null;
   let config: Record<string, unknown> = {};
   if (src.connectionId) {
-    const c = lookup?.(src.connectionId);
+    const c = await lookup?.(src.connectionId);
     if (!c) return null; // connection missing / revoked / not supported here
     secret = c.secret;
     config = c.config;

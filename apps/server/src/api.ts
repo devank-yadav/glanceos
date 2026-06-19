@@ -34,6 +34,8 @@ import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
   connLookupFor, createConnection, deleteConnection, getConnectionSummary, listConnections, updateConnection,
 } from "./connections";
+import { buildAuthorizeUrl, completeOAuth, NoOAuthApp } from "./oauth";
+import { deleteOAuthApp, getOAuthAppSummary, setOAuthApp } from "./oauth-apps";
 import { PROVIDERS } from "./providers/registry";
 import { resolveSource } from "./providers/resolve";
 import { resolveWidgetData } from "./widgets";
@@ -41,6 +43,12 @@ import { resolveWidgetData } from "./widgets";
 const here = dirname(fileURLToPath(import.meta.url));
 
 const baseUrl = (): string => `http://127.0.0.1:${process.env.PORT ?? 8080}`;
+
+// Public origin for OAuth redirect URIs — behind a reverse proxy the request
+// origin is wrong, so GLANCEOS_PUBLIC_URL overrides it. Must match the redirect
+// URI registered in the provider's OAuth app.
+const publicBase = (c: Context): string =>
+  process.env.GLANCEOS_PUBLIC_URL?.replace(/\/+$/, "") ?? new URL(c.req.url).origin;
 
 const SESSION_COOKIE = "glanceos_session";
 
@@ -389,7 +397,7 @@ export function buildApp(): Hono<Env> {
 
   app.get("/api/providers", (c) =>
     c.json([...PROVIDERS.values()].map((p) => ({
-      id: p.id, label: p.label, category: p.category, authKind: p.authKind,
+      id: p.id, label: p.label, category: p.category, authKind: p.authKind, oauth: !!p.oauth,
       resources: p.resources.map((r) => ({ id: r.id, label: r.label, shape: r.shape })),
     }))));
 
@@ -422,6 +430,45 @@ export function buildApp(): Hono<Env> {
     const parsed = BlockSource.safeParse({ ...(body.source ?? {}), connectionId: id });
     if (!parsed.success) return c.json({ error: "validation" }, 400);
     return c.json({ data: await resolveSource(parsed.data, connLookupFor(userId)) });
+  });
+
+  // ---- OAuth: the self-hoster's app credentials (secret sealed, never returned) ----
+  app.get("/api/oauth-apps/:provider", (c) =>
+    c.json(getOAuthAppSummary(c.get("userId"), c.req.param("provider")) ?? { hasApp: false }));
+
+  app.put("/api/oauth-apps/:provider", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { clientId?: string; clientSecret?: string };
+    if (!body.clientId || !body.clientSecret) return c.json({ error: "clientId and clientSecret required" }, 400);
+    setOAuthApp(c.get("userId"), c.req.param("provider"), body.clientId, body.clientSecret);
+    return c.json({ ok: true });
+  });
+
+  app.delete("/api/oauth-apps/:provider", (c) => {
+    deleteOAuthApp(c.get("userId"), c.req.param("provider"));
+    return c.json({ ok: true });
+  });
+
+  // ---- OAuth flow: redirect to provider, then handle the callback ----
+  app.get("/api/oauth/:provider/start", (c) => {
+    const provider = c.req.param("provider");
+    const redirectUri = `${publicBase(c)}/api/oauth/${provider}/callback`;
+    try {
+      return c.redirect(buildAuthorizeUrl(c.get("userId"), provider, redirectUri));
+    } catch (e) {
+      if (e instanceof NoOAuthApp) return c.json({ error: "no_oauth_app", provider }, 412);
+      return c.json({ error: "oauth_unavailable" }, 400);
+    }
+  });
+
+  app.get("/api/oauth/:provider/callback", async (c) => {
+    const provider = c.req.param("provider");
+    const code = c.req.query("code");
+    const state = c.req.query("state");
+    const back = (status: string) => c.redirect(`/#/integrations?oauth=${status}`);
+    if (c.req.query("error") || !code || !state) return back("denied");
+    const redirectUri = `${publicBase(c)}/api/oauth/${provider}/callback`;
+    const result = await completeOAuth(c.get("userId"), provider, code, state, redirectUri);
+    return back(result.ok ? "connected" : `error:${result.error ?? "unknown"}`);
   });
 
   app.get("/api/layouts/:id", (c) => {

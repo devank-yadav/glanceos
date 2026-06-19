@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
+import { ensureFreshOAuthToken } from "./oauth";
 import { PROVIDERS, type AuthKind } from "./providers/registry";
 import type { ConnContext, ConnLookup } from "./providers/resolve";
 import { open, seal } from "./secrets";
@@ -122,9 +123,14 @@ function readSecret(connectionId: string, kind: string): string | null {
  *  resolver. Never exposed over the API. Flips status to needs_auth if a secret
  *  was expected but can't be decrypted (lost/rotated key). */
 export function connLookupFor(userId: string): ConnLookup {
-  return (connectionId: string): ConnContext | null => {
+  return async (connectionId: string): Promise<ConnContext | null> => {
     const row = db.prepare("SELECT * FROM connections WHERE id = ? AND user_id = ?").get(connectionId, userId) as ConnRow | undefined;
     if (!row) return null;
+    if (row.auth_kind === "oauth2") {
+      // access token, transparently refreshed if expired; null → needs reconnect
+      const access = await ensureFreshOAuthToken(connectionId, userId, row.provider);
+      return { secret: access, config: safeJson(row.config) };
+    }
     const secret = readSecret(connectionId, "secret");
     if (!secret && (row.auth_kind === "token" || row.auth_kind === "apiKey" || row.auth_kind === "url")) {
       db.prepare("UPDATE connections SET status = 'needs_auth' WHERE id = ?").run(connectionId);
