@@ -6,6 +6,7 @@ import { DataPanel } from "./databind";
 import {
   applyDrop, indicatorBox, moveBlock, moveRow, pageGeometry, removeBlocks, type DropTarget,
 } from "./geometry";
+import { ListEditor } from "./listEditor";
 import { Overlay } from "./overlay";
 import { Palette } from "./palette";
 import { Present } from "./present";
@@ -13,9 +14,13 @@ import { PreviewStage } from "./preview";
 import { BlockFields, BoardSettings } from "./properties";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
+import { TableEditor } from "./tableEditor";
 import { BlockMenu } from "./toolbar";
 import { Icon } from "./icons";
 import { editorReducer, initialEditor, primaryId } from "./state";
+
+// Block types that get the structured per-line list editor instead of a textarea.
+const LIST_EDIT = new Set<WidgetType>(["bulletList", "numberedList", "checklist", "steps"]);
 
 interface ScreenPreset { id: string; label: string; w: number; h: number; category: string }
 const SIZE_CATEGORIES = ["TV", "Monitor", "Laptop", "Tablet", "Phone", "E-Paper", "Signage"];
@@ -548,6 +553,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
       : null;
 
   const editBox = editing ? geometry.blocks.find((b) => b.id === editing.id) : undefined;
+  const editingBlock = editing ? state.present.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id) : undefined;
   const editValue = editing
     ? String(((docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.props ?? {}) as Record<string, unknown>)[editing.prop] ?? "")
     : "";
@@ -620,7 +626,27 @@ export function Studio({ layoutId }: { layoutId: number }) {
               <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
             )}
             <div class="drop-indicator" ref={indicatorRef} />
-            {editBox && editing && (
+            {editBox && editing && editingBlock?.type === "table" && (
+              <TableEditor
+                box={editBox}
+                scale={scale}
+                block={editingBlock}
+                setContent={(v) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id); if (blk && blk.type === "table") blk.props.content = v; })}
+                setHeader={(h) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id); if (blk && blk.type === "table") blk.props.header = h; })}
+                onClose={() => setEditing(null)}
+              />
+            )}
+            {editBox && editing && editingBlock && LIST_EDIT.has(editingBlock.type) && (
+              <ListEditor
+                box={editBox}
+                scale={scale}
+                block={editingBlock}
+                prop={editing.prop}
+                setItems={(v) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id); if (blk) (blk.props as Record<string, unknown>)[editing.prop] = v; })}
+                onClose={() => setEditing(null)}
+              />
+            )}
+            {editBox && editing && editingBlock?.type !== "table" && !(editingBlock && LIST_EDIT.has(editingBlock.type)) && (
               <textarea
                 ref={editRef}
                 key={editing.id}
