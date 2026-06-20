@@ -10,6 +10,8 @@ import { useTheme } from "./hooks/useTheme";
 import { AccountPage } from "./pages/account";
 import { FleetPage } from "./pages/fleet";
 import { HubPage } from "./pages/hub";
+import { Onboarding } from "./pages/onboarding";
+import { DISMISS_KEY, needsOnboarding } from "./onboarding";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
@@ -51,6 +53,7 @@ export function App() {
   });
   const [drawer, setDrawer] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [onboard, setOnboard] = useState(false);
 
   const refreshAuth = async () => {
     try { setStatus(await api.get<AuthStatus>("/api/auth/status")); }
@@ -63,6 +66,17 @@ export function App() {
     if (!status?.authed) return;
     const t = window.setTimeout(loadStudio, 1200);
     return () => window.clearTimeout(t);
+  }, [status?.authed]);
+
+  // First-run: show the wizard on a fresh, undismissed account (no boards + no screens).
+  useEffect(() => {
+    if (!status?.authed) return;
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(DISMISS_KEY) === "1"; } catch { /* ignore */ }
+    if (dismissed) return;
+    Promise.all([api.get<unknown[]>("/api/devices"), api.get<unknown[]>("/api/layouts")])
+      .then(([d, l]) => setOnboard(needsOnboarding({ deviceCount: d.length, layoutCount: l.length, dismissed: false })))
+      .catch(() => {});
   }, [status?.authed]);
 
   // ⌘K opens the palette; close the mobile drawer whenever the route changes.
@@ -90,6 +104,7 @@ export function App() {
     { id: "new-setup", label: "New setup", hint: "Action", icon: <Icon.plus />, run: async () => {
         try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); } catch { navigate("/setups"); }
       } },
+    { id: "help-onboard", label: "Show the setup guide", hint: "Help", icon: <Icon.help />, run: () => { try { localStorage.removeItem(DISMISS_KEY); } catch { /* ignore */ } setOnboard(true); } },
     { id: "theme", label: "Toggle theme", hint: "Appearance", icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, run: cycleTheme },
     { id: "logout", label: "Log out", hint: "Account", icon: <Icon.x />, run: logout },
   ], [theme]);
@@ -107,6 +122,9 @@ export function App() {
 
   // The studio is a full-screen surface with its own chrome.
   if (page.name === "edit") return <StudioRoute layoutId={page.layoutId} />;
+
+  // First-run wizard takes over until a board/screen exists or it's dismissed.
+  if (onboard) return <Onboarding onDone={() => setOnboard(false)} />;
 
   return (
     <ShellCtx.Provider value={{ openDrawer: () => setDrawer(true) }}>
