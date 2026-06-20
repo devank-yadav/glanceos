@@ -11,7 +11,7 @@ import { Icon } from "../editor/icons";
 
 const CAT_LABEL: Record<string, string> = {
   tasks: "Tasks", issues: "Issues", docs: "Docs & sheets", dev: "Developer", calendar: "Calendar",
-  "smart-home": "Smart home", generic: "Generic", mail: "Mail",
+  "smart-home": "Smart home", media: "Media", generic: "Generic", mail: "Mail",
 };
 
 interface ProviderInfo {
@@ -33,7 +33,7 @@ interface Connection {
   config: Record<string, unknown>;
 }
 
-const CAT_ORDER = ["tasks", "issues", "docs", "dev", "calendar", "smart-home", "generic", "mail"];
+const CAT_ORDER = ["tasks", "issues", "docs", "dev", "calendar", "smart-home", "media", "generic", "mail"];
 const SECRET_HINT: Record<string, string> = {
   token: "Personal API token (paste once — stored encrypted)",
   apiKey: "API key (optional — leave blank for public endpoints)",
@@ -41,13 +41,15 @@ const SECRET_HINT: Record<string, string> = {
 };
 const CONNECT_HELP: Record<string, string> = {
   todoist: "Todoist → Settings → Integrations → Developer → API token",
-  github: "github.com → Settings → Developer settings → Personal access token (read-only)",
-  notion: "notion.so/my-integrations → New internal integration → share your database with it",
+  github: "GitHub → Settings → Developer settings → OAuth Apps → New OAuth App; add the redirect URI below, then paste the client id/secret.",
+  notion: "notion.so/my-integrations → New integration → set it Public (OAuth); add the redirect URI below, then paste the client id/secret. Share each database with the integration.",
   linear: "Linear → Settings → API → Personal API key",
   ical: "Google/Apple/Outlook calendar → Settings → secret iCal (.ics) address",
   sheets: "Google Sheet → File → Share → Publish to web → CSV",
   google: "Google Cloud Console → create an OAuth client (Web app), enable the Calendar API, then paste the client id/secret below.",
   homeassistant: "Home Assistant → your profile → Long-lived access tokens → Create token.",
+  microsoft: "Azure Portal → App registrations → New registration; add the redirect URI below + the Calendars.Read delegated permission, then paste the client id/secret.",
+  spotify: "developer.spotify.com → Dashboard → Create app; add the redirect URI below, then paste the client id/secret.",
 };
 
 export function IntegrationsPage() {

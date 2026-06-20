@@ -69,7 +69,7 @@ export function buildAuthorizeUrl(userId: string, providerId: string, redirectUr
   u.searchParams.set("client_id", creds.clientId);
   u.searchParams.set("redirect_uri", redirectUri);
   u.searchParams.set("response_type", "code");
-  u.searchParams.set("scope", provider.oauth.scopes.join(" "));
+  if (provider.oauth.scopes.length) u.searchParams.set("scope", provider.oauth.scopes.join(" ")); // Notion sends no scope
   u.searchParams.set("state", state);
   u.searchParams.set("code_challenge", challenge);
   u.searchParams.set("code_challenge_method", "S256");

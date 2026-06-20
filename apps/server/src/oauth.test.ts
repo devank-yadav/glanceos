@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { mapGoogleEvents, type OAuthSpec } from "./providers/registry";
+import { formatNowPlaying, mapGoogleEvents, mapGraphEvents, type OAuthSpec } from "./providers/registry";
 import {
   buildAuthorizeUrl, exchangeCode, NoOAuthApp, pkcePair, refreshAccessToken,
   signState, tokensFromResp, verifyState,
@@ -117,6 +117,30 @@ describe("buildAuthorizeUrl", () => {
   it("throws NoOAuthApp when the self-hoster hasn't registered an app", () => {
     // no oauth_apps row exists for this random user → must refuse to start
     expect(() => buildAuthorizeUrl("no-such-user", "google", "https://app/cb")).toThrow(NoOAuthApp);
+  });
+});
+
+describe("mapGraphEvents (Microsoft 365)", () => {
+  it("shapes Graph calendarView items and drops start-less ones", () => {
+    const { events } = mapGraphEvents([
+      { subject: "Sync", start: { dateTime: "2026-06-20T09:00:00" }, end: { dateTime: "2026-06-20T09:30:00" } },
+      { start: {} }, // dropped
+      { start: { dateTime: "2026-06-20T12:00:00" } }, // no subject → "(busy)"
+    ]);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ title: "Sync", start: "2026-06-20T09:00:00" });
+    expect(events[1]!.title).toBe("(busy)");
+  });
+});
+
+describe("formatNowPlaying (Spotify)", () => {
+  it("204 / no item → idle string without throwing", () => {
+    expect(formatNowPlaying(204, null)).toEqual({ value: "Nothing playing" });
+    expect(formatNowPlaying(200, {})).toEqual({ value: "Nothing playing" });
+  });
+  it("playing → 'Track — Artist(s)'", () => {
+    expect(formatNowPlaying(200, { item: { name: "Weightless", artists: [{ name: "Marconi Union" }] } })).toEqual({ value: "Weightless — Marconi Union" });
+    expect(formatNowPlaying(200, { item: { name: "Solo", artists: [] } })).toEqual({ value: "Solo" });
   });
 });
 

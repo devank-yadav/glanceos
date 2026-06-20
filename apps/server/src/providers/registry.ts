@@ -3,7 +3,7 @@
 // via the block's SourceMap. Pure data + functions, no network at import →
 // offline-safe; every fetch goes through the SSRF-guarded cache.ts egress.
 
-import { getJSON, getText, postJSON, TTL } from "../fetchers/cache";
+import { assertSafeUrl, getJSON, getText, httpError, postJSON, TTL } from "../fetchers/cache";
 import { parseIcs } from "../fetchers/ics";
 import { headlinesData } from "../fetchers/live";
 
@@ -165,10 +165,20 @@ reg({
 });
 
 reg({
-  id: "github", label: "GitHub", category: "dev", authKind: "token",
+  // OAuth now (self-registered GitHub OAuth app); tokens don't expire / have no
+  // refresh → nonExpiring. Existing personal-token connections still resolve
+  // (their connection row stays auth_kind=token; resolve() only reads ctx.secret).
+  id: "github", label: "GitHub", category: "dev", authKind: "oauth2",
   defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://github.com/login/oauth/authorize",
+    tokenUrl: "https://github.com/login/oauth/access_token",
+    scopes: ["repo", "read:user"],
+    nonExpiring: true,
+  },
   resources: [
-    { id: "github.issues", label: "Issues", shape: "list" },
+    { id: "github.search", label: "Issue / PR search", shape: "list" },
+    { id: "github.issues", label: "Repo issues", shape: "list" },
     { id: "github.repo", label: "Repo stats", shape: "scalar" },
     { id: "github.commits", label: "Commit activity", shape: "series" },
   ],
@@ -176,6 +186,11 @@ reg({
     const h: Record<string, string> = { accept: "application/vnd.github+json" };
     if (ctx.secret) h.authorization = `Bearer ${ctx.secret}`;
     const repo = ctx.query.repo; // "owner/name"
+    // Issue/PR search across all repos — q like "is:open assignee:@me label:urgent"
+    if (ctx.resource === "github.search") {
+      const q = ctx.query.q || "is:open assignee:@me";
+      return getJSON(`https://api.github.com/search/issues?per_page=20&q=${encodeURIComponent(q)}`, h);
+    }
     if (ctx.resource === "github.issues") {
       if (ctx.query.q) return getJSON(`https://api.github.com/search/issues?q=${encodeURIComponent(ctx.query.q)}`, h);
       if (repo) return getJSON(`https://api.github.com/repos/${repo}/issues?per_page=20`, h);
@@ -188,8 +203,18 @@ reg({
 });
 
 reg({
-  id: "notion", label: "Notion", category: "docs", authKind: "token",
+  // OAuth (self-registered Notion integration); Basic-auth token endpoint, no
+  // expiry/refresh. owner=user is required on the authorize request.
+  id: "notion", label: "Notion", category: "docs", authKind: "oauth2",
   defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://api.notion.com/v1/oauth/authorize",
+    tokenUrl: "https://api.notion.com/v1/oauth/token",
+    scopes: [],
+    authParams: { owner: "user" },
+    tokenAuth: "basic",
+    nonExpiring: true,
+  },
   resources: [{ id: "notion.database", label: "Database rows", shape: "table" }],
   async resolve(ctx) {
     if (!ctx.secret || !ctx.query.database_id) return null;
@@ -266,5 +291,68 @@ reg({
       return hist?.[0] ?? null; // [{ state, last_changed }, …]
     }
     return getJSON(`${base}/api/states/${encodeURIComponent(entity)}`, h); // { state, attributes, … }
+  },
+});
+
+// ---- OAuth provider: Microsoft 365 / Outlook Calendar (read-only). Multi-tenant
+// 'common' endpoints; the self-hoster registers an Azure app. ctx.secret is the
+// access token (refreshed via offline_access).
+export interface GraphEvent { subject?: string; start?: { dateTime?: string }; end?: { dateTime?: string } }
+/** Shape Microsoft Graph calendar items into the {title,start,end} events the calendar renderer reads. */
+export function mapGraphEvents(items: GraphEvent[]): { events: { title: string; start: string; end?: string }[] } {
+  const events = items
+    .map((e) => ({ title: e.subject || "(busy)", start: e.start?.dateTime || "", end: e.end?.dateTime }))
+    .filter((e) => e.start);
+  return { events };
+}
+reg({
+  id: "microsoft", label: "Microsoft 365 / Outlook", category: "calendar", authKind: "oauth2",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    scopes: ["Calendars.Read", "offline_access", "openid", "profile"],
+  },
+  resources: [{ id: "microsoft.calendar", label: "Calendar events", shape: "events" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const max = Number(ctx.query.max) || 8;
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 86_400_000);
+    const url = "https://graph.microsoft.com/v1.0/me/calendarView"
+      + `?startDateTime=${now.toISOString()}&endDateTime=${end.toISOString()}`
+      + `&$orderby=${encodeURIComponent("start/dateTime")}&$top=${max}&$select=subject,start,end`;
+    const raw = (await getJSON(url, { authorization: `Bearer ${ctx.secret}`, prefer: 'outlook.timezone="UTC"' })) as { value?: GraphEvent[] } | null;
+    if (!raw?.value) return null;
+    return mapGraphEvents(raw.value);
+  },
+});
+
+// ---- OAuth provider: Spotify now-playing. Basic-auth token endpoint; the
+// currently-playing endpoint returns 204 (empty) when nothing is playing.
+export interface SpotifyTrack { item?: { name?: string; artists?: { name?: string }[] } }
+export function formatNowPlaying(status: number, data: SpotifyTrack | null): { value: string } {
+  if (status === 204 || !data?.item) return { value: "Nothing playing" };
+  const artists = (data.item.artists ?? []).map((a) => a.name).filter(Boolean).join(", ");
+  return { value: `${data.item.name ?? "Unknown"}${artists ? ` — ${artists}` : ""}` };
+}
+reg({
+  id: "spotify", label: "Spotify", category: "media", authKind: "oauth2",
+  defaultTtlMs: TTL.min, minRefreshMs: 20_000,
+  oauth: {
+    authorizeUrl: "https://accounts.spotify.com/authorize",
+    tokenUrl: "https://accounts.spotify.com/api/token",
+    scopes: ["user-read-currently-playing"],
+    tokenAuth: "basic",
+  },
+  resources: [{ id: "spotify.nowplaying", label: "Now playing", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const url = "https://api.spotify.com/v1/me/player/currently-playing";
+    await assertSafeUrl(url); // 204-aware: can't use getJSON (it chokes on an empty body)
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { authorization: `Bearer ${ctx.secret}`, accept: "application/json" } });
+    if (res.status !== 204 && !res.ok) throw httpError(res); // 401 → needs_auth via the resolver
+    const data = res.status === 204 ? null : ((await res.json()) as SpotifyTrack);
+    return formatNowPlaying(res.status, data);
   },
 });
