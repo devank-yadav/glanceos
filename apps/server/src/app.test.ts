@@ -470,3 +470,35 @@ describe("display groups (signage)", () => {
     expect((await app.request(`/api/groups/${g.id}`, { method: "PATCH", ...authed(b, { name: "hijack" }) })).status).toBe(404);
   });
 });
+
+describe("signage: fleet commands + proof-of-play", () => {
+  const reg = async (name: string, email: string) =>
+    cookieOf(await app.request("/api/auth/register", { method: "POST", ...json({ name, email, password: "calm-glass-grp" }) }));
+
+  it("records play-log and reports it for the group (JSON + CSV)", async () => {
+    const cookie = await reg("Pia", "pia@example.com");
+    const group = await (await app.request("/api/groups", { method: "POST", ...authed(cookie, { name: "Hall" }) })).json();
+    const dev = await (await app.request("/api/devices/register", { method: "POST", ...json({ profile: { width: 1920, height: 1080 } }) })).json();
+    await app.request("/api/devices/claim", { method: "POST", ...authed(cookie, { code: dev.claimCode, name: "Hall screen" }) });
+    await app.request(`/api/devices/${dev.deviceId}`, { method: "PATCH", ...authed(cookie, { groupId: group.id }) });
+
+    const creds = { "x-device-id": dev.deviceId, "x-device-secret": dev.deviceSecret, "content-type": "application/json" };
+    const res = await app.request("/api/devices/me/play-log", { method: "POST", headers: creds, body: JSON.stringify({ entries: [{ layoutId: 1, shownAt: 1_780_000_000_000, durationMs: 5000 }, { layoutId: 2, shownAt: 1_780_000_100_000 }] }) });
+    expect((await res.json()).written).toBe(2);
+
+    const report = await (await app.request(`/api/groups/${group.id}/play-log?days=365`, { headers: { cookie } })).json();
+    expect(report.rows.length).toBe(2);
+    const csv = await (await app.request(`/api/groups/${group.id}/play-log?days=365&format=csv`, { headers: { cookie } })).text();
+    expect(csv.split("\n")[0]).toContain("shown_at_iso");
+    expect(csv.split("\n").length).toBe(3); // header + 2 rows
+  });
+
+  it("rejects unknown fleet commands, accepts known ones", async () => {
+    const cookie = await reg("Cleo", "cleo@example.com");
+    const group = await (await app.request("/api/groups", { method: "POST", ...authed(cookie, { name: "Cmd" }) })).json();
+    expect((await app.request(`/api/groups/${group.id}/command`, { method: "POST", ...authed(cookie, { command: "explode" }) })).status).toBe(400);
+    const ok = await app.request(`/api/groups/${group.id}/command`, { method: "POST", ...authed(cookie, { command: "reload" }) });
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).delivered).toBe(0); // no live SSE connection in the test
+  });
+});

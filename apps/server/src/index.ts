@@ -3,6 +3,7 @@ import { buildApp } from "./api";
 import { validateConfig } from "./config";
 import { checkpoint, migrate } from "./db";
 import { runAlertChecks } from "./notifications";
+import { pruneProofOfPlay } from "./playlog";
 import { gcRateLimits } from "./ratelimit";
 import { undecryptableSecretCount } from "./rotate";
 import { seedTemplates } from "./seed";
@@ -56,3 +57,10 @@ setInterval(() => {
 
 // Fold the WAL back into the DB so it can't grow unbounded on a busy fleet.
 setInterval(() => checkpoint(), 10 * 60 * 1000);
+
+// Prune proof-of-play beyond the retention window (default 90 days) so the log
+// can't grow without bound on a busy signage fleet.
+const POP_RETENTION_DAYS = Math.max(1, Number(process.env.GLANCEOS_PLAYLOG_RETENTION_DAYS) || 90);
+setInterval(() => {
+  try { pruneProofOfPlay(Date.now() - POP_RETENTION_DAYS * 86_400_000); } catch { /* never crash the loop */ }
+}, 6 * 60 * 60 * 1000);

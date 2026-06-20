@@ -63,6 +63,12 @@ function GroupCard({ group, setups, onChanged, confirm, toast }: {
     try { await api.del(`/api/groups/${group.id}`); toast.success("Group deleted"); await onChanged(); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
+  const command = async (cmd: string, params?: Record<string, unknown>) => {
+    try {
+      const r = await api.post<{ delivered: number }>(`/api/groups/${group.id}/command`, { command: cmd, params });
+      toast.success(`${cmd} → ${r.delivered} live screen${r.delivered === 1 ? "" : "s"}`);
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   return (
     <div class="card group-card">
@@ -85,6 +91,11 @@ function GroupCard({ group, setups, onChanged, confirm, toast }: {
         <span>Timezone <span class="muted">(for group schedules)</span></span>
         <input type="text" value={tz} placeholder="Server timezone" onInput={(e) => setTz((e.currentTarget as HTMLInputElement).value)} onBlur={() => tz !== (group.timezone ?? "") && patch({ timezone: tz.trim() || null })} />
       </label>
+      <div class="row wrap group-actions" style={{ gap: "6px" }}>
+        <button class="ghost" disabled={group.deviceCount === 0} title="Refresh every live screen in this group" onClick={() => command("reload")}><Icon.convert /> Reload</button>
+        <button class="ghost" disabled={group.deviceCount === 0} title="Flash a marker on every live screen" onClick={() => command("identify", { label: group.name })}><Icon.warning /> Identify</button>
+        <a class="btn ghost-link" href={`/api/groups/${group.id}/play-log?days=30&format=csv`} download title="Download the last 30 days of proof-of-play"><Icon.download /> Play-log</a>
+      </div>
     </div>
   );
 }

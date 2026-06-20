@@ -135,6 +135,18 @@ export async function pushGroupDevices(groupId: number): Promise<void> {
   await pushDeviceIds(deviceIdsInGroup(groupId));
 }
 
+/** Deliver a fleet command (reload/identify/…) to every connected screen in a group.
+ *  Returns how many live screens received it. */
+export async function emitGroupCommand(groupId: number, command: string, params?: Record<string, unknown>): Promise<number> {
+  let delivered = 0;
+  for (const id of deviceIdsInGroup(groupId)) {
+    if (!isConnected(id)) continue;
+    await emit(id, "command", { command, params: params ?? {} });
+    delivered++;
+  }
+  return delivered;
+}
+
 export async function pushAllConnected(staggerMs = 0): Promise<void> {
   await pushSpread(connectedDeviceIds(), staggerMs);
 }

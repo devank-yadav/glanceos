@@ -52,15 +52,22 @@ export async function ensureIdentity(): Promise<Identity> {
  * params. Reconnection and Last-Event-ID come for free — that is the whole
  * reason this is SSE and not a WebSocket.
  */
+export interface FleetCommand { command: string; params?: Record<string, unknown> }
+
 export function openStream(
   id: Identity,
-  handlers: { onState: (payload: StreamPayloadT) => void; onDown: () => void },
+  handlers: { onState: (payload: StreamPayloadT) => void; onDown: () => void; onCommand?: (cmd: FleetCommand) => void },
 ): EventSource {
   const url = `/api/devices/me/stream?id=${encodeURIComponent(id.deviceId)}&secret=${encodeURIComponent(id.deviceSecret)}`;
   const es = new EventSource(url);
   es.addEventListener("state", (e) => {
     handlers.onState(JSON.parse((e as MessageEvent).data) as StreamPayloadT);
   });
+  if (handlers.onCommand) {
+    es.addEventListener("command", (e) => {
+      try { handlers.onCommand!(JSON.parse((e as MessageEvent).data) as FleetCommand); } catch { /* ignore malformed */ }
+    });
+  }
   es.onerror = () => handlers.onDown();
   return es;
 }

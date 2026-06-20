@@ -1,6 +1,7 @@
 import "./style.css";
 import type { StreamPayloadT } from "@glanceos/schema";
 import { ensureIdentity, openStream } from "./api";
+import { handleFleetCommand } from "./fleet";
 import { bootCast } from "./cast";
 import { markFresh, markStale, renderMessage, renderPayload } from "./render";
 import { enableTvMode } from "./tv";
@@ -49,6 +50,7 @@ function bootScreen(): void {
         markFresh();
       },
       onDown: () => markStale(), // EventSource reconnects on its own
+      onCommand: (cmd) => handleFleetCommand(cmd),
     });
   })().catch(() => {
     if (!cached) {

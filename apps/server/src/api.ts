@@ -18,6 +18,7 @@ import {
   createGroup, deleteGroup, getGroupRow, getOwnedGroup, listGroups, listGroupSchedules,
   setDeviceGroup, setGroupSchedules, updateGroup, type GroupSchedule,
 } from "./groups";
+import { playLogCsv, playLogForGroup, recordPlayLog, type PlayLogEntry } from "./playlog";
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
@@ -42,7 +43,7 @@ import {
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
-  composeState, currentLayoutId, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
+  composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
   pushGroupDevices, pushRotatingDevices, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
@@ -80,6 +81,7 @@ const DEVICE_PLANE = new Set([
   "/api/devices/me/display",
   "/api/devices/me/render.bmp",
   "/api/devices/me/telemetry",
+  "/api/devices/me/play-log",
 ]);
 
 type Env = { Variables: { userId: string } };
@@ -216,6 +218,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/devices/claim", limiter("claim", 30, 60_000));
   app.use("/api/devices/me/display", limiter("display", 120, 60_000, deviceKey));
   app.use("/api/devices/me/telemetry", limiter("telemetry", 120, 60_000, deviceKey));
+  app.use("/api/devices/me/play-log", limiter("play-log", 120, 60_000, deviceKey));
   app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
@@ -350,6 +353,16 @@ export function buildApp(): Hono<Env> {
     const body = (await c.req.json().catch(() => ({}))) as { battery?: number; rssi?: number; firmware?: string };
     recordTelemetry(device.id, { ...telemetryFromHeaders(c), ...body });
     return c.json({ ok: true });
+  });
+
+  // Proof-of-play: a screen reports what it showed (single object or a batch).
+  app.post("/api/devices/me/play-log", async (c) => {
+    const device = authDevice(c.req.header("id") ?? c.req.header("x-device-id"), c.req.header("access-token") ?? c.req.header("x-device-secret"));
+    if (!device) return c.json({ error: "unauthorized" }, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { entries?: PlayLogEntry[] } | PlayLogEntry | PlayLogEntry[];
+    const entries: PlayLogEntry[] = Array.isArray(body) ? body : Array.isArray((body as { entries?: PlayLogEntry[] }).entries) ? (body as { entries: PlayLogEntry[] }).entries : [body as PlayLogEntry];
+    const written = recordPlayLog(device.id, entries, Date.now());
+    return c.json({ ok: true, written });
   });
 
   // ---- screens (config plane) ----
@@ -525,6 +538,32 @@ export function buildApp(): Hono<Env> {
     setGroupSchedules(g.id, Array.isArray(body.schedules) ? body.schedules : []);
     await pushGroupDevices(g.id);
     return c.json({ schedules: listGroupSchedules(g.id) });
+  });
+
+  // Fleet command: deliver an instant action to every live screen in a group.
+  const FLEET_COMMANDS = new Set(["reload", "identify", "clear-cache", "screenshot-now"]);
+  app.post("/api/groups/:id/command", async (c) => {
+    const g = getOwnedGroup(Number(c.req.param("id")), c.get("userId"));
+    if (!g) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { command?: string; params?: Record<string, unknown> };
+    if (!body.command || !FLEET_COMMANDS.has(body.command)) return c.json({ error: "unknown command" }, 400);
+    const delivered = await emitGroupCommand(g.id, body.command, body.params);
+    return c.json({ ok: true, delivered });
+  });
+
+  // Proof-of-play report for a group (JSON, or CSV with ?format=csv). ?days bounds the window.
+  app.get("/api/groups/:id/play-log", (c) => {
+    const g = getOwnedGroup(Number(c.req.param("id")), c.get("userId"));
+    if (!g) return c.json({ error: "not found" }, 404);
+    const days = Math.max(1, Math.min(365, Number(c.req.query("days")) || 7));
+    const since = Date.now() - days * 86_400_000;
+    const rows = playLogForGroup(g.id, since);
+    if (c.req.query("format") === "csv") {
+      return new Response(playLogCsv(rows), {
+        headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="play-log-${g.id}.csv"` },
+      });
+    }
+    return c.json({ days, rows });
   });
 
   // ---- setups ----
