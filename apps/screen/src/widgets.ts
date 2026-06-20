@@ -1,5 +1,5 @@
 import type {
-  AirQualityDataT, CalendarDataT, CryptoDataT, CurrencyDataT, FactDataT, ForecastDataT,
+  AirQualityDataT, CalendarDataT, CryptoDataT, CurrencyDataT, CustomDataT, FactDataT, ForecastDataT,
   GithubDataT, HeadlinesDataT, HolidayDataT, IssDataT, OnThisDayDataT, PrecipDataT,
   QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
 } from "@glanceos/schema";
@@ -1173,6 +1173,28 @@ const jsonFeed: Render = (el, w, data) => {
   el.appendChild(list);
 };
 
+const customData: Render = (el, w, data) => {
+  if (w.type !== "customData") return;
+  if (w.props.label) heading2(el, w.props.label);
+  const d = data as CustomDataT | null;
+  if (!d || d.value === undefined || d.value === null) return placeholder(el, d?.error ?? "no data");
+  if (w.props.format === "json") {
+    const pre = document.createElement("pre");
+    pre.className = "custom-json";
+    pre.textContent = JSON.stringify(d.value, null, 2); // textContent — never markup
+    el.appendChild(pre);
+    return;
+  }
+  let text: string;
+  if (w.props.format === "number") {
+    const n = Number(d.value as string | number);
+    text = Number.isFinite(n) ? n.toLocaleString() : String(d.value);
+  } else {
+    text = typeof d.value === "object" ? JSON.stringify(d.value) : String(d.value);
+  }
+  el.appendChild(div("custom-value", text));
+};
+
 // ===================== v0.8 blocks =====================
 
 const pipes = (s: string): Array<[string, string]> =>
@@ -2212,4 +2234,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   tzPair, nextWeekday, daylight, moonProgress, seasonProgress, goldenHour, goalProgress, stepsToday,
   streakPair, bookList, moodToday, budgetLine, welcomeSign, priceTag, todaySpecial, phoneNumber,
   socialHandle, wayfinding,
+  // v3.0
+  customData,
 };

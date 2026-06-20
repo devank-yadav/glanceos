@@ -8,6 +8,7 @@ import {
 } from "./fetchers/live";
 import { airQualityData, forecastData, precipData, uvData, windData } from "./fetchers/openmeteo";
 import { weatherData } from "./fetchers/weather";
+import { customDataWidget } from "./customdata";
 import { queueData } from "./queues";
 import { tasksData } from "./tasks";
 
@@ -50,6 +51,7 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
         case "calendar": data[b.id] = await calendarData(b.props); break;
         case "tasks": data[b.id] = tasksData(b.props, userId); break;
         case "queue": data[b.id] = queueData(b.props, userId); break;
+        case "customData": { const cd = customDataWidget(b.props, userId); if (cd) data[b.id] = cd; break; }
         // location-aware: screens inherit their device location for untouched blocks
         case "sunriseSunset": case "daylight": case "goldenHour": {
           const gp = g(b.props as { latitude?: number; longitude?: number });

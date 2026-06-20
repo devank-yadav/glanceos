@@ -188,6 +188,14 @@ export const JsonFeedProps = z.object({
   refreshSeconds: z.number().int().min(30).max(86400).default(900),
 });
 
+// v3.0 reactive: shows a value from the per-user custom-data store (written by the
+// API / webhooks / automations), looked up by `key`.
+export const CustomDataProps = z.object({
+  key: line(100).default(""),
+  label: line(60).default(""),
+  format: z.enum(["text", "number", "json"]).default("text"),
+});
+
 // ===== v0.8 blocks: text & structure =====
 export const SignatureProps = z.object({ name: line(60).default("Your Name"), role: line(60).default("") });
 export const AddressProps = z.object({ content: line(300).default("221B Baker Street\nLondon NW1\nUnited Kingdom") });
@@ -438,6 +446,7 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("nextHoliday"), props: NextHolidayProps }),
   z.object({ ...b, type: z.literal("issNow"), props: IssNowProps }),
   z.object({ ...b, type: z.literal("jsonFeed"), props: JsonFeedProps }),
+  z.object({ ...b, type: z.literal("customData"), props: CustomDataProps }),
   // v0.8 text & structure
   z.object({ ...b, type: z.literal("signature"), props: SignatureProps }),
   z.object({ ...b, type: z.literal("address"), props: AddressProps }),

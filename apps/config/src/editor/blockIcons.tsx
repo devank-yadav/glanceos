@@ -107,6 +107,7 @@ export const BLOCK_ICON_PATHS: Partial<Record<WidgetType, string>> = {
   "nextHoliday": "<path d=\"M5 4h14v16H5z\"/><line x1=\"5\" y1=\"8\" x2=\"19\" y2=\"8\"/><circle cx=\"8\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
   "issNow": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/><circle cx=\"12\" cy=\"12\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
   "jsonFeed": "<path d=\"M5 5h4v4H5zM10 5h4v4h-4zM15 5h4v4h-4zM5 10h4v4H5zM10 10h4v4h-4zM15 10h4v4h-4zM5 15h4v4H5zM10 15h4v4h-4zM15 15h4v4h-4z\"/>",
+  "customData": "<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 3v18M4 7.5l8 4.5 8-4.5\"/>",
   "signature": "<path d=\"M5 8l2 3 3-5 2 3 1-2M5 14h14\"/>",
   "address": "<path d=\"M5 8h14M5 11h14M5 14h14M5 17h12\"/>",
   "byline": "<path d=\"M5 8h12M5 11h14\"/>",

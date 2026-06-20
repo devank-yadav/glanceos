@@ -45,6 +45,7 @@ import { isScope, listKeys, mintKey, resolveKey, revokeKey, SCOPES, type Scope }
 import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
 } from "./playlists";
+import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
@@ -265,6 +266,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
   app.use("/api/geocode", limiter("geocode", 60, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
+  app.use("/api/data", limiter("data", 120, 60_000, userKey));
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
   app.use("/api/account/api-keys", limiter("apikeys", 20, 60_000, userKey));
@@ -946,6 +948,28 @@ export function buildApp(): Hono<Env> {
     await pushUserDevices(c.get("userId"));
     return c.json(q);
   });
+
+  // ---- custom data (per-user key→JSON; read by the "customData" block) ----
+  // GET stays session-only; POST is also reachable with a data:write API key
+  // (allowlisted) so scripts / webhooks / automations can push values.
+  app.get("/api/data", (c) => c.json(listCustomData(c.get("userId"))));
+  app.get("/api/data/:key", (c) => {
+    const value = getCustomData(c.get("userId"), c.req.param("key"));
+    return value === undefined ? c.json({ error: "not found" }, 404) : c.json({ key: c.req.param("key"), value });
+  });
+  app.post("/api/data/:key", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { value?: unknown };
+    if (!("value" in body)) return c.json({ error: "body must include a \"value\"" }, 400);
+    const r = setCustomData(c.get("userId"), c.req.param("key"), body.value);
+    if (!r.ok) {
+      const status = r.error === "too_large" ? 413 : r.error === "too_many_keys" ? 409 : 400;
+      return c.json({ error: r.error }, status);
+    }
+    await pushUserDevices(c.get("userId"));
+    return c.json(r.entry, 201);
+  });
+  app.delete("/api/data/:key", (c) =>
+    deleteCustomData(c.get("userId"), c.req.param("key")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {

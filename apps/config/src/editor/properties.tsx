@@ -127,6 +127,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   nextHoliday: [S("country", "Country code (e.g. IN)"), S("label", "Label")],
   issNow: [S("label", "Label")],
   jsonFeed: [S("url", "JSON URL"), T("template", "Template — {{dotted.path}}"), S("label", "Label"), N("refreshSeconds", "Refresh (seconds)")],
+  customData: [S("key", "Data key"), S("label", "Label"), Sel("format", "Format", ["text", "number", "json"])],
   // v0.8 text & structure
   signature: [S("name", "Name"), S("role", "Role")],
   address: [T("content", "Address")],

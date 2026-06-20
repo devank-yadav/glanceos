@@ -58,7 +58,7 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       "habitTracker", "streak", "waterTracker", "wifiCard",
       "forecast", "windCompass", "uvIndex", "airQuality", "precip", "headlines", "currencyRate", "cryptoPrice",
       "onThisDay", "wikiToday", "quoteLive", "factLive", "hackerNews", "githubStats", "nextHoliday", "issNow",
-      "jsonFeed",
+      "jsonFeed", "customData",
       // v0.8
       "signature", "address", "byline", "legend", "breadcrumb", "noticeBar", "keyCombo", "dividerLabeled",
       "iconRow", "statRow", "spacerDots", "frame",
@@ -94,7 +94,7 @@ describe("layout schema (v3 document-flow with row heights)", () => {
       const result = Layout.safeParse({ schemaVersion: 3, name: "n", rows: [{ id: "r", blocks }] });
       expect(result.success, `${type} should parse`).toBe(true);
     }
-    expect(new Set(types).size).toBe(199);
+    expect(new Set(types).size).toBe(200);
   });
 
   it("defaults block style and board align (v0.6, additive)", () => {

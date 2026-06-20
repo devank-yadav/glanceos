@@ -769,6 +769,8 @@ body {
 .feed-item { font-size: calc(2.4vmin * var(--font-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 1.6vmin; text-indent: -1.6vmin; }
 .feed-item::before { content: "› "; color: var(--muted); }
 .feed-line { font-size: calc(2.6vmin * var(--font-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.custom-value { font-size: calc(5.2vmin * var(--font-scale, 1)); font-weight: 600; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+.custom-json { font-family: var(--mono, ui-monospace, monospace); font-size: calc(2vmin * var(--font-scale, 1)); white-space: pre-wrap; word-break: break-word; margin: 0; overflow: hidden; }
 .otd-row { display: flex; gap: 1.4vmin; font-size: calc(2.3vmin * var(--font-scale, 1)); padding: 0.4vmin 0; }
 .otd-year { font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
 .otd-text { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

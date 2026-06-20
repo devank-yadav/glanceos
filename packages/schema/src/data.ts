@@ -119,3 +119,7 @@ export interface JsonFeedDataT {
   lines: string[];
   error?: string;
 }
+export interface CustomDataT {
+  value?: string | number | boolean | Record<string, unknown> | unknown[];
+  error?: string;
+}
