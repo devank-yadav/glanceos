@@ -67,7 +67,6 @@ export function Sidebar({
       </nav>
 
       <div class="sidebar-foot">
-        <NotificationsBell />
         <Menu
           align="left"
           triggerClass="sidebar-account"
@@ -79,6 +78,7 @@ export function Sidebar({
             { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
           ]}
         />
+        <NotificationsBell />
       </div>
     </aside>
   );

@@ -1,9 +1,15 @@
 import type { ComponentChildren } from "preact";
+import { createPortal } from "preact/compat";
 import { useEffect, useRef } from "preact/hooks";
 import { Icon } from "../editor/icons";
 
 // Accessible modal: role=dialog, Escape closes, focus trapped inside, focus
 // restored to the opener on close. Reuses the glassy .sheet look.
+//
+// Rendered through a portal to <body>: a position:fixed backdrop is otherwise
+// contained by any transformed/animated ancestor (e.g. .card:hover's transform
+// or the page-enter animation), which threw the sheet off-screen / "in two
+// places". Portaling pins it to the viewport no matter where <Modal> is mounted.
 export function Modal({
   open,
   onClose,
@@ -45,7 +51,7 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div class="sheet-backdrop" onPointerDown={onClose}>
       <div
         ref={ref}
@@ -62,6 +68,7 @@ export function Modal({
         </div>
         <div class="sheet-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

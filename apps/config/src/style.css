@@ -55,7 +55,9 @@
   --conn-auth: #b45309; --conn-auth-bg: rgba(217, 119, 6, 0.14);
   --conn-error: #b91c1c; --conn-error-bg: rgba(220, 38, 38, 0.12);
   --solid-bg: linear-gradient(180deg, #2c2c2c, #111); /* ink-black primary action */
+  --solid-bg-hover: linear-gradient(180deg, #383838, #1a1a1a); /* solid button :hover */
   --solid-fg: #fff;
+  --hover-bg: rgba(17, 17, 17, 0.055);   /* subtle hover wash on transparent controls */
   --indigo-fg: #fff;                     /* text/icon on an indigo fill */
   --qr-bg: #fff;                         /* QR always sits on light for scannability */
   --thumb-bg: #dcdcda;                   /* e-ink/thumbnail placeholder cell */
@@ -92,7 +94,9 @@
     --conn-auth: #fbbf24; --conn-auth-bg: rgba(245, 158, 11, 0.16);
     --conn-error: #f87171; --conn-error-bg: rgba(248, 113, 113, 0.16);
     --solid-bg: linear-gradient(180deg, #f5f5f5, #d8d8d8); /* light primary reads on dark */
+    --solid-bg-hover: linear-gradient(180deg, #ffffff, #e6e6e6); /* solid button :hover */
     --solid-fg: #111;
+    --hover-bg: rgba(255, 255, 255, 0.08); /* subtle hover wash on transparent controls */
     --thumb-bg: #2a2a28;
     --backdrop: rgba(0, 0, 0, 0.6);
     --scrollbar-thumb: rgba(255, 255, 255, 0.22);
@@ -121,7 +125,9 @@
   --conn-auth: #fbbf24; --conn-auth-bg: rgba(245, 158, 11, 0.16);
   --conn-error: #f87171; --conn-error-bg: rgba(248, 113, 113, 0.16);
   --solid-bg: linear-gradient(180deg, #f5f5f5, #d8d8d8); /* light primary reads on dark */
+  --solid-bg-hover: linear-gradient(180deg, #ffffff, #e6e6e6); /* solid button :hover */
   --solid-fg: #111;
+  --hover-bg: rgba(255, 255, 255, 0.08); /* subtle hover wash on transparent controls */
   --thumb-bg: #2a2a28;
   --backdrop: rgba(0, 0, 0, 0.6);
   --scrollbar-thumb: rgba(255, 255, 255, 0.22);
@@ -326,7 +332,8 @@ button.primary,
 
 button.primary:hover,
 .btn.solid:hover {
-  background: linear-gradient(180deg, #383838, #1a1a1a);
+  background: var(--solid-bg-hover);
+  color: var(--solid-fg);
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
@@ -341,7 +348,7 @@ button.ghost,
 button.ghost:hover,
 .btn.ghost-link:hover {
   color: var(--fg);
-  background: rgba(17, 17, 17, 0.05);
+  background: var(--hover-bg);
 }
 
 .btn.glass-btn {
@@ -1269,7 +1276,7 @@ ul.tasks li:last-child {
 }
 
 .studio-bar .back:hover {
-  background: rgba(17, 17, 17, 0.05);
+  background: var(--hover-bg);
   color: var(--fg);
 }
 
@@ -1730,7 +1737,7 @@ ul.tasks li:last-child {
 }
 
 .bm-item:hover {
-  background: rgba(17, 17, 17, 0.06);
+  background: var(--hover-bg);
 }
 
 .bm-item:hover svg {
@@ -1872,7 +1879,7 @@ ul.tasks li:last-child {
 }
 
 .icon-btn:hover {
-  background: rgba(17, 17, 17, 0.06);
+  background: var(--hover-bg);
   color: var(--fg);
 }
 
@@ -2329,6 +2336,9 @@ textarea:focus-visible,
 .app-shell.collapsed .brand { display: none; }
 .app-shell.collapsed .sidebar-search,
 .app-shell.collapsed .sidebar-link { justify-content: center; }
+/* Too narrow for the account row + bell side by side — stack them. */
+.app-shell.collapsed .sidebar-foot { flex-direction: column; gap: 4px; }
+.app-shell.collapsed .sidebar-account { justify-content: center; }
 
 .sidebar-head {
   display: flex;
@@ -2387,7 +2397,7 @@ textarea:focus-visible,
   min-width: 0;
 }
 .sidebar-link .sidebar-label { overflow: hidden; text-overflow: ellipsis; }
-.sidebar-link:hover { background: rgba(127, 127, 127, 0.1); color: var(--fg); }
+.sidebar-link:hover { background: var(--hover-bg); color: var(--fg); }
 .sidebar-link[aria-current="page"] {
   color: var(--fg);
   font-weight: 600;
@@ -2396,7 +2406,9 @@ textarea:focus-visible,
 }
 .sidebar-link svg { width: 18px; height: 18px; flex: none; }
 
-.sidebar-foot { border-top: 1px solid var(--rule); padding-top: var(--space-sm); }
+/* Account row + notification bell share one line: account grows, bell pinned right. */
+.sidebar-foot { border-top: 1px solid var(--rule); padding-top: var(--space-sm); display: flex; align-items: center; gap: 4px; }
+.sidebar-foot .menu-wrap { flex: 1; min-width: 0; }
 .sidebar-account {
   display: flex;
   align-items: center;
@@ -2411,7 +2423,7 @@ textarea:focus-visible,
   font-size: 13.5px;
   justify-content: flex-start;
 }
-.sidebar-account:hover { background: rgba(127, 127, 127, 0.1); }
+.sidebar-account:hover { background: var(--hover-bg); }
 .avatar {
   width: 26px;
   height: 26px;
@@ -2600,7 +2612,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .setup-card .row.wrap, .device-actions { margin-top: 4px; }
 .setup-card .card-title, .device-name { cursor: default; }
 .device-name { cursor: text; border-radius: 5px; padding: 1px 4px; margin: -1px -4px; }
-.device-name:hover { background: rgba(127, 127, 127, 0.1); }
+.device-name:hover { background: var(--hover-bg); }
 .rename-input { font-size: 15px; font-weight: 600; padding: 3px 6px; }
 .device-id { gap: 9px; min-width: 0; }
 .device-actions .refresh-field { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
