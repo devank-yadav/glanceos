@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "./db";
 import { getOAuthAppCreds } from "./oauth-apps";
 import { PROVIDERS, type OAuthSpec } from "./providers/registry";
-import { hmacSign, hmacVerify, open, seal } from "./secrets";
+import { currentKeyVersion, hmacSign, hmacVerify, open, seal } from "./secrets";
 
 // OAuth2 authorization-code + PKCE + refresh, generic over any provider that
 // declares an OAuthSpec. The self-hoster supplies the client id/secret in
@@ -122,8 +122,8 @@ export function saveOAuthConnection(userId: string, providerId: string, tokens: 
     db.prepare("INSERT INTO connections (id, user_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, 'oauth2', '{}', 'ok', '', ?, ?)")
       .run(id, userId, providerId, provider.label, now, now);
   }
-  db.prepare("INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, 'oauth', 1, ?, ?) ON CONFLICT(connection_id, kind) DO UPDATE SET cipher = excluded.cipher, updated_at = excluded.updated_at")
-    .run(id, seal(JSON.stringify(tokens)), now);
+  db.prepare("INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, 'oauth', ?, ?, ?) ON CONFLICT(connection_id, kind) DO UPDATE SET cipher = excluded.cipher, key_version = excluded.key_version, updated_at = excluded.updated_at")
+    .run(id, currentKeyVersion(), seal(JSON.stringify(tokens)), now);
   return id;
 }
 

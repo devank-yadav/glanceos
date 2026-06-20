@@ -2,11 +2,20 @@ import { serve } from "@hono/node-server";
 import { buildApp } from "./api";
 import { migrate } from "./db";
 import { runAlertChecks } from "./notifications";
+import { gcRateLimits } from "./ratelimit";
+import { undecryptableSecretCount } from "./rotate";
 import { seedTemplates } from "./seed";
 import { pushAllConnected, pushRotatingDevices, pushScheduledDevices } from "./state";
 
 migrate();
 seedTemplates();
+
+// Rotation safety: warn loudly if stored secrets can't be decrypted with the
+// current/previous key (operator changed GLANCEOS_SECRET_KEY without rotating).
+const undecryptable = undecryptableSecretCount();
+if (undecryptable > 0) {
+  console.warn(`[secrets] ${undecryptable} stored secret(s) can't be decrypted — set GLANCEOS_SECRET_KEY_PREVIOUS to the old key and run \`pnpm --filter @glanceos/server rotate-secrets\`. Affected connections will show "needs auth" until then.`);
+}
 
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: buildApp().fetch, port }, (info) => {
@@ -32,3 +41,6 @@ setInterval(() => {
 setInterval(() => {
   try { runAlertChecks(); } catch { /* never let the sweep crash the loop */ }
 }, 60 * 1000);
+
+// Drop expired rate-limit windows so the map stays bounded.
+setInterval(() => gcRateLimits(), 5 * 60 * 1000);

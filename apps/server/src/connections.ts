@@ -3,7 +3,7 @@ import { db } from "./db";
 import { ensureFreshOAuthToken } from "./oauth";
 import { PROVIDERS, type AuthKind } from "./providers/registry";
 import type { ConnContext, ConnLookup } from "./providers/resolve";
-import { open, seal } from "./secrets";
+import { currentKeyVersion, open, seal } from "./secrets";
 
 // Per-user integration connections. The ONLY shape that leaves the server is
 // ConnectionSummary — *_secrets/cipher are never SELECTed into a response. Every
@@ -116,9 +116,9 @@ export function markConnStatus(id: string, status: "ok" | "needs_auth" | "error"
 
 function putSecret(connectionId: string, kind: string, plain: string): void {
   db.prepare(
-    "INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, ?, 1, ?, ?) " +
-    "ON CONFLICT(connection_id, kind) DO UPDATE SET cipher = excluded.cipher, key_version = 1, updated_at = excluded.updated_at",
-  ).run(connectionId, kind, seal(plain), Date.now());
+    "INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(connection_id, kind) DO UPDATE SET cipher = excluded.cipher, key_version = excluded.key_version, updated_at = excluded.updated_at",
+  ).run(connectionId, kind, currentKeyVersion(), seal(plain), Date.now());
 }
 
 function readSecret(connectionId: string, kind: string): string | null {

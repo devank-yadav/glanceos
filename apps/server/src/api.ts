@@ -14,6 +14,7 @@ import {
   registrationOpen, sessionUserId, updateUserName, verifyLogin,
 } from "./auth";
 import { dumpUser } from "./backup";
+import { requestLogger } from "./logging";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
   registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, setRenderOpts, updateDevice, type DeviceRow,
@@ -121,6 +122,8 @@ function setupSummary(l: ReturnType<typeof listSetups>[number]) {
 
 export function buildApp(): Hono<Env> {
   const app = new Hono<Env>();
+
+  app.use("*", requestLogger()); // opt-in JSON request log (GLANCEOS_LOG=json)
 
   // ---- liveness/readiness probes (before the API guard; no auth) ----
   app.get("/health", (c) => c.json({ ok: true }));

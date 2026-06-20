@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { open, seal } from "./secrets";
+import { currentKeyVersion, open, seal } from "./secrets";
 
 // OAuth *app* credentials the self-hoster registers with each provider (the
 // agent cannot register apps). One row per (provider, user). The client secret
@@ -16,9 +16,9 @@ interface AppRow { provider: string; user_id: string; client_id: string; client_
 
 export function setOAuthApp(userId: string, provider: string, clientId: string, clientSecret: string): void {
   db.prepare(
-    "INSERT INTO oauth_apps (provider, user_id, client_id, client_secret_enc, key_version, created_at) VALUES (?, ?, ?, ?, 1, ?) " +
-    "ON CONFLICT(provider, user_id) DO UPDATE SET client_id = excluded.client_id, client_secret_enc = excluded.client_secret_enc, key_version = 1",
-  ).run(provider, userId, clientId.trim(), seal(clientSecret), Date.now());
+    "INSERT INTO oauth_apps (provider, user_id, client_id, client_secret_enc, key_version, created_at) VALUES (?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(provider, user_id) DO UPDATE SET client_id = excluded.client_id, client_secret_enc = excluded.client_secret_enc, key_version = excluded.key_version",
+  ).run(provider, userId, clientId.trim(), seal(clientSecret), currentKeyVersion(), Date.now());
 }
 
 export function deleteOAuthApp(userId: string, provider: string): boolean {
