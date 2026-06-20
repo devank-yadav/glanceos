@@ -2,6 +2,7 @@ import type { BlockSourceT, WidgetT } from "@glanceos/schema";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { LIST_BLOCKS, PASSTHROUGH_BLOCKS, SERIES_BLOCKS } from "./blocks";
+import { compileNotionFilter, NOTION_OPERATORS, type NotionFilterRow, type NotionFilterType } from "./notionFilter";
 
 // The ⟿ Data tab: point a block at a live source. Two ways in:
 //  • a saved connection (Todoist, GitHub, Notion, … — set up on the Integrations
@@ -59,6 +60,8 @@ export function DataPanel({
   const [transform, setTransform] = useState<string>(existing?.map?.transform ?? "first");
   const [preview, setPreview] = useState("");
   const [busy, setBusy] = useState(false);
+  const [nf, setNf] = useState<NotionFilterRow[]>([]);
+  const [nfComb, setNfComb] = useState<"and" | "or">("and");
 
   useEffect(() => {
     Promise.all([api.get<ProviderInfo[]>("/api/providers"), api.get<Connection[]>("/api/connections")])
@@ -76,6 +79,11 @@ export function DataPanel({
   const build = (): BlockSourceT => {
     const query: Record<string, string> = usingConn ? parseParams(params) : { url };
     if (!usingConn && urlKind === "graphql") query.gqlQuery = gql;
+    // Notion filter builder → query.body (a raw `body=` in params always wins).
+    if (kind === "notion.database" && !query.body) {
+      const compiled = compileNotionFilter(nf, nfComb);
+      if (compiled.filter) query.body = JSON.stringify(compiled);
+    }
     const map = !shaped
       ? { path: "", transform: "none" as const }
       : isSeries
@@ -125,6 +133,38 @@ export function DataPanel({
             <span>Parameters</span>
             <textarea value={params} placeholder={"repo=owner/name\ndatabase_id=…\nproject_id=…"} onInput={(e) => setParams((e.currentTarget as HTMLTextAreaElement).value)} />
           </label>
+          {kind === "notion.database" && (
+            <div class="notion-filter">
+              <div class="row spread">
+                <span class="field-label">Filter <span class="muted">(optional)</span></span>
+                {nf.length > 1 && (
+                  <select class="nf-comb" value={nfComb} onChange={(e) => setNfComb((e.currentTarget as HTMLSelectElement).value as "and" | "or")}>
+                    <option value="and">match all</option>
+                    <option value="or">match any</option>
+                  </select>
+                )}
+              </div>
+              {nf.map((r, i) => {
+                const set = (patch: Partial<NotionFilterRow>) => setNf((rows) => rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                return (
+                  <div class="nf-row" key={i}>
+                    <input class="nf-prop" value={r.property} placeholder="Property" onInput={(e) => set({ property: (e.currentTarget as HTMLInputElement).value })} />
+                    <select value={r.type} onChange={(e) => { const type = (e.currentTarget as HTMLSelectElement).value as NotionFilterType; set({ type, operator: NOTION_OPERATORS[type][0] }); }}>
+                      {Object.keys(NOTION_OPERATORS).map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={r.operator} onChange={(e) => set({ operator: (e.currentTarget as HTMLSelectElement).value })}>
+                      {NOTION_OPERATORS[r.type].map((op) => <option key={op} value={op}>{op.replace(/_/g, " ")}</option>)}
+                    </select>
+                    {r.type !== "checkbox"
+                      ? <input class="nf-val" value={r.value} placeholder="value" onInput={(e) => set({ value: (e.currentTarget as HTMLInputElement).value })} />
+                      : <select value={r.value || "true"} onChange={(e) => set({ value: (e.currentTarget as HTMLSelectElement).value })}><option value="true">true</option><option value="false">false</option></select>}
+                    <button class="ghost nf-del" title="Remove" onClick={() => setNf((rows) => rows.filter((_, j) => j !== i))}>×</button>
+                  </div>
+                );
+              })}
+              <button class="ghost nf-add" onClick={() => setNf((rows) => [...rows, { property: "", type: "title", operator: "contains", value: "" }])}>+ Add filter</button>
+            </div>
+          )}
         </>
       ) : (
         <>

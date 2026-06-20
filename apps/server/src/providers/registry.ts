@@ -3,7 +3,7 @@
 // via the block's SourceMap. Pure data + functions, no network at import →
 // offline-safe; every fetch goes through the SSRF-guarded cache.ts egress.
 
-import { assertSafeUrl, getJSON, getText, httpError, postJSON, TTL } from "../fetchers/cache";
+import { assertSafeUrl, AuthError, getJSON, getText, httpError, postJSON, TTL } from "../fetchers/cache";
 import { parseIcs } from "../fetchers/ics";
 import { headlinesData } from "../fetchers/live";
 
@@ -336,6 +336,109 @@ export function formatNowPlaying(status: number, data: SpotifyTrack | null): { v
   const artists = (data.item.artists ?? []).map((a) => a.name).filter(Boolean).join(", ");
   return { value: `${data.item.name ?? "Unknown"}${artists ? ` — ${artists}` : ""}` };
 }
+// ---- Token provider: Asana (personal access token, Bearer). ----
+reg({
+  id: "asana", label: "Asana", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "asana.tasks", label: "My tasks", shape: "list" },
+    { id: "asana.projects", label: "Projects", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    const pick = (r: unknown): unknown => (r && typeof r === "object" ? (r as { data?: unknown }).data ?? r : r);
+    if (ctx.resource === "asana.projects") {
+      const ws = ctx.query.workspace;
+      return pick(await getJSON(`https://app.asana.com/api/1.0/projects?limit=50${ws ? `&workspace=${encodeURIComponent(ws)}` : ""}`, h));
+    }
+    const params = new URLSearchParams({ limit: "50", completed_since: "now", opt_fields: "name,completed,due_on" });
+    if (ctx.query.project) params.set("project", ctx.query.project);
+    else { params.set("assignee", ctx.query.assignee || "me"); if (ctx.query.workspace) params.set("workspace", ctx.query.workspace); }
+    return pick(await getJSON(`https://app.asana.com/api/1.0/tasks?${params.toString()}`, h));
+  },
+});
+
+// ---- Token provider: Jira (email + API token → HTTP Basic; JQL search). The
+// site base URL + email are non-secret connection config; the token is sealed.
+// Cloud 3LO / cloudId is deferred — this is the token-only path.
+reg({
+  id: "jira", label: "Jira", category: "issues", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "jira.search", label: "Issue search (JQL)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = String(ctx.config.baseUrl || "").replace(/\/+$/, "");
+    const email = String(ctx.config.email || "");
+    if (!base || !email) return null;
+    const basic = Buffer.from(`${email}:${ctx.secret}`).toString("base64");
+    const jql = ctx.query.jql || "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC";
+    const url = `${base}/rest/api/3/search?maxResults=20&fields=${encodeURIComponent("summary,status,priority")}&jql=${encodeURIComponent(jql)}`;
+    const r = (await getJSON(url, { authorization: `Basic ${basic}`, accept: "application/json" })) as { issues?: unknown[] } | null;
+    return r?.issues ?? r;
+  },
+});
+
+// ---- Token provider: Trello (API key is non-secret config, token is sealed;
+// both ride as query params). Exercises the EXTRA_CONFIG declarative field. ----
+reg({
+  id: "trello", label: "Trello", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [
+    { id: "trello.cards", label: "Cards (list or board)", shape: "list" },
+    { id: "trello.boards", label: "My boards", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const key = String(ctx.config.key || "");
+    if (!key) return null;
+    const auth = `key=${encodeURIComponent(key)}&token=${encodeURIComponent(ctx.secret)}`;
+    if (ctx.resource === "trello.boards") return getJSON(`https://api.trello.com/1/members/me/boards?fields=${encodeURIComponent("name,url")}&${auth}`);
+    const list = ctx.query.list, board = ctx.query.board;
+    if (list) return getJSON(`https://api.trello.com/1/lists/${encodeURIComponent(list)}/cards?fields=${encodeURIComponent("name,due,url")}&${auth}`);
+    if (board) return getJSON(`https://api.trello.com/1/boards/${encodeURIComponent(board)}/cards?fields=${encodeURIComponent("name,due,url")}&${auth}`);
+    return null;
+  },
+});
+
+// ---- OAuth provider: Slack. v2 OAuth; the token endpoint posts client creds in
+// the body (not Basic) and bot tokens don't expire → nonExpiring. Slack signals
+// failure with HTTP 200 + {ok:false,error}, so we inspect the body, not the status.
+const SLACK_AUTH_ERRORS = new Set(["invalid_auth", "not_authed", "token_revoked", "account_inactive", "token_expired"]);
+export function slackError(error: string | undefined): Error {
+  const msg = `slack: ${error || "request failed"}`;
+  return error && SLACK_AUTH_ERRORS.has(error) ? new AuthError(msg) : new Error(msg);
+}
+reg({
+  id: "slack", label: "Slack", category: "chat", authKind: "oauth2",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  oauth: {
+    authorizeUrl: "https://slack.com/oauth/v2/authorize",
+    tokenUrl: "https://slack.com/api/oauth.v2.access",
+    scopes: ["channels:read", "channels:history", "groups:read", "groups:history"],
+    nonExpiring: true,
+  },
+  resources: [
+    { id: "slack.messages", label: "Channel messages", shape: "list" },
+    { id: "slack.channels", label: "Channels", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "slack.channels") {
+      const data = (await getJSON("https://slack.com/api/conversations.list?limit=100&types=public_channel,private_channel", h)) as { ok: boolean; error?: string; channels?: unknown[] };
+      if (!data.ok) throw slackError(data.error);
+      return data.channels ?? [];
+    }
+    const channel = ctx.query.channel;
+    if (!channel) return null;
+    const max = Number(ctx.query.max) || 10;
+    const data = (await getJSON(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(channel)}&limit=${max}`, h)) as { ok: boolean; error?: string; messages?: { text?: string; ts?: string }[] };
+    if (!data.ok) throw slackError(data.error);
+    return { items: (data.messages ?? []).map((m) => ({ text: m.text ?? "", ts: m.ts ?? "" })) };
+  },
+});
+
 reg({
   id: "spotify", label: "Spotify", category: "media", authKind: "oauth2",
   defaultTtlMs: TTL.min, minRefreshMs: 20_000,

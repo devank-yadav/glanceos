@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { EmptyState } from "../components/EmptyState";
@@ -50,6 +51,22 @@ const CONNECT_HELP: Record<string, string> = {
   homeassistant: "Home Assistant → your profile → Long-lived access tokens → Create token.",
   microsoft: "Azure Portal → App registrations → New registration; add the redirect URI below + the Calendars.Read delegated permission, then paste the client id/secret.",
   spotify: "developer.spotify.com → Dashboard → Create app; add the redirect URI below, then paste the client id/secret.",
+  asana: "Asana → My settings → Apps → Manage developer apps → Personal access token.",
+  jira: "Atlassian → id.atlassian.com → Security → API tokens → Create. Use your account email + site URL below.",
+  trello: "trello.com/app-key for the API key; click 'Token' on that page to generate the token below.",
+  slack: "api.slack.com/apps → Create New App; add the redirect URI below + the channels:read/history scopes, then paste the client id/secret.",
+};
+
+// Non-secret config fields a token provider needs besides its sealed token,
+// declared per provider (generalizes the old hardcoded Home Assistant baseUrl).
+interface ExtraField { key: string; label: string; placeholder?: string; hint?: ComponentChildren }
+const EXTRA_CONFIG: Record<string, ExtraField[]> = {
+  homeassistant: [{ key: "baseUrl", label: "Home Assistant URL", placeholder: "http://homeassistant.local:8123", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code> on the server.</> }],
+  jira: [
+    { key: "baseUrl", label: "Jira site URL", placeholder: "https://yourteam.atlassian.net" },
+    { key: "email", label: "Account email", placeholder: "you@example.com" },
+  ],
+  trello: [{ key: "key", label: "API key", placeholder: "your Trello API key" }],
 };
 
 export function IntegrationsPage() {
@@ -152,11 +169,12 @@ function AddForm({ provider, onAdded }: { provider: ProviderInfo; onAdded: () =>
 
   const [label, setLabel] = useState(provider.label);
   const [secret, setSecret] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
+  const extra = EXTRA_CONFIG[provider.id] ?? [];
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const needsSecret = provider.authKind === "token" || provider.authKind === "url";
-  const needsBaseUrl = provider.id === "homeassistant"; // a token provider that also needs its host
+  const missingExtra = extra.some((f) => !(config[f.key] || "").trim());
 
   const save = async () => {
     setBusy(true);
@@ -165,7 +183,7 @@ function AddForm({ provider, onAdded }: { provider: ProviderInfo; onAdded: () =>
         provider: provider.id,
         label,
         secret: secret || undefined,
-        config: needsBaseUrl ? { baseUrl } : undefined,
+        config: extra.length ? config : undefined,
       });
       toast.success(`Connected ${provider.label}`);
       onAdded();
@@ -182,13 +200,13 @@ function AddForm({ provider, onAdded }: { provider: ProviderInfo; onAdded: () =>
         <span>Label</span>
         <input value={label} maxLength={60} onInput={(e) => setLabel((e.currentTarget as HTMLInputElement).value)} />
       </label>
-      {needsBaseUrl && (
-        <label class="field grow">
-          <span>Home Assistant URL</span>
-          <input type="text" value={baseUrl} placeholder="http://homeassistant.local:8123" onInput={(e) => setBaseUrl((e.currentTarget as HTMLInputElement).value)} />
-          <span class="field-hint muted">Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code> on the server.</span>
+      {extra.map((f) => (
+        <label class="field grow" key={f.key}>
+          <span>{f.label}</span>
+          <input type="text" value={config[f.key] || ""} placeholder={f.placeholder} onInput={(e) => { const v = (e.currentTarget as HTMLInputElement).value; setConfig((c) => ({ ...c, [f.key]: v })); }} />
+          {f.hint && <span class="field-hint muted">{f.hint}</span>}
         </label>
-      )}
+      ))}
       {needsSecret && (
         <label class="field grow">
           <span>{provider.authKind === "url" ? "URL" : "Token"}</span>
@@ -197,7 +215,7 @@ function AddForm({ provider, onAdded }: { provider: ProviderInfo; onAdded: () =>
       )}
       <div class="row spread" style={{ marginTop: "4px" }}>
         <span />
-        <button class="primary" disabled={busy || (needsSecret && !secret) || (needsBaseUrl && !baseUrl)} onClick={save}>{busy ? "Connecting…" : "Connect"}</button>
+        <button class="primary" disabled={busy || (needsSecret && !secret) || missingExtra} onClick={save}>{busy ? "Connecting…" : "Connect"}</button>
       </div>
     </>
   );

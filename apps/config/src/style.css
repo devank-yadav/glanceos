@@ -2785,3 +2785,14 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .onboard-step-body p { margin: 0; font-size: 13px; }
 .onboard-step-body .primary, .onboard-step-body .ghost { align-self: flex-start; margin-top: 4px; }
 .onboard-skip { margin-top: 20px; }
+
+/* ---------- Notion filter builder (Data tab) ---------- */
+.notion-filter { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.notion-filter .field-label { font-size: 12px; font-weight: 500; }
+.nf-row { display: flex; gap: 4px; align-items: center; }
+.nf-row select, .nf-row input { font-size: 12px; padding: 4px 6px; min-width: 0; }
+.nf-row .nf-prop { flex: 1 1 80px; }
+.nf-row .nf-val { flex: 1 1 70px; }
+.nf-row .nf-del { padding: 2px 8px; line-height: 1; }
+.nf-add { align-self: flex-start; font-size: 12px; }
+.nf-comb { font-size: 12px; padding: 2px 6px; }
