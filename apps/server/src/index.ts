@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { buildApp } from "./api";
+import { validateConfig } from "./config";
 import { migrate } from "./db";
 import { runAlertChecks } from "./notifications";
 import { gcRateLimits } from "./ratelimit";
@@ -8,6 +9,7 @@ import { seedTemplates } from "./seed";
 import { pushAllConnected, pushRotatingDevices, pushScheduledDevices } from "./state";
 import { gcUploads } from "./uploads";
 
+validateConfig(); // fail fast on a broken GLANCEOS_* env
 migrate();
 seedTemplates();
 

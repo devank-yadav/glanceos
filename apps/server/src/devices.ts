@@ -86,11 +86,21 @@ export function allClaimedDevices(): DeviceRow[] {
   return db.prepare("SELECT * FROM devices WHERE claimed_at IS NOT NULL").all() as DeviceRow[];
 }
 
+// Valid IANA zone names (Node 24's Intl), so a bogus/injected string can't be
+// stored and later fed to schedule/wall-clock formatting.
+const VALID_TZ = new Set<string>(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []);
+export function isValidTimezone(tz: string): boolean {
+  if (VALID_TZ.size) return VALID_TZ.has(tz) || tz === "UTC";
+  try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; } // fallback
+}
+
 /** Set a device's IANA timezone for schedule wall-clock (null/"" → server tz). */
 export function setDeviceTimezone(id: string, tz: string | null, userId: string): DeviceRow | null {
   const device = getDevice(id);
   if (!device || device.user_id !== userId) return null;
-  db.prepare("UPDATE devices SET timezone = ? WHERE id = ?").run(tz?.trim() || null, id);
+  const trimmed = tz?.trim() || null;
+  if (trimmed && !isValidTimezone(trimmed)) return null; // reject a bogus zone (caller → 400/404)
+  db.prepare("UPDATE devices SET timezone = ? WHERE id = ?").run(trimmed, id);
   return getDevice(id) ?? null;
 }
 
