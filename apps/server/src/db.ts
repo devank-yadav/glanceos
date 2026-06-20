@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dataDir = process.env.GLANCEOS_DATA_DIR ?? join(here, "..", "data");
+export const dataDir = process.env.GLANCEOS_DATA_DIR ?? join(here, "..", "data");
 mkdirSync(dataDir, { recursive: true });
 
 export const db = new Database(join(dataDir, "glanceos.db"));

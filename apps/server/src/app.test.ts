@@ -271,6 +271,28 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(["Rot A", "Rot B"]).toContain(after.state.layout.name);
   });
 
+  it("accepts an image upload and rejects bad type / oversized", async () => {
+    const fd = new FormData();
+    fd.append("file", new File([new Uint8Array([1, 2, 3, 4])], "logo.png", { type: "image/png" }));
+    const res = await app.request("/api/uploads", { method: "POST", body: fd, headers: { cookie: cookieA } });
+    expect(res.status).toBe(201);
+    const { url } = await res.json();
+    expect(url).toMatch(/^\/uploads\/[\w-]+\.png$/);
+
+    const bad = new FormData();
+    bad.append("file", new File(["plain"], "x.txt", { type: "text/plain" }));
+    expect((await app.request("/api/uploads", { method: "POST", body: bad, headers: { cookie: cookieA } })).status).toBe(400);
+
+    const big = new FormData();
+    big.append("file", new File([new Uint8Array(2 * 1024 * 1024 + 16)], "big.png", { type: "image/png" }));
+    expect((await app.request("/api/uploads", { method: "POST", body: big, headers: { cookie: cookieA } })).status).toBe(413);
+
+    // unauthenticated upload is rejected by the session guard
+    const noauth = new FormData();
+    noauth.append("file", new File([new Uint8Array([1])], "a.png", { type: "image/png" }));
+    expect((await app.request("/api/uploads", { method: "POST", body: noauth })).status).toBe(401);
+  });
+
   it("shares a board by public read-only link, gated and revocable", async () => {
     const layout = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Shared", document: LOCAL_LAYOUT }) })).json();
 

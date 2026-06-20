@@ -18,6 +18,8 @@ import {
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
+import { dataDir } from "./db";
+import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload } from "./uploads";
 import { isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
@@ -660,6 +662,20 @@ export function buildApp(): Hono<Env> {
     await pushUserDevices(c.get("userId"));
     return c.json(q);
   });
+
+  // ---- user image uploads ----
+  app.post("/api/uploads", async (c) => {
+    const userId = c.get("userId");
+    const body = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+    const file = (body as Record<string, unknown>).file;
+    if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
+    if (!isAllowedMime(file.type)) return c.json({ error: "unsupported type — use PNG, JPEG, WebP or GIF" }, 400);
+    const buf = Buffer.from(await file.arrayBuffer());
+    if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: "image too large (max 2 MB)" }, 413);
+    return c.json(saveUpload(userId, buf, file.type, file.name), 201);
+  });
+  // Serve uploaded bytes (unguessable id; referenced by image blocks + public boards).
+  app.use("/uploads/*", serveStatic({ root: relative(process.cwd(), join(dataDir, "uploads")), rewriteRequestPath: (p) => p.replace(/^\/uploads/, "") || "/" }));
 
   // ---- built frontends, when they exist: one process serves everything ----
 

@@ -1,5 +1,6 @@
 import type { LayoutT, WidgetT } from "@glanceos/schema";
 import type { VNode } from "preact";
+import { useState } from "preact/hooks";
 import { BINDABLE, blockFor, type WidgetType } from "./blocks";
 import { Icon } from "./icons";
 
@@ -280,6 +281,7 @@ export function BlockFields({
         ))}
         {fields.length === 0 && <p class="muted">Nothing to configure.</p>}
       </div>
+      {block.type === "image" && <ImageUpload onUploaded={(url) => editProp("url", url)} />}
       {block.type === "text" && (
         <label class="field">
           <span>Format</span>
@@ -308,6 +310,33 @@ export function BlockFields({
         <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={[<Icon.alignTop />, <Icon.alignMiddle />, <Icon.alignBottom />]} onChange={(v) => editStyle({ valign: v })} />
       </div>
     </div>
+  );
+}
+
+function ImageUpload({ onUploaded }: { onUploaded: (url: string) => void }) {
+  const [status, setStatus] = useState("");
+  const pick = async (e: Event) => {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    setStatus("Uploading…");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: fd, credentials: "same-origin" });
+      const r = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !r.url) throw new Error(r.error || `HTTP ${res.status}`);
+      onUploaded(r.url);
+      setStatus("Uploaded ✓");
+    } catch (err) {
+      setStatus(String(err instanceof Error ? err.message : err));
+    }
+  };
+  return (
+    <label class="field">
+      <span>Upload image <em>(PNG/JPEG/WebP/GIF, ≤2 MB)</em></span>
+      <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pick} />
+      {status && <span class="field-hint muted">{status}</span>}
+    </label>
   );
 }
 

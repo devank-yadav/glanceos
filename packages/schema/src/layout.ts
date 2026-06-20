@@ -41,7 +41,7 @@ export const HeadingProps = z.object({
   level: z.union([z.literal(1), z.literal(2)]).default(1),
 });
 export const DividerProps = z.object({});
-export const ImageProps = z.object({ url: httpUrl, fit: z.enum(["cover", "contain"]).default("cover") });
+export const ImageProps = z.object({ url: z.union([httpUrl, z.string().regex(/^\/uploads\/[\w.-]+$/)]), fit: z.enum(["cover", "contain"]).default("cover") });
 export const CalloutProps = z.object({
   content: line(500).default(""),
   emoji: z.string().max(8).default("💡"),
