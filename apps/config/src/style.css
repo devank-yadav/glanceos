@@ -2714,3 +2714,32 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .sched-day.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
 .sched-times { gap: 12px; }
 .sched-times .field { flex: 1; }
+
+/* ---------- notifications bell ---------- */
+.notif-wrap { position: relative; }
+.notif-badge {
+  position: absolute; top: -2px; right: -2px; pointer-events: none;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--indigo); color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.notif-panel {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60;
+  width: 300px; max-width: 78vw; padding: 10px;
+  animation: rise 0.14s var(--ease) both;
+}
+.notif-head { margin-bottom: 6px; }
+.notif-head .ghost { font-size: 12px; padding: 3px 7px; }
+.notif-empty { font-size: 13px; margin: 8px 2px; }
+.notif-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow: auto; }
+.notif-item-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 8px; border-radius: var(--r-sm); background: transparent; border: none; cursor: pointer; color: var(--fg);
+}
+.notif-item-btn:hover { background: var(--soft); }
+.notif-item.read .notif-item-btn { opacity: 0.55; cursor: default; }
+.notif-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--muted); }
+.notif-dot.offline { background: var(--bad); }
+.notif-dot.low_battery { background: #d8a72a; }
+.notif-msg { flex: 1; font-size: 13px; }
+.notif-time { font-size: 11px; flex: none; }

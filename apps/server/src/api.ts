@@ -17,6 +17,7 @@ import {
   registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, updateDevice, type DeviceRow,
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
+import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
 import { isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
@@ -344,6 +345,20 @@ export function buildApp(): Hono<Env> {
     await pushDevice(id);
     const updated = getDevice(id)!;
     return c.json({ timezone: updated.timezone, schedules: listSchedules(id) });
+  });
+
+  // ---- in-app notifications (offline / low-battery alerts) ----
+  app.get("/api/notifications", (c) => {
+    const userId = c.get("userId");
+    return c.json({ notifications: listNotifications(userId, c.req.query("unread") === "1"), unread: unreadCount(userId) });
+  });
+  app.post("/api/notifications/:id/read", (c) => {
+    markRead(Number(c.req.param("id")), c.get("userId"));
+    return c.json({ ok: true, unread: unreadCount(c.get("userId")) });
+  });
+  app.post("/api/notifications/read-all", (c) => {
+    markAllRead(c.get("userId"));
+    return c.json({ ok: true, unread: 0 });
   });
 
   // Grayscale PNG preview of exactly what a screen would show on e-ink.

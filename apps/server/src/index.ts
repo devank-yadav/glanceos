@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { buildApp } from "./api";
 import { migrate } from "./db";
+import { runAlertChecks } from "./notifications";
 import { seedTemplates } from "./seed";
 import { pushAllConnected, pushRotatingDevices, pushScheduledDevices } from "./state";
 
@@ -25,4 +26,9 @@ setInterval(() => {
 // Flip scheduled screens at their window boundaries (minute granularity is enough).
 setInterval(() => {
   pushScheduledDevices().catch(() => {});
+}, 60 * 1000);
+
+// Flag offline / low-battery screens as in-app notifications.
+setInterval(() => {
+  try { runAlertChecks(); } catch { /* never let the sweep crash the loop */ }
 }, 60 * 1000);

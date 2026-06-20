@@ -2,6 +2,7 @@ import { Icon } from "../editor/icons";
 import type { Theme } from "../hooks/useTheme";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
+import { NotificationsBell } from "./NotificationsBell";
 
 // Notion-style left navigation: brand, search (⌘K), the page links, and an
 // account menu (theme + log out) pinned to the bottom. Collapses to icons.
@@ -60,6 +61,7 @@ export function Sidebar({
       </nav>
 
       <div class="sidebar-foot">
+        <NotificationsBell />
         <Menu
           align="left"
           triggerClass="sidebar-account"

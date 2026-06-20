@@ -71,6 +71,11 @@ export function setRefresh(id: string, seconds: number, userId: string): DeviceR
   return getDevice(id) ?? null;
 }
 
+/** Every claimed device across all users — for the background alert sweep. */
+export function allClaimedDevices(): DeviceRow[] {
+  return db.prepare("SELECT * FROM devices WHERE claimed_at IS NOT NULL").all() as DeviceRow[];
+}
+
 /** Set a device's IANA timezone for schedule wall-clock (null/"" → server tz). */
 export function setDeviceTimezone(id: string, tz: string | null, userId: string): DeviceRow | null {
   const device = getDevice(id);
