@@ -1056,3 +1056,9 @@ body {
 body.stale .stale-dot {
   opacity: 0.85;
 }
+
+/* password gate for a protected share link */
+.share-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.5vmin; height: 100%; padding: 6vmin; }
+.share-gate-msg { font-size: 3vmin; color: var(--muted); margin: 0; }
+.share-gate-input { font-size: 3vmin; padding: 1.4vmin 2vmin; border: 1px solid var(--rule); border-radius: 1.2vmin; background: var(--bg); color: var(--fg); width: min(60vmin, 80%); }
+.share-gate-btn { font-size: 3vmin; padding: 1.4vmin 3vmin; border: none; border-radius: 1.2vmin; background: var(--fg); color: var(--bg); cursor: pointer; }

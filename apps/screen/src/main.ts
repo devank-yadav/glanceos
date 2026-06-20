@@ -63,23 +63,54 @@ function bootScreen(): void {
  */
 function bootShare(token: string): void {
   const cacheKey = `glanceos.share.${token}`;
+  const pwKey = `glanceos.share.pw.${token}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try { renderPayload(JSON.parse(cached) as StreamPayloadT); markStale(); } catch { localStorage.removeItem(cacheKey); }
   }
   const load = async () => {
-    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}`);
+    const pw = localStorage.getItem(pwKey);
+    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}${pw ? `?pw=${encodeURIComponent(pw)}` : ""}`);
+    if (res.status === 401) { localStorage.removeItem(pwKey); throw { needsPassword: true }; }
     if (!res.ok) throw new Error(String(res.status));
     const payload = (await res.json()) as StreamPayloadT;
     localStorage.setItem(cacheKey, JSON.stringify(payload));
     renderPayload(payload);
     markFresh();
   };
-  load().catch(() => {
-    if (!cached) renderMessage("This board isn't available", "The share link may have been turned off.");
-    markStale();
+  const start = () => load().then(() => { setInterval(() => load().catch(() => markStale()), 60_000); }).catch((e) => {
+    if ((e as { needsPassword?: boolean })?.needsPassword) {
+      promptPassword(`This board is password protected.`, (pw) => { localStorage.setItem(pwKey, pw); start(); });
+    } else if (!cached) {
+      renderMessage("This board isn't available", "The share link may have been turned off.");
+      markStale();
+    } else { markStale(); }
   });
-  setInterval(() => { load().catch(() => markStale()); }, 60_000);
+  start();
+}
+
+/** Minimal password gate for a protected share (DOM-built, no framework). */
+function promptPassword(message: string, onSubmit: (pw: string) => void): void {
+  const root = document.getElementById("root") ?? document.body;
+  root.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "share-gate";
+  const h = document.createElement("p");
+  h.className = "share-gate-msg";
+  h.textContent = message;
+  const input = document.createElement("input");
+  input.type = "password";
+  input.placeholder = "Password";
+  input.className = "share-gate-input";
+  const btn = document.createElement("button");
+  btn.className = "share-gate-btn";
+  btn.textContent = "View board";
+  const submit = () => { if (input.value) onSubmit(input.value); };
+  btn.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  wrap.append(h, input, btn);
+  root.appendChild(wrap);
+  input.focus();
 }
 
 const params = new URLSearchParams(location.search);

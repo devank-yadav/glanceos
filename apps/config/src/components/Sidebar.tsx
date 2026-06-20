@@ -69,6 +69,7 @@ export function Sidebar({
           triggerLabel="Account menu"
           trigger={<><span class="avatar" aria-hidden="true">{(userName || "?").slice(0, 1).toUpperCase()}</span><span class="sidebar-label">{userName}</span></>}
           items={[
+            { label: "Account", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
             { label: themeLabel(theme), icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, onClick: onCycleTheme },
             { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
           ]}

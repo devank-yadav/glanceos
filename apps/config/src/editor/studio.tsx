@@ -122,6 +122,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareDays, setShareDays] = useState(0); // 0 = never
+  const [sharePw, setSharePw] = useState("");
   const [convertId, setConvertId] = useState<string | null>(null);
   // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -591,7 +593,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
   };
   const createShare = async () => {
     setShareBusy(true);
-    try { const r = await api.post<{ url: string }>(`/api/layouts/${layoutId}/share`); setShareUrl(r.url); } catch { /* keep popover open */ } finally { setShareBusy(false); }
+    try {
+      const r = await api.post<{ url: string }>(`/api/layouts/${layoutId}/share`, { expiresInDays: shareDays || null, password: sharePw || null });
+      setShareUrl(r.url);
+      setSharePw("");
+    } catch { /* keep popover open */ } finally { setShareBusy(false); }
   };
   const revokeShare = async () => {
     setShareBusy(true);
@@ -650,7 +656,21 @@ export function Studio({ layoutId }: { layoutId: number }) {
             ) : (
               <>
                 <p class="muted">Create a public, read-only link to this board.</p>
-                <button class="primary" onClick={createShare} disabled={shareBusy}>{shareBusy ? "Creating…" : "Create link"}</button>
+                <label class="field"><span>Link expires</span>
+                  <select value={String(shareDays)} onChange={(e) => setShareDays(Number((e.currentTarget as HTMLSelectElement).value))}>
+                    <option value="0">Never</option>
+                    <option value="1">After 1 day</option>
+                    <option value="7">After 7 days</option>
+                    <option value="30">After 30 days</option>
+                  </select>
+                </label>
+                <label class="field"><span>Password <em>(optional)</em></span>
+                  <input type="text" value={sharePw} placeholder="No password" onInput={(e) => setSharePw((e.currentTarget as HTMLInputElement).value)} />
+                </label>
+                <div class="row spread" style={{ marginTop: "4px" }}>
+                  <span />
+                  <button class="primary" onClick={createShare} disabled={shareBusy}>{shareBusy ? "Creating…" : "Create link"}</button>
+                </div>
               </>
             )}
           </div>

@@ -10,8 +10,10 @@ import { compress } from "hono/compress";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
-  createSession, createUser, destroySession, getUser, registrationOpen, sessionUserId, verifyLogin,
+  changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
+  registrationOpen, sessionUserId, updateUserName, verifyLogin,
 } from "./auth";
+import { dumpUser } from "./backup";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
   registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, setRenderOpts, updateDevice, type DeviceRow,
@@ -24,8 +26,8 @@ import { limiter } from "./ratelimit";
 import { isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
-  getLayoutByShareToken, getOwnedLayout, getShareToken, importFromHub, listPublished, listSetups,
-  setShareToken, updateLayout, updateLayoutMeta,
+  getLayoutByShareToken, getOwnedLayout, getShareInfo, importFromHub, listPublished, listSetups,
+  setShareToken, shareExpired, updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
 import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
@@ -604,15 +606,19 @@ export function buildApp(): Hono<Env> {
   // ---- public read-only share links ----
   const shareLink = (c: Context, token: string) => `${publicBase(c)}/screen/?share=${token}`;
 
-  app.get("/api/layouts/:id/share", (c) => {
-    const token = getShareToken(Number(c.req.param("id")), c.get("userId"));
-    return c.json({ token, url: token ? shareLink(c, token) : null });
-  });
+  const shareResponse = (c: Context, info: ReturnType<typeof getShareInfo>) =>
+    info ? { token: info.token, url: shareLink(c, info.token), expiresAt: info.expiresAt, hasPassword: info.hasPassword } : { token: null };
 
-  app.post("/api/layouts/:id/share", (c) => {
-    const token = setShareToken(Number(c.req.param("id")), c.get("userId"));
-    if (!token) return c.json({ error: "not found" }, 404);
-    return c.json({ token, url: shareLink(c, token) });
+  app.get("/api/layouts/:id/share", (c) => c.json(shareResponse(c, getShareInfo(Number(c.req.param("id")), c.get("userId")))));
+
+  app.post("/api/layouts/:id/share", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { expiresInDays?: number | null; password?: string | null };
+    const opts: { expiresAt?: number | null; password?: string | null } = {};
+    if (body.expiresInDays !== undefined) opts.expiresAt = body.expiresInDays && body.expiresInDays > 0 ? Date.now() + body.expiresInDays * 86_400_000 : null;
+    if (body.password !== undefined) opts.password = body.password ? body.password : null;
+    const info = setShareToken(Number(c.req.param("id")), c.get("userId"), opts);
+    if (!info) return c.json({ error: "not found" }, 404);
+    return c.json(shareResponse(c, info));
   });
 
   app.delete("/api/layouts/:id/share", (c) => {
@@ -620,10 +626,12 @@ export function buildApp(): Hono<Env> {
     return c.json({ ok: true });
   });
 
-  // Public board state (no auth) — resolves live data under the OWNER's connections.
+  // Public board state (no auth) — honors expiry + optional password, then
+  // resolves live data under the OWNER's connections.
   app.get("/api/public/board/:token", async (c) => {
     const found = getLayoutByShareToken(c.req.param("token"));
-    if (!found) return c.json({ error: "not found" }, 404);
+    if (!found || shareExpired(found.expiresAt)) return c.json({ error: "not found" }, 404);
+    if (!verifySharePassword(found.pwHash, c.req.query("pw"))) return c.json({ error: "password_required" }, 401);
     const { record, ownerId } = found;
     const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
     return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });
@@ -700,6 +708,35 @@ export function buildApp(): Hono<Env> {
     const q = resetQueue(c.get("userId"), c.req.param("id"));
     await pushUserDevices(c.get("userId"));
     return c.json(q);
+  });
+
+  // ---- account management ----
+  app.patch("/api/account", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    if (typeof body.name !== "string" || !body.name.trim()) return c.json({ error: "name required" }, 400);
+    const u = updateUserName(c.get("userId"), body.name);
+    return u ? c.json(u) : c.json({ error: "not found" }, 404);
+  });
+  app.post("/api/account/password", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { current?: string; next?: string };
+    if (!body.next || body.next.length < 8) return c.json({ error: "new password must be at least 8 characters" }, 400);
+    if (!changePassword(c.get("userId"), body.current ?? "", body.next)) return c.json({ error: "current password is incorrect" }, 400);
+    return c.json({ ok: true });
+  });
+  app.post("/api/account/logout-everywhere", (c) => {
+    destroyAllSessions(c.get("userId"));
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.json({ ok: true });
+  });
+  app.delete("/api/account", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { password?: string };
+    if (!deleteUser(c.get("userId"), body.password ?? "")) return c.json({ error: "password is incorrect" }, 401);
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.json({ ok: true });
+  });
+  app.get("/api/account/export", (c) => {
+    c.header("content-disposition", 'attachment; filename="glanceos-backup.json"');
+    return c.json(dumpUser(c.get("userId")));
   });
 
   // ---- user image uploads ----

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Layout, parseDocument, type LayoutT } from "@glanceos/schema";
+import { hashPassword, verifyHash } from "./auth";
 import { db } from "./db";
 
 // Setups (user layouts) AND the template hub live here. Builtins are rows with
@@ -71,7 +72,9 @@ export function getOwnedLayout(id: number, userId: string): LayoutRecord | undef
   return layout && layout.userId === userId ? layout : undefined;
 }
 
-// ---- public read-only share links ----
+// ---- public read-only share links (optional expiry + password) ----
+
+export interface ShareInfo { token: string; expiresAt: number | null; hasPassword: boolean }
 
 /** Current share token for an owned layout (null if not shared). */
 export function getShareToken(id: number, userId: string): string | null {
@@ -79,24 +82,49 @@ export function getShareToken(id: number, userId: string): string | null {
   return row?.share_token ?? null;
 }
 
-/** Enable sharing (idempotent — returns the existing token if already shared). */
-export function setShareToken(id: number, userId: string): string | null {
+/** Share status for the owner UI (null if not shared). */
+export function getShareInfo(id: number, userId: string): ShareInfo | null {
+  const row = db.prepare("SELECT share_token, share_expires_at, share_pw_hash FROM layouts WHERE id = ? AND user_id = ?")
+    .get(id, userId) as { share_token: string | null; share_expires_at: number | null; share_pw_hash: string | null } | undefined;
+  if (!row?.share_token) return null;
+  return { token: row.share_token, expiresAt: row.share_expires_at, hasPassword: !!row.share_pw_hash };
+}
+
+/** Enable/update sharing. Mints a token if none; sets expiry/password when given
+ *  (expiresAt/password === null clears that field). Idempotent on the token. */
+export function setShareToken(id: number, userId: string, opts: { expiresAt?: number | null; password?: string | null } = {}): ShareInfo | null {
   if (!getOwnedLayout(id, userId)) return null;
-  const existing = getShareToken(id, userId);
-  if (existing) return existing;
-  const token = randomBytes(18).toString("base64url");
-  db.prepare("UPDATE layouts SET share_token = ? WHERE id = ? AND user_id = ?").run(token, id, userId);
-  return token;
+  const token = getShareToken(id, userId) ?? randomBytes(18).toString("base64url");
+  const sets = ["share_token = ?"];
+  const vals: unknown[] = [token];
+  if (opts.expiresAt !== undefined) { sets.push("share_expires_at = ?"); vals.push(opts.expiresAt); }
+  if (opts.password !== undefined) { sets.push("share_pw_hash = ?"); vals.push(opts.password ? hashPassword(opts.password) : null); }
+  db.prepare(`UPDATE layouts SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`).run(...vals, id, userId);
+  return getShareInfo(id, userId);
 }
 
 export function clearShareToken(id: number, userId: string): boolean {
-  return db.prepare("UPDATE layouts SET share_token = NULL WHERE id = ? AND user_id = ?").run(id, userId).changes > 0;
+  return db.prepare("UPDATE layouts SET share_token = NULL, share_expires_at = NULL, share_pw_hash = NULL WHERE id = ? AND user_id = ?")
+    .run(id, userId).changes > 0;
 }
 
-/** Resolve a public share token → the board + its owner (for data resolution). */
-export function getLayoutByShareToken(token: string): { record: LayoutRecord; ownerId: string | null } | undefined {
-  const row = db.prepare("SELECT * FROM layouts WHERE share_token = ?").get(token) as LayoutRow | undefined;
-  return row ? { record: toRecord(row), ownerId: row.user_id } : undefined;
+export interface ShareResolve { record: LayoutRecord; ownerId: string | null; expiresAt: number | null; pwHash: string | null }
+/** Resolve a public share token → the board + its owner + gate fields (for data resolution). */
+export function getLayoutByShareToken(token: string): ShareResolve | undefined {
+  const row = db.prepare("SELECT * FROM layouts WHERE share_token = ?").get(token) as
+    | (LayoutRow & { share_expires_at: number | null; share_pw_hash: string | null }) | undefined;
+  if (!row) return undefined;
+  return { record: toRecord(row), ownerId: row.user_id, expiresAt: row.share_expires_at, pwHash: row.share_pw_hash };
+}
+
+/** A share is live if it hasn't expired. */
+export function shareExpired(expiresAt: number | null): boolean {
+  return expiresAt != null && Date.now() > expiresAt;
+}
+/** Password gate: true when no password is set, or the candidate matches. */
+export function verifySharePassword(pwHash: string | null, candidate: string | undefined): boolean {
+  if (!pwHash) return true;
+  return typeof candidate === "string" && verifyHash(candidate, pwHash);
 }
 
 export function listSetups(userId: string): SetupSummary[] {

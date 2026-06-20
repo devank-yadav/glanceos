@@ -17,12 +17,12 @@ interface UserRow extends PublicUser {
   created_at: number;
 }
 
-function hashPassword(password: string): string {
+export function hashPassword(password: string): string {
   const salt = randomBytes(16);
   return `${salt.toString("hex")}:${scryptSync(password, salt, 64).toString("hex")}`;
 }
 
-function verifyHash(password: string, stored: string): boolean {
+export function verifyHash(password: string, stored: string): boolean {
   const [saltHex, hashHex] = stored.split(":");
   if (!saltHex || !hashHex) return false;
   const candidate = scryptSync(password, Buffer.from(saltHex, "hex"), 64);
@@ -100,4 +100,36 @@ export function sessionUserId(token: string | undefined): string | null {
 
 export function destroySession(token: string | undefined): void {
   if (token) db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+// ---- account management ----
+
+export function updateUserName(userId: string, name: string): PublicUser | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(trimmed, userId);
+  return getUser(userId);
+}
+
+/** Verify the current password, then set a new one. false if current is wrong. */
+export function changePassword(userId: string, current: string, next: string): boolean {
+  const row = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string } | undefined;
+  if (!row || !verifyHash(current, row.password_hash)) return false;
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(next), userId);
+  return true;
+}
+
+/** Log out everywhere — invalidate every session for this user (incl. the current one). */
+export function destroyAllSessions(userId: string): void {
+  db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+}
+
+/** Delete the account after verifying the password. Every user-scoped table
+ *  cascades on user_id (foreign_keys = ON), so this removes layouts, devices,
+ *  playlists, connections, oauth apps, tasks, notifications, uploads and sessions. */
+export function deleteUser(userId: string, password: string): boolean {
+  const row = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string } | undefined;
+  if (!row || !verifyHash(password, row.password_hash)) return false;
+  db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  return true;
 }

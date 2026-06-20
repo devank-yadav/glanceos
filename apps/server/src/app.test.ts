@@ -321,6 +321,43 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect((await app.request("/api/public/board/nope")).status).toBe(404);
   });
 
+  it("password-protects a share link", async () => {
+    const layout = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Locked", document: LOCAL_LAYOUT }) })).json();
+    const share = await (await app.request(`/api/layouts/${layout.id}/share`, { method: "POST", ...authed(cookieA, { password: "s3cret" }) })).json();
+    expect(share.hasPassword).toBe(true);
+    expect((await app.request(`/api/public/board/${share.token}`)).status).toBe(401); // no password
+    expect((await app.request(`/api/public/board/${share.token}?pw=wrong`)).status).toBe(401);
+    const ok = await app.request(`/api/public/board/${share.token}?pw=s3cret`);
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).state.layout.name).toBe("Locked");
+  });
+
+  it("manages the account (rename, password, delete) and logs out everywhere", async () => {
+    const reg = await app.request("/api/auth/register", { method: "POST", ...json({ name: "Temp", email: "temp@example.com", password: "temp-pass-1" }) });
+    const cookieT = cookieOf(reg);
+
+    expect((await app.request("/api/account", { method: "PATCH", ...authed(cookieT, { name: "Renamed" }) })).status).toBe(200);
+    expect((await (await app.request("/api/auth/status", { headers: { cookie: cookieT } })).json()).user.name).toBe("Renamed");
+
+    expect((await app.request("/api/account/password", { method: "POST", ...authed(cookieT, { current: "wrong", next: "temp-pass-2" }) })).status).toBe(400);
+    expect((await app.request("/api/account/password", { method: "POST", ...authed(cookieT, { current: "temp-pass-1", next: "temp-pass-2" }) })).status).toBe(200);
+
+    // export returns the user's data
+    const exp = await (await app.request("/api/account/export", { headers: { cookie: cookieT } })).json();
+    expect(exp.format).toBe("glanceos-backup");
+
+    // delete: wrong password 401, correct 200, then the session is gone
+    expect((await app.request("/api/account", { method: "DELETE", ...authed(cookieT, { password: "nope" }) })).status).toBe(401);
+    expect((await app.request("/api/account", { method: "DELETE", ...authed(cookieT, { password: "temp-pass-2" }) })).status).toBe(200);
+    expect((await app.request("/api/devices", { headers: { cookie: cookieT } })).status).toBe(401);
+
+    // log-out-everywhere invalidates a separate user's session
+    const reg2 = await app.request("/api/auth/register", { method: "POST", ...json({ name: "Sess", email: "sess@example.com", password: "sess-pass-1" }) });
+    const cookieS = cookieOf(reg2);
+    expect((await app.request("/api/account/logout-everywhere", { method: "POST", headers: { cookie: cookieS } })).status).toBe(200);
+    expect((await app.request("/api/devices", { headers: { cookie: cookieS } })).status).toBe(401);
+  });
+
   it("logs out and re-locks the config plane", async () => {
     await app.request("/api/auth/logout", { method: "POST", headers: { cookie: cookieA } });
     expect((await app.request("/api/devices", { headers: { cookie: cookieA } })).status).toBe(401);

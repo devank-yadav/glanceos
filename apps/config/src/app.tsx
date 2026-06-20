@@ -7,6 +7,7 @@ import { ShellCtx } from "./components/PageHeader";
 import { Sidebar } from "./components/Sidebar";
 import { Icon } from "./editor/icons";
 import { useTheme } from "./hooks/useTheme";
+import { AccountPage } from "./pages/account";
 import { FleetPage } from "./pages/fleet";
 import { HubPage } from "./pages/hub";
 import { IntegrationsPage } from "./pages/integrations";
@@ -85,6 +86,7 @@ export function App() {
     { id: "nav-playlists", label: "Go to Playlists", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
     { id: "nav-hub", label: "Go to Hub", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
     { id: "nav-integrations", label: "Go to Integrations", hint: "Page", icon: <Icon.link />, run: () => navigate("/integrations") },
+    { id: "nav-account", label: "Go to Account", hint: "Page", icon: <Icon.settings />, run: () => navigate("/account") },
     { id: "new-setup", label: "New setup", hint: "Action", icon: <Icon.plus />, run: async () => {
         try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); } catch { navigate("/setups"); }
       } },
@@ -129,6 +131,7 @@ export function App() {
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
           {page.name === "integrations" && <IntegrationsPage />}
+          {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       </div>

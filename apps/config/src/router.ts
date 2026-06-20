@@ -11,6 +11,7 @@ export type Route =
   | { name: "playlists" }
   | { name: "hub" }
   | { name: "integrations" }
+  | { name: "account" }
   | { name: "edit"; layoutId: number };
 
 export function parseRoute(hash: string): Route {
@@ -22,6 +23,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };
   if (path === "/integrations") return { name: "integrations" };
+  if (path === "/account") return { name: "account" };
   const edit = /^\/edit\/(\d+)$/.exec(path);
   if (edit) return { name: "edit", layoutId: Number(edit[1]) };
   return { name: "screens" };

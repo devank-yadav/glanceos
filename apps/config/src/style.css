@@ -2759,3 +2759,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .dither-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; width: 100%; }
 .dither-controls .field { gap: 3px; }
 .dither-controls input[type="range"] { width: 100%; accent-color: var(--fg); }
+
+/* ---------- account page ---------- */
+.account-page { max-width: 560px; }
+.account-section { padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.account-section h2 { margin: 0 0 4px; font-size: 15px; }
+.account-section .row { margin-top: 2px; }
+.danger-zone { border-color: color-mix(in srgb, var(--bad) 35%, var(--rule)); }
+.danger-zone h2 { color: var(--bad); }
+.ghost.danger { color: var(--bad); }
