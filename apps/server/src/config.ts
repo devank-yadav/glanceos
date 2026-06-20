@@ -30,6 +30,12 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): ConfigIssues 
   num("GLANCEOS_OFFLINE_MINUTES", { min: 0 });
   url("GLANCEOS_PUBLIC_URL");
 
+  if (env.GLANCEOS_REDIS_URL) {
+    try { const u = new URL(env.GLANCEOS_REDIS_URL); if (u.protocol !== "redis:" && u.protocol !== "rediss:") throw new Error("scheme"); }
+    catch { errors.push(`GLANCEOS_REDIS_URL=${env.GLANCEOS_REDIS_URL} must be a redis(s):// URL`); }
+    warnings.push("GLANCEOS_REDIS_URL is set — multi-process scale mode (needs `ioredis` installed; load-test before relying on it)");
+  }
+
   if (env.GLANCEOS_SECRET_KEY && env.GLANCEOS_SECRET_KEY.length < 16) warnings.push("GLANCEOS_SECRET_KEY is short (<16 chars) — use a long random value");
   if (env.GLANCEOS_SECRET_KEY_PREVIOUS && !env.GLANCEOS_SECRET_KEY) warnings.push("GLANCEOS_SECRET_KEY_PREVIOUS is set without GLANCEOS_SECRET_KEY — rotation has no new key");
   if (env.GLANCEOS_RATE_LIMIT === "off") warnings.push("GLANCEOS_RATE_LIMIT=off — rate limiting is disabled");

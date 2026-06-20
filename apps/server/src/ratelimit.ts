@@ -7,6 +7,16 @@ import type { Context, Next } from "hono";
 const OFF = process.env.GLANCEOS_RATE_LIMIT === "off";
 const windows = new Map<string, { count: number; resetAt: number }>();
 
+// A shared-window backend (e.g. Redis) so replicas count against the same window.
+// Default null = the in-memory windows above (single process). Set by initRedis.
+export interface RateBackend {
+  check(key: string, limit: number, windowMs: number): Promise<{ ok: boolean; retryAfter: number }>;
+}
+let rateBackend: RateBackend | null = null;
+export function setRateBackend(b: RateBackend | null): void {
+  rateBackend = b;
+}
+
 export function rateCheck(key: string, limit: number, windowMs: number, now = Date.now()): { ok: boolean; retryAfter: number } {
   if (OFF) return { ok: true, retryAfter: 0 };
   let w = windows.get(key);
@@ -37,10 +47,13 @@ const clientIp = (c: Context): string => {
   return peer;
 };
 
-/** Hono middleware: cap requests per window, keyed by IP (default) or a custom key. */
+/** Hono middleware: cap requests per window, keyed by IP (default) or a custom key.
+ *  Uses the shared backend when one is configured, else the in-memory windows. */
 export function limiter(bucket: string, max: number, windowMs: number, keyFn?: (c: Context) => string) {
   return async (c: Context, next: Next) => {
-    const r = rateCheck(`${bucket}:${keyFn ? keyFn(c) : clientIp(c)}`, max, windowMs);
+    if (OFF) return next();
+    const key = `${bucket}:${keyFn ? keyFn(c) : clientIp(c)}`;
+    const r = rateBackend ? await rateBackend.check(key, max, windowMs) : rateCheck(key, max, windowMs);
     if (!r.ok) return c.json({ error: "rate limited — slow down" }, 429, { "retry-after": String(r.retryAfter) });
     return next();
   };

@@ -21,6 +21,14 @@ if (undecryptable > 0) {
   console.warn(`[secrets] ${undecryptable} stored secret(s) can't be decrypted — set GLANCEOS_SECRET_KEY_PREVIOUS to the old key and run \`pnpm --filter @glanceos/server rotate-secrets\`. Affected connections will show "needs auth" until then.`);
 }
 
+// Optional multi-process scale: fan SSE + rate-limit windows out over Redis.
+// Off by default (single process, zero deps). Boot fails loudly if it can't init.
+if (process.env.GLANCEOS_REDIS_URL) {
+  const { initRedis } = await import("./redis");
+  await initRedis(process.env.GLANCEOS_REDIS_URL);
+  console.log("[glanceos] Redis scale backend active (SSE fan-out + shared rate limits)");
+}
+
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: buildApp().fetch, port }, (info) => {
   console.log(`[glanceos] server on http://localhost:${info.port}`);
