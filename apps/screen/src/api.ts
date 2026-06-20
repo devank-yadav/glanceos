@@ -29,12 +29,19 @@ export async function ensureIdentity(): Promise<Identity> {
     localStorage.removeItem(ID_KEY);
   }
 
-  const profile = {
+  // A native shell (Fire TV / Tizen / webOS / tvOS / Pi kiosk) loads the runtime
+  // with ?platform=<id>[&native=<ver>] so the fleet can show what's running it.
+  const params = new URLSearchParams(location.search);
+  const profile: Record<string, unknown> = {
     width: window.innerWidth,
     height: window.innerHeight,
     colorDepth: "color",
     refresh: { mode: "sse" },
   };
+  const platform = params.get("platform");
+  if (platform) profile.platform = platform;
+  const nativeVersion = params.get("native");
+  if (nativeVersion) profile.nativeVersion = nativeVersion;
   const res = await fetch("/api/devices/register", {
     method: "POST",
     headers: { "content-type": "application/json" },

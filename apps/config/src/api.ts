@@ -34,6 +34,8 @@ export interface DeviceSummary {
     burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
     wake?: { startMin: number; endMin: number; daysMask: number };
   };
+  platform: string | null;
+  nativeVersion: string | null;
   groupId: number | null;
   groupName: string | null;
   createdAt: number;

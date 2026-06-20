@@ -502,3 +502,23 @@ describe("signage: fleet commands + proof-of-play", () => {
     expect((await ok.json()).delivered).toBe(0); // no live SSE connection in the test
   });
 });
+
+describe("native platform identity", () => {
+  it("a device self-reports its platform; it surfaces on the summary, sanitized", async () => {
+    const cookie = cookieOf(await app.request("/api/auth/register", { method: "POST", ...json({ name: "Pat", email: "pat-native@example.com", password: "calm-glass-grp" }) }));
+    const dev = await (await app.request("/api/devices/register", { method: "POST", ...json({ profile: { width: 1920, height: 1080, platform: "fire tv!!", nativeVersion: "1.0.0" } }) })).json();
+    await app.request("/api/devices/claim", { method: "POST", ...authed(cookie, { code: dev.claimCode, name: "Lobby FireTV" }) });
+    const list = await (await app.request("/api/devices", { headers: { cookie } })).json() as { id: string; platform: string | null; nativeVersion: string | null }[];
+    const d = list.find((x) => x.id === dev.deviceId)!;
+    expect(d.platform).toBe("firetv"); // space + "!" stripped by the sanitizer
+    expect(d.nativeVersion).toBe("1.0.0"); // dots preserved
+  });
+
+  it("a device with no platform reports null (ungrouped, unchanged)", async () => {
+    const cookie = cookieOf(await app.request("/api/auth/register", { method: "POST", ...json({ name: "Nil", email: "nil-native@example.com", password: "calm-glass-grp" }) }));
+    const dev = await (await app.request("/api/devices/register", { method: "POST", ...json({ profile: { width: 800, height: 480 } }) })).json();
+    await app.request("/api/devices/claim", { method: "POST", ...authed(cookie, { code: dev.claimCode, name: "Plain panel" }) });
+    const list = await (await app.request("/api/devices", { headers: { cookie } })).json() as { id: string; platform: string | null }[];
+    expect(list.find((x) => x.id === dev.deviceId)!.platform).toBeNull();
+  });
+});

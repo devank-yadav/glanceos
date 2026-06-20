@@ -157,6 +157,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
 
       <div class="chip-row">
         <StatChip icon={<Icon.monitor />} title="Resolution">{device.resolution}</StatChip>
+        {device.platform && <StatChip title="Running on">{platformLabel(device.platform)}{device.nativeVersion ? ` ${device.nativeVersion}` : ""}</StatChip>}
         <StatChip icon={<Icon.convert />} title="Refresh interval">{fmtDuration(device.refreshSeconds)}</StatChip>
         {device.battery !== null && <StatChip title="Battery">{device.battery}%</StatChip>}
         {device.rssi !== null && <StatChip title="Wi-Fi signal">{device.rssi} dBm</StatChip>}
@@ -289,6 +290,14 @@ function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: stri
       </div>
     </div>
   );
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  firetv: "Fire TV", androidtv: "Android TV", tizen: "Samsung Tizen",
+  webos: "LG webOS", tvos: "Apple TV", pi: "Raspberry Pi", kiosk: "Kiosk",
+};
+function platformLabel(id: string): string {
+  return PLATFORM_LABELS[id.toLowerCase()] ?? id;
 }
 
 function fmtDuration(s: number): string {

@@ -107,6 +107,8 @@ function deviceSummary(d: DeviceRow) {
     timezone: d.timezone,
     renderOpts: safeJsonObj(d.render_opts),
     tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake },
+    platform: profile.platform ?? null,
+    nativeVersion: profile.nativeVersion ?? null,
     groupId: d.group_id,
     groupName: d.group_id ? getGroupRow(d.group_id)?.name ?? null : null,
     createdAt: d.created_at,

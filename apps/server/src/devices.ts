@@ -33,7 +33,14 @@ export interface DeviceProfile {
   safeArea?: { top: number; right: number; bottom: number; left: number };
   burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
   wake?: { startMin: number; endMin: number; daysMask: number };
+  platform?: string;
+  nativeVersion?: string;
 }
+
+// A native shell self-reports what it is; keep it short + plain so it can't be
+// used to smuggle markup into the fleet dashboard.
+const shortLabel = (v: unknown, max: number): string | undefined =>
+  typeof v === "string" && v.trim() ? v.trim().replace(/[^\w.+-]/g, "").slice(0, max) || undefined : undefined;
 
 const clamp = (n: unknown, lo: number, hi: number, dflt = 0): number =>
   typeof n === "number" && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
@@ -64,6 +71,10 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
     const w = p.wake as Record<string, unknown>;
     out.wake = { startMin: clamp(w.startMin, 0, 1439), endMin: clamp(w.endMin, 0, 1439), daysMask: clamp(w.daysMask, 0, 127, 127) };
   }
+  const platform = shortLabel(p.platform, 24);
+  if (platform) out.platform = platform;
+  const nativeVersion = shortLabel(p.nativeVersion, 24);
+  if (nativeVersion) out.nativeVersion = nativeVersion;
   return out;
 }
 

@@ -179,6 +179,15 @@ describe("TV / large-display profile (v1.7, optional → back-compatible)", () =
     const p = DeviceProfile.parse({ width: 800, height: 480 });
     expect(p.tvMode).toBeUndefined();
     expect(p.safeArea).toBeUndefined();
+    expect(p.platform).toBeUndefined();
+  });
+
+  it("carries an optional native platform / version (v2.0, no migration)", async () => {
+    const { DeviceProfile } = await import("./device");
+    const p = DeviceProfile.parse({ width: 1920, height: 1080, platform: "firetv", nativeVersion: "1.0.0" });
+    expect(p.platform).toBe("firetv");
+    expect(p.nativeVersion).toBe("1.0.0");
+    expect(() => DeviceProfile.parse({ platform: "x".repeat(25) })).toThrow(); // 24-char cap
   });
 
   it("parses ScreenState with an optional tv block", async () => {

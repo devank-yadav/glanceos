@@ -37,6 +37,10 @@ export const DeviceProfile = z.object({
   inputMethod: z.enum(["pointer", "dpad", "touch"]).optional(),
   burnIn: BurnIn.optional(),
   wake: WakeWindow.optional(),
+  // What's running the screen — a native shell self-reports these so the fleet
+  // can show "Fire TV" / "Pi" etc. Free-form short strings (optional, no migration).
+  platform: z.string().max(24).optional(),       // e.g. firetv, androidtv, tizen, webos, tvos, pi
+  nativeVersion: z.string().max(24).optional(),  // the shell's own version string
 });
 
 // Server-computed TV settings the screen applies at render time.
