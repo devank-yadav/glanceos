@@ -1,42 +1,232 @@
 import type { JSX } from "preact";
 import type { WidgetType } from "./blocks";
 
-// A bespoke monochrome icon per block type — the palette, slash menu and the
-// landing block-wall render these instead of emoji/typographic glyphs. Same
-// dependency-free, Feather-style contract as icons.tsx: viewBox 0 0 24 24,
-// stroke=currentColor, stroke-width 1.7, round caps — so the whole set is
-// visually coherent. Lives in its own module (the editor + landing import it),
-// kept out of icons.tsx so the eager chrome set stays small.
+// Bespoke monochrome icon per block type — rendered (instead of emoji/typographic
+// glyphs) in the palette, slash menu, and landing block-wall. Each value is the
+// INNER SVG markup on a 0 0 24 24 viewBox, drawn with stroke=currentColor width
+// 1.7, round caps — coherent with the chrome icons in icons.tsx. Authored in one
+// pass (see ADR 054); strings keep the 199-entry set easy to audit in one place.
 
-type P = { class?: string };
-type IconComp = (p: P) => JSX.Element;
+const FALLBACK = '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/>';
 
-const svg = (children: JSX.Element | JSX.Element[]): IconComp =>
-  ({ class: c }: P) => (
-    <svg class={c} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      {children}
-    </svg>
-  );
-
-// Generic "block" mark — any type without a bespoke icon yet falls back to this,
-// so the UI never breaks while the full set is filled in.
-const FALLBACK = svg([<rect x="4" y="5" width="16" height="14" rx="2" />, <path d="M8 10h8M8 14h5" />]);
-
-// House-style exemplars spanning the visual vocabulary (lines, shapes, charts,
-// faces). The remaining block types are authored to match this style.
-export const BLOCK_ICONS: Partial<Record<WidgetType, IconComp>> = {
-  text: svg([<path d="M5 7h14" />, <path d="M5 12h14" />, <path d="M5 17h9" />]),
-  heading: svg([<path d="M6 6v12" />, <path d="M18 6v12" />, <path d="M6 12h12" />]),
-  bulletList: svg([<circle cx="5" cy="7" r="1.1" fill="currentColor" stroke="none" />, <circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none" />, <circle cx="5" cy="17" r="1.1" fill="currentColor" stroke="none" />, <path d="M9 7h11M9 12h11M9 17h7" />]),
-  divider: svg(<path d="M4 12h16" />),
-  table: svg([<rect x="3" y="5" width="18" height="14" rx="1.5" />, <path d="M3 10h18M3 14.5h18M9 5v14M15 5v14" />]),
-  clock: svg([<circle cx="12" cy="12" r="8" />, <path d="M12 8v4l3 2" />]),
-  image: svg([<rect x="3" y="5" width="18" height="14" rx="2" />, <circle cx="8.5" cy="10" r="1.6" />, <path d="m4 17 5-4 4 3 3-2 5 4" />]),
-  barChart: svg([<path d="M5 5v14h14" />, <rect x="8" y="12" width="2.6" height="5" fill="currentColor" stroke="none" />, <rect x="12.5" y="9" width="2.6" height="8" fill="currentColor" stroke="none" />, <rect x="17" y="14" width="2.6" height="3" fill="currentColor" stroke="none" />]),
+export const BLOCK_ICON_PATHS: Partial<Record<WidgetType, string>> = {
+  "text": "<path d=\"M5 6h14M5 10h14M5 14h10M5 18h14\"/>",
+  "heading": "<path d=\"M5 7v10M5 7h14M5 12h14M19 7v10\"/>",
+  "subheading": "<path d=\"M6 7v8M6 7h12M6 11h10M17 7v8\"/>",
+  "label": "<rect x=\"5\" y=\"8\" width=\"14\" height=\"8\" rx=\"2\"/><path d=\"M9 11h6M9 13h6\"/>",
+  "quote": "<path d=\"M7 7c-1 0-2 1-2 2v6c0 1 1 2 2 2h2m4-10c-1 0-2 1-2 2v6c0 1 1 2 2 2h2\"/>",
+  "callout": "<rect x=\"5\" y=\"6\" width=\"14\" height=\"12\" rx=\"1\"/><circle cx=\"12\" cy=\"12\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/>",
+  "banner": "<rect x=\"4\" y=\"7\" width=\"16\" height=\"10\" rx=\"1\"/><path d=\"M8 11h8M8 14h6\"/>",
+  "bulletList": "<circle cx=\"6\" cy=\"8\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M9 8h9M6 12c0 .5-.4 1-1 1s-1-.5-1-1 .4-1 1-1 1 .5 1 1M9 12h9M6 16c0 .5-.4 1-1 1s-1-.5-1-1 .4-1 1-1 1 .5 1 1M9 16h8\"/>",
+  "numberedList": "<path d=\"M6 8h1M7.5 8h10.5M6 12h1.5M8.5 12h9.5M6 16h2M8.5 16h9.5\"/>",
+  "checklist": "<rect x=\"5\" y=\"7\" width=\"2\" height=\"2\" rx=\"0.2\"/><path d=\"M8 8h10M5 12l1 1 2-2M8 12h10M5 16l1 1 2-2M8 16h9\"/>",
+  "code": "<path d=\"M8 6l-3 6 3 6M16 6l3 6-3 6M12 5l-2 14\"/>",
+  "keyValue": "<path d=\"M5 8h5M11 8h8M5 12h4M10 12h9M5 16h3M9 16h10\"/>",
+  "table": "<rect x=\"5\" y=\"7\" width=\"14\" height=\"10\"/><path d=\"M5 10h14M10 7v10M15 7v10\"/>",
+  "definition": "<path d=\"M5 8h14M5 11h14M5 14h10M7 8v8M12 8v8\"/>",
+  "divider": "<path d=\"M5 12h14\"/>",
+  "spacer": "<circle cx=\"8\" cy=\"12\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"12\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/>",
+  "image": "<path d=\"M3 3h18v18H3z\"/><circle cx=\"8\" cy=\"8\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M3 15l5-5 7 7 5-5v6\"/>",
+  "icon": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 9v6M9 12h6\"/>",
+  "avatar": "<circle cx=\"12\" cy=\"7\" r=\"3.5\"/><path d=\"M6 16c0-2.2 2.7-4 6-4s6 1.8 6 4v3H6v-3z\"/>",
+  "badge": "<path d=\"M5 11c0-1.7 1.3-3 3-3h8c1.7 0 3 1.3 3 3v2c0 1.7-1.3 3-3 3H8c-1.7 0-3-1.3-3-3v-2z\"/>",
+  "nameTag": "<path d=\"M4 6h16v13H4z\"/><circle cx=\"12\" cy=\"8.5\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/><line x1=\"6\" y1=\"12\" x2=\"18\" y2=\"12\"/><line x1=\"6\" y1=\"15\" x2=\"18\" y2=\"15\"/>",
+  "link": "<path d=\"M9.5 13.5l1.4-1.4c.6-.6 1.6-.6 2.2 0l1.4 1.4\"/><path d=\"M5 10c-1.1-1.1-1.1-2.9 0-4l4-4c1.1-1.1 2.9-1.1 4 0l1 1\"/><path d=\"M19 14l-1 1c-1.1 1.1-2.9 1.1-4 0l-4-4\"/>",
+  "stat": "<path d=\"M5 18h14M7 8l2 4 2-2 2 3 2-4M4 6h16M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z\"/>",
+  "metric": "<path d=\"M7 9l2-2 2 2 3-4M5 18h14M4 6h16M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z\"/>",
+  "progress": "<rect x=\"4\" y=\"10\" width=\"16\" height=\"4\" rx=\"2\"/><rect x=\"5\" y=\"10.5\" width=\"8\" height=\"3\" rx=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "gauge": "<path d=\"M12 5v6l3 2M12 18a6 6 0 0 1-5.2-9M12 18a6 6 0 0 0 5.2-9M7 9a5 5 0 0 1 10 0\"/>",
+  "rating": "<path d=\"M12 5l2 5h5l-4 3 2 5-5-3-5 3 2-5-4-3h5l2-5Z\"/>",
+  "clock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"12\"/><line x1=\"12\" y1=\"12\" x2=\"15\" y2=\"12\"/>",
+  "worldClock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"18\"/><line x1=\"6\" y1=\"12\" x2=\"18\" y2=\"12\"/>",
+  "analogClock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"/><line x1=\"12\" y1=\"12\" x2=\"15\" y2=\"15\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "countdown": "<path d=\"M7 5h10v2H7zM8 8h8v7c0 2.2-1.8 4-4 4s-4-1.8-4-4V8z\"/><line x1=\"12\" y1=\"10\" x2=\"12\" y2=\"15\"/>",
+  "daysUntil": "<path d=\"M5 7h14v11c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V7z\"/><line x1=\"5\" y1=\"9\" x2=\"19\" y2=\"9\"/><line x1=\"8\" y1=\"5\" x2=\"8\" y2=\"7\"/><line x1=\"16\" y1=\"5\" x2=\"16\" y2=\"7\"/>",
+  "timer": "<circle cx=\"12\" cy=\"13\" r=\"8\"/><path d=\"M9 6h6M8 4h8\"/><line x1=\"12\" y1=\"10\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"13\" x2=\"14.5\" y2=\"15.5\"/>",
+  "dateBadge": "<rect x=\"5\" y=\"6\" width=\"14\" height=\"14\" rx=\"2\"/><line x1=\"5\" y1=\"10\" x2=\"19\" y2=\"10\"/><circle cx=\"12\" cy=\"14\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "weekNumber": "<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"1\"/><line x1=\"5\" y1=\"8\" x2=\"19\" y2=\"8\"/><line x1=\"8\" y1=\"11\" x2=\"16\" y2=\"11\"/><line x1=\"8\" y1=\"14\" x2=\"16\" y2=\"14\"/>",
+  "weather": "<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"M5 15c-1 1-1.5 2-1.5 3 0 2.5 1.5 4.5 4 4.5h9c3 0 5-2 5-4.5 0-1.5-.8-2.8-2-3.5\"/>",
+  "moonPhase": "<circle cx=\"12\" cy=\"12\" r=\"7.5\"/><path d=\"M12 4.5v15M12 4.5a7.5 7.5 0 0 1 0 15\" fill=\"currentColor\" stroke=\"none\"/>",
+  "sunriseSunset": "<circle cx=\"12\" cy=\"6\" r=\"2.5\"/><path d=\"M12 8.5v5M5 17h14\"/><path d=\"M7 14.5l-2 2.5M19 14.5l2 2.5\"/><path d=\"M4.5 14.5c0-3.5 2.5-6 7.5-6s7.5 2.5 7.5 6\"/>",
+  "calendar": "<path d=\"M5 6h14M5 9h14M8 3v3M16 3v3M5 6c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V6z\"/><path d=\"M5 12h14\"/>",
+  "tasks": "<path d=\"M5 8h14M5 13h14M5 18h14M3 8l1.5 1.5L7 7M3 13l1.5 1.5L7 12M3 18l1.5 1.5L7 17\"/>",
+  "queue": "<path d=\"M5 6h14c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2zM5 14h14c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2z\"/><circle cx=\"19\" cy=\"9\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "hours": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 7v5l3 2\"/><path d=\"M6 4h12M6 20h12M4 12h2M18 12h2\"/>",
+  "menuList": "<path d=\"M5 8h10M5 12h10M5 16h10M17 8l2 3-2 3\"/><path d=\"M6 9v6\"/>",
+  "deviceStatus": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 8v8M8 12h8\"/>",
+  "sensor": "<path d=\"M9 3h6v4H9zM12 7v10M8 10h8M8 14h8M8 18h8\"/>",
+  "thermostat": "<circle cx=\"12\" cy=\"14\" r=\"6\"/><path d=\"M12 6v4M12 20v-2\"/><circle cx=\"12\" cy=\"14\" r=\"3\" fill=\"currentColor\" stroke=\"none\"/>",
+  "lead": "<path d=\"M5 7h14M5 10h14M5 13h12M5 16h10\"/>",
+  "pullquote": "<rect x=\"6\" y=\"7\" width=\"12\" height=\"10\" rx=\"1\"/><path d=\"M9 10h6M9 13h4\"/>",
+  "dropCap": "<rect x=\"5\" y=\"7\" width=\"3\" height=\"3\" rx=\"0.5\"/><path d=\"M9 7h10M5 11h14M5 14h14M5 17h12\"/>",
+  "finePrint": "<path d=\"M5 11h14M5 14h12\"/>",
+  "numberedHeading": "<path d=\"M5 8h2M8 8h11M5 12h14M5 16h10\"/>",
+  "verse": "<path d=\"M8 8h8M7 11h10M8 14h8M7 17h10\"/>",
+  "ascii": "<path d=\"M7 6l2 3-1 3-1-3 2-3M12 6l-3 6 3 6M12 6l3 6-3 6M14 10h2v6\"/>",
+  "tagCloud": "<rect x=\"5\" y=\"10\" width=\"3\" height=\"2\" rx=\"1\"/><rect x=\"9\" y=\"10\" width=\"4\" height=\"2\" rx=\"1\"/><rect x=\"14\" y=\"10\" width=\"5\" height=\"2\" rx=\"1\"/><rect x=\"6\" y=\"14\" width=\"3\" height=\"2\" rx=\"1\"/><rect x=\"10\" y=\"14\" width=\"4\" height=\"2\" rx=\"1\"/><rect x=\"15\" y=\"14\" width=\"4\" height=\"2\" rx=\"1\"/>",
+  "timeline": "<line x1=\"7\" y1=\"7\" x2=\"7\" y2=\"17\"/><circle cx=\"7\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"7\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"7\" cy=\"16\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M9 8h9M9 12h8M9 16h7\"/>",
+  "steps": "<circle cx=\"6\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M9 8h10M5.5 11.5l1 1 2-2M9 12h9M5.5 15.5l1 1 2-2M9 16h8\"/>",
+  "faq": "<path d=\"M6 8v1c0 1 .5 1.5 1.5 1.5M9 8h10M6 12h14M6 15v1c0 1 .5 1.5 1.5 1.5M9 16h10\"/>",
+  "prosCons": "<path d=\"M6 7h6M5.5 9l1 1 2-2M8 10h4M17 7h2M16 9l1 1 2-2M19 10h2M6 14h6M5.5 16l1 1 2-2M8 17h4\"/>",
+  "sparkline": "<path d=\"M 3 17 Q 6 14 9 15 Q 12 16 15 12 Q 18 8 21 10\"/>",
+  "barChart": "<rect x=\"4\" y=\"14\" width=\"2.5\" height=\"8\" fill=\"currentColor\"/><rect x=\"8.5\" y=\"10\" width=\"2.5\" height=\"12\" fill=\"currentColor\"/><rect x=\"13\" y=\"12\" width=\"2.5\" height=\"10\" fill=\"currentColor\"/><rect x=\"17.5\" y=\"9\" width=\"2.5\" height=\"13\" fill=\"currentColor\"/>",
+  "progressRing": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><path d=\"M 19 12 A 7 7 0 0 0 15 5.5\"/>",
+  "dotProgress": "<circle cx=\"5\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"11\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"14\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"17\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"20\" cy=\"12\" r=\"1.2\"/>",
+  "scoreboard": "<rect x=\"4\" y=\"8\" width=\"7\" height=\"8\"/><rect x=\"13\" y=\"8\" width=\"7\" height=\"8\"/><line x1=\"13\" y1=\"8\" x2=\"13\" y2=\"16\"/><text x=\"7.5\" y=\"13\" font-size=\"4\" text-anchor=\"middle\" fill=\"currentColor\">2</text><text x=\"16.5\" y=\"13\" font-size=\"4\" text-anchor=\"middle\" fill=\"currentColor\">1</text>",
+  "fraction": "<line x1=\"6\" y1=\"12\" x2=\"18\" y2=\"12\"/><text x=\"12\" y=\"9\" font-size=\"4\" text-anchor=\"middle\" fill=\"currentColor\">3</text><text x=\"12\" y=\"15\" font-size=\"4\" text-anchor=\"middle\" fill=\"currentColor\">10</text>",
+  "tally": "<line x1=\"5\" y1=\"7\" x2=\"5\" y2=\"17\"/><line x1=\"8\" y1=\"7\" x2=\"8\" y2=\"17\"/><line x1=\"11\" y1=\"7\" x2=\"11\" y2=\"17\"/><line x1=\"14\" y1=\"7\" x2=\"14\" y2=\"17\"/><line x1=\"5.5\" y1=\"12\" x2=\"13.5\" y2=\"12\"/>",
+  "heatStrip": "<rect x=\"3\" y=\"10\" width=\"1.3\" height=\"4\" fill=\"currentColor\"/><rect x=\"5\" y=\"10\" width=\"1.3\" height=\"4\" fill=\"currentColor\"/><rect x=\"7\" y=\"9\" width=\"1.3\" height=\"6\" fill=\"currentColor\"/><rect x=\"9\" y=\"8\" width=\"1.3\" height=\"8\" fill=\"currentColor\"/><rect x=\"11\" y=\"9\" width=\"1.3\" height=\"6\" fill=\"currentColor\"/><rect x=\"13\" y=\"8\" width=\"1.3\" height=\"8\" fill=\"currentColor\"/><rect x=\"15\" y=\"10\" width=\"1.3\" height=\"4\" fill=\"currentColor\"/><rect x=\"17\" y=\"10\" width=\"1.3\" height=\"4\" fill=\"currentColor\"/><rect x=\"19\" y=\"11\" width=\"1.3\" height=\"2\" fill=\"currentColor\"/>",
+  "trend": "<text x=\"4\" y=\"12\" font-size=\"6\" fill=\"currentColor\">1.2K</text><polyline points=\"14,14 16,12 18,13 20,11\"/>",
+  "kpiSpark": "<text x=\"4\" y=\"9\" font-size=\"6\" fill=\"currentColor\">92</text><text x=\"16\" y=\"9\" font-size=\"4\" fill=\"currentColor\">%</text><polyline points=\"4,16 7,14 10,15 13,13 16,14 19,12\"/>",
+  "dayProgress": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 3 A 9 9 0 0 1 19.6 19.6\"/><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"3\"/>",
+  "yearProgress": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 3 A 9 9 0 0 1 12.2 20.9\"/><circle cx=\"12\" cy=\"12\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "weekProgress": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M21 12 A 9 9 0 0 1 15.5 19.3\"/><line x1=\"12\" y1=\"12\" x2=\"21\" y2=\"12\"/>",
+  "greeting": "<path d=\"M8 15c0 2.2 1.8 4 4 4s4-1.8 4-4M9 10c0 .6.4 1 1 1s1-.4 1-1-.4-1-1-1-1 .4-1 1M15 10c0 .6.4 1 1 1s1-.4 1-1-.4-1-1-1-1 .4-1 1\"/><path d=\"M11 5h2v3h-2z\"/>",
+  "romanClock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><text x=\"12\" y=\"15\" text-anchor=\"middle\" font-size=\"8\" fill=\"currentColor\">XII</text>",
+  "binaryClock": "<rect x=\"6\" y=\"6\" width=\"12\" height=\"12\" rx=\"1\"/><circle cx=\"8\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"8\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"8\" cy=\"16\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"16\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "seasonClock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 4 Q 18 12 12 20 Q 6 12 12 4\" fill=\"currentColor\" stroke=\"none\" opacity=\"0.6\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/>",
+  "zodiac": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 5 L15 9 L15 15 L12 18 L9 15 L9 9 Z\"/><circle cx=\"12\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "habitTracker": "<circle cx=\"6\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"18\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"6\" cy=\"6\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"6\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"18\" cy=\"6\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"6\" cy=\"18\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"18\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"18\" cy=\"18\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "streak": "<path d=\"M6 18V8l3.5-3.5 2 2 3-4 2.5 2.5 2-2V18\"/><circle cx=\"12\" cy=\"8\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "waterTracker": "<path d=\"M6 12c0-1.5 1-3 2-4s2-2 2-3.5c0 0 0 3.5 2 3.5s2 2 2 4\"/><path d=\"M12 12c0-1.5 1-3 2-4s2-2 2-3.5\"/><path d=\"M7 18h10\"/>",
+  "wifiCard": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M12 8c3.5 0 6.5 1.5 8 3.5\"/><path d=\"M12 12c2 0 4 0.5 5 1.5\"/><circle cx=\"12\" cy=\"16\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/>",
+  "forecast": "<circle cx=\"12\" cy=\"8\" r=\"5\"/><path d=\"M6 16h12M6 19h12M6 22h12\"/>",
+  "windCompass": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 4v4M16 12h-4M12 20v-4M8 12h4\"/><path d=\"M14 6l1 2-2-1M18 14l-2-1 1 2M10 18l-1-2 2 1M6 10l2 1-1-2\"/>",
+  "uvIndex": "<circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M6 14h12\"/><path d=\"M7 18l2-4h2l2 4\"/><path d=\"M15 18l2-4h2l2 4\"/>",
+  "airQuality": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"6\" fill=\"currentColor\" stroke=\"none\" opacity=\"0.7\"/><circle cx=\"12\" cy=\"12\" r=\"3\" fill=\"white\" stroke=\"none\"/>",
+  "precip": "<path d=\"M7 6c0-2 2-3 3-3s3 1 3 3\"/><path d=\"M7 9c0-2 2-3 3-3s3 1 3 3\"/><path d=\"M5 12l1.5 4h1l-1.5-4M8 12l1.5 4h1l-1.5-4M11 12l1.5 4h1l-1.5-4M14 12l1.5 4h1l-1.5-4\"/>",
+  "headlines": "<line x1=\"4\" y1=\"4\" x2=\"20\" y2=\"4\"/><line x1=\"4\" y1=\"8\" x2=\"20\" y2=\"8\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"4\" y1=\"16\" x2=\"20\" y2=\"16\"/><line x1=\"4\" y1=\"20\" x2=\"20\" y2=\"20\"/>",
+  "currencyRate": "<circle cx=\"8\" cy=\"8\" r=\"4\"/><path d=\"M8 6v4M6 8h4\"/><circle cx=\"16\" cy=\"16\" r=\"4\"/><path d=\"M16 14v4M14 16h4\"/><path d=\"M12 12l3-3\"/>",
+  "cryptoPrice": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 6v12\"/><path d=\"M9 9h6a2 2 0 0 1 0 2h-6M9 13h6a2 2 0 0 1 0 2h-6\"/>",
+  "onThisDay": "<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"1\"/><line x1=\"4\" y1=\"8\" x2=\"20\" y2=\"8\"/><circle cx=\"8\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><line x1=\"6\" y1=\"11\" x2=\"18\" y2=\"11\"/><line x1=\"6\" y1=\"14\" x2=\"18\" y2=\"14\"/><line x1=\"6\" y1=\"17\" x2=\"18\" y2=\"17\"/>",
+  "wikiToday": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M9 10h6M10 13h4M11 16h2\"/>",
+  "quoteLive": "<path d=\"M5 5l2 2-2 2M5 13l2 2-2 2M17 5l2 2-2 2M17 13l2 2-2 2\"/><path d=\"M9 8h6M9 16h6\"/>",
+  "factLive": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 8v4M10 12h4\"/><path d=\"M9 16h6\"/>",
+  "hackerNews": "<path d=\"M4 6h16v4H4zM4 11h16v2H4zM4 14h16v2H4zM4 17h16v2H4z\"/><path d=\"M6 7v2M6 12v0M6 15v0M6 18v0\"/>",
+  "githubStats": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M10 9l2 3 2-3M10 15l2-3 2 3\"/><path d=\"M8 12h8\"/>",
+  "nextHoliday": "<path d=\"M5 4h14v16H5z\"/><line x1=\"5\" y1=\"8\" x2=\"19\" y2=\"8\"/><circle cx=\"8\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"6\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "issNow": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/><circle cx=\"12\" cy=\"12\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "jsonFeed": "<path d=\"M5 5h4v4H5zM10 5h4v4h-4zM15 5h4v4h-4zM5 10h4v4H5zM10 10h4v4h-4zM15 10h4v4h-4zM5 15h4v4H5zM10 15h4v4h-4zM15 15h4v4h-4z\"/>",
+  "signature": "<path d=\"M5 8l2 3 3-5 2 3 1-2M5 14h14\"/>",
+  "address": "<path d=\"M5 8h14M5 11h14M5 14h14M5 17h12\"/>",
+  "byline": "<path d=\"M5 8h12M5 11h14\"/>",
+  "legend": "<circle cx=\"6\" cy=\"9\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M9 9h9M6 12.5a1.5 1.5 0 1 1 0 0M9 12.5h9M6 16a1 1 0 0 0 0 1 1 1 0 0 1 0-1M9 16h9\"/>",
+  "breadcrumb": "<path d=\"M5 12h3l2 2-2 2h-3M9 12h3l2 2-2 2h-3M13 12h6\"/>",
+  "noticeBar": "<path d=\"M5 8v8h14V8H5M12 10l1.5 2L15 11M12 14h3\"/>",
+  "keyCombo": "<rect x=\"6\" y=\"10\" width=\"2.5\" height=\"2\" rx=\"0.3\"/><rect x=\"9\" y=\"10\" width=\"2.5\" height=\"2\" rx=\"0.3\"/><rect x=\"12\" y=\"10\" width=\"2.5\" height=\"2\" rx=\"0.3\"/><rect x=\"15\" y=\"10\" width=\"2.5\" height=\"2\" rx=\"0.3\"/>",
+  "dividerLabeled": "<path d=\"M5 12h3.5M8.5 12h5M13.5 12h5.5M10 10l-1 2 1 2\"/>",
+  "iconRow": "<circle cx=\"5\" cy=\"12\" r=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><circle cx=\"19\" cy=\"12\" r=\"2\"/><path d=\"M6 10.5v3M13 10.5v3M20 10.5v3\"/>",
+  "statRow": "<rect x=\"3\" y=\"8\" width=\"3\" height=\"8\" rx=\"0.5\"/><rect x=\"10\" y=\"6\" width=\"3\" height=\"10\" rx=\"0.5\"/><rect x=\"17\" y=\"7\" width=\"3\" height=\"9\" rx=\"0.5\"/><line x1=\"2\" y1=\"17\" x2=\"22\" y2=\"17\"/>",
+  "spacerDots": "<circle cx=\"8\" cy=\"12\" r=\"0.6\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"0.6\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"16\" cy=\"12\" r=\"0.6\" fill=\"currentColor\" stroke=\"none\"/>",
+  "frame": "<rect x=\"5\" y=\"7\" width=\"14\" height=\"10\" rx=\"1\"/><path d=\"M5 9h14M8 7v10\"/>",
+  "lineChart": "<polyline points=\"3,16 7,12 11,14 15,9 19,11 21,6\"/><line x1=\"3\" y1=\"20\" x2=\"21\" y2=\"20\"/><line x1=\"3\" y1=\"6\" x2=\"3\" y2=\"20\"/>",
+  "areaChart": "<path d=\"M 3 16 L 7 12 L 11 14 L 15 9 L 19 11 L 21 6 L 21 20 L 3 20 Z\" fill=\"currentColor\" opacity=\"0.15\"/><line x1=\"3\" y1=\"20\" x2=\"21\" y2=\"20\"/><line x1=\"3\" y1=\"6\" x2=\"3\" y2=\"20\"/>",
+  "bulletGraph": "<rect x=\"4\" y=\"11\" width=\"14\" height=\"2\" fill=\"currentColor\"/><rect x=\"4\" y=\"10\" width=\"10\" height=\"4\"/><circle cx=\"16\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/>",
+  "horizontalBars": "<line x1=\"4\" y1=\"6\" x2=\"19\" y2=\"6\"/><line x1=\"4\" y1=\"10\" x2=\"15\" y2=\"10\"/><line x1=\"4\" y1=\"14\" x2=\"17\" y2=\"14\"/><line x1=\"4\" y1=\"18\" x2=\"13\" y2=\"18\"/>",
+  "rankingList": "<text x=\"5\" y=\"7.5\" font-size=\"4\" font-weight=\"bold\" fill=\"currentColor\">1</text><line x1=\"9\" y1=\"5\" x2=\"19\" y2=\"5\"/><text x=\"5\" y=\"12\" font-size=\"4\" font-weight=\"bold\" fill=\"currentColor\">2</text><line x1=\"9\" y1=\"10\" x2=\"17\" y2=\"10\"/><text x=\"5\" y=\"17\" font-size=\"4\" font-weight=\"bold\" fill=\"currentColor\">3</text><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"/>",
+  "waffle": "<rect x=\"4\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"6.5\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"9\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"11.5\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"14\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"16.5\" y=\"5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"4\" y=\"7.5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"6.5\" y=\"7.5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"9\" y=\"7.5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"11.5\" y=\"7.5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"14\" y=\"7.5\" width=\"1.5\" height=\"1.5\" fill=\"currentColor\"/><rect x=\"16.5\" y=\"7.5\" width=\"1.5\" height=\"1.5\"/><rect x=\"4\" y=\"10\" width=\"1.5\" height=\"1.5\"/><rect x=\"6.5\" y=\"10\" width=\"1.5\" height=\"1.5\"/>",
+  "signalBars": "<rect x=\"4\" y=\"14\" width=\"2\" height=\"6\" fill=\"currentColor\"/><rect x=\"7.5\" y=\"11\" width=\"2\" height=\"9\" fill=\"currentColor\"/><rect x=\"11\" y=\"8\" width=\"2\" height=\"12\" fill=\"currentColor\"/><rect x=\"14.5\" y=\"5\" width=\"2\" height=\"15\" fill=\"currentColor\"/>",
+  "thermometer": "<rect x=\"10.5\" y=\"4\" width=\"3\" height=\"11\"/><circle cx=\"12\" cy=\"17\" r=\"2.5\"/><rect x=\"11\" y=\"8\" width=\"2\" height=\"5\" fill=\"currentColor\"/>",
+  "comparison": "<line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><rect x=\"4\" y=\"10\" width=\"9\" height=\"4\" fill=\"currentColor\"/><rect x=\"13\" y=\"10\" width=\"7\" height=\"4\" fill=\"currentColor\" opacity=\"0.4\"/>",
+  "percentList": "<line x1=\"4\" y1=\"6\" x2=\"20\" y2=\"6\"/><rect x=\"4\" y=\"4.5\" width=\"6.4\" height=\"3\" fill=\"currentColor\"/><rect x=\"10.4\" y=\"4.5\" width=\"5.6\" height=\"3\" fill=\"currentColor\" opacity=\"0.6\"/><rect x=\"16\" y=\"4.5\" width=\"4\" height=\"3\" fill=\"currentColor\" opacity=\"0.3\"/><line x1=\"4\" y1=\"11\" x2=\"20\" y2=\"11\"/>",
+  "monthCalendar": "<rect x=\"4\" y=\"6\" width=\"16\" height=\"13\" rx=\"1\"/><line x1=\"4\" y1=\"9\" x2=\"20\" y2=\"9\"/><line x1=\"8\" y1=\"6\" x2=\"8\" y2=\"8\"/><line x1=\"16\" y1=\"6\" x2=\"16\" y2=\"8\"/><line x1=\"6\" y1=\"11\" x2=\"18\" y2=\"11\"/><line x1=\"6\" y1=\"14\" x2=\"18\" y2=\"14\"/><circle cx=\"15\" cy=\"16\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/>",
+  "weekStrip": "<rect x=\"5\" y=\"8\" width=\"14\" height=\"8\" rx=\"1\"/><line x1=\"7\" y1=\"8\" x2=\"7\" y2=\"16\"/><line x1=\"9\" y1=\"8\" x2=\"9\" y2=\"16\"/><line x1=\"11\" y1=\"8\" x2=\"11\" y2=\"16\"/><line x1=\"13\" y1=\"8\" x2=\"13\" y2=\"16\"/><line x1=\"15\" y1=\"8\" x2=\"15\" y2=\"16\"/><line x1=\"17\" y1=\"8\" x2=\"17\" y2=\"16\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "nowNext": "<line x1=\"5\" y1=\"6\" x2=\"19\" y2=\"6\"/><line x1=\"5\" y1=\"10\" x2=\"19\" y2=\"10\"/><line x1=\"5\" y1=\"14\" x2=\"19\" y2=\"14\"/><line x1=\"5\" y1=\"18\" x2=\"19\" y2=\"18\"/><path d=\"M8 8 L7 6 L8 4\"/><path d=\"M8 12 L7 10 L8 8\"/>",
+  "ageCounter": "<path d=\"M12 5c3.9 0 7 3.1 7 7s-3.1 7-7 7-7-3.1-7-7 3.1-7 7-7z\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"13\"/><line x1=\"15\" y1=\"12\" x2=\"12\" y2=\"12\"/><text x=\"12\" y=\"17\" text-anchor=\"middle\" font-size=\"5\" fill=\"currentColor\">+</text>",
+  "anniversary": "<path d=\"M12 5C7.6 5 4 8.6 4 13s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 13c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5z\"/><path d=\"M11 10h2v4h-2z\"/><path d=\"M14 13h-2\"/>",
+  "timeBlocks": "<rect x=\"5\" y=\"6\" width=\"4\" height=\"3\" rx=\"0.5\"/><rect x=\"5\" y=\"10\" width=\"4\" height=\"3\" rx=\"0.5\"/><rect x=\"5\" y=\"14\" width=\"4\" height=\"3\" rx=\"0.5\"/><line x1=\"10\" y1=\"7\" x2=\"18\" y2=\"7\"/><line x1=\"10\" y1=\"11\" x2=\"18\" y2=\"11\"/><line x1=\"10\" y1=\"15\" x2=\"18\" y2=\"15\"/>",
+  "shiftStatus": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"9\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"19\"/><line x1=\"5\" y1=\"12\" x2=\"9\" y2=\"12\"/><line x1=\"15\" y1=\"12\" x2=\"19\" y2=\"12\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "pomodoro": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 5 A 7 7 0 0 1 19 12\"/><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"8\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M5 18 L8 18 L8 20 L5 20 Z\"/>",
+  "monthHabit": "<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"1\"/><circle cx=\"7\" cy=\"7\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"7\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"17\" cy=\"7\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"7\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"17\" cy=\"12\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"7\" cy=\"17\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"17\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"17\" cy=\"17\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "savingsGoal": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><path d=\"M12 5v14\"/><path d=\"M12 8c2 0 3.5 1.5 3.5 3.5\"/><path d=\"M12 8c-2 0-3.5 1.5-3.5 3.5\"/><text x=\"12\" y=\"13\" text-anchor=\"middle\" font-size=\"6\" fill=\"currentColor\">$</text>",
+  "readingNow": "<path d=\"M5 3h14c1 0 1 1 1 1v16c0 1-1 1-1 1H5c-1 0-1-1-1-1V4c0-1 1-1 1-1z\"/><path d=\"M8 7h8\"/><path d=\"M8 10h8\"/><path d=\"M8 13h6\"/><path d=\"M8 16h8\"/>",
+  "weightTrend": "<path d=\"M4 16l3-5 2.5 3 2-4 2.5 1.5 3-2.5 2 3\"/><line x1=\"4\" y1=\"16\" x2=\"18\" y2=\"16\"/><path d=\"M12 6c-1.5 0-2.5 1-2.5 2.5S10.5 11 12 11s2.5-1 2.5-2.5S13.5 6 12 6z\"/>",
+  "moodWeek": "<circle cx=\"6\" cy=\"12\" r=\"3\"/><path d=\"M5 13c0.5 0.5 1 0.5 2 0.5s1.5-0.5 2-0.5\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M11 12.5c0.5 0 1 0.5 2 0.5s1.5-0.5 2-0.5\"/><circle cx=\"18\" cy=\"12\" r=\"3\"/><path d=\"M17 11c0.5-0.5 1-1 2-1s1.5 0.5 2 1\"/>",
+  "checklistProgress": "<rect x=\"4\" y=\"5\" width=\"3\" height=\"3\" rx=\"0.5\"/><path d=\"M5 6.5L6 7.5 7 6\"/><line x1=\"9\" y1=\"6.5\" x2=\"20\" y2=\"6.5\"/><rect x=\"4\" y=\"10\" width=\"3\" height=\"3\" rx=\"0.5\"/><path d=\"M5 11.5L6 12.5 7 11\"/><line x1=\"9\" y1=\"11.5\" x2=\"20\" y2=\"11.5\"/><rect x=\"4\" y=\"15\" width=\"3\" height=\"3\" rx=\"0.5\"/><line x1=\"9\" y1=\"16.5\" x2=\"20\" y2=\"16.5\"/>",
+  "roomStatus": "<path d=\"M5 6h14c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2z\"/><circle cx=\"12\" cy=\"13\" r=\"2.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M8 9v2M16 9v2\"/>",
+  "directory": "<path d=\"M5 7h14M5 11h14M5 15h14M5 19h10M7 7v12M17 7v8\"/><circle cx=\"19\" cy=\"8\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"19\" cy=\"12\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"19\" cy=\"16\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "eventBanner": "<path d=\"M5 7h14c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V9c0-1.1.9-2 2-2z\"/><path d=\"M5 11h14M7 9v2M17 9v2\"/>",
+  "openSign": "<path d=\"M5 7h14c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V9c0-1.1.9-2 2-2z\"/><circle cx=\"12\" cy=\"13\" r=\"3\"/>",
+  "nowPlaying": "<path d=\"M5 8h14M5 13h14M5 18h14M3 10v4l3-2-3-2z\"/><circle cx=\"12\" cy=\"6\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"15\" cy=\"6\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"18\" cy=\"6\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/>",
+  "splitFlap": "<path d=\"M5 7h14c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V9c0-1.1.9-2 2-2zM5 13h14c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2z\"/><path d=\"M12 7v10\"/>",
+  "epigraph": "<path d=\"M6 8h10M6 11h12M6 14h9M6 17l2-1\"/>",
+  "kicker": "<path d=\"M5 8h14M5 11h14M5 14h12\"/>",
+  "ticker": "<path d=\"M5 11h14M6 8h3M10 8h2M13 8h3M17 8h2\"/>",
+  "glossary": "<path d=\"M5 8h6M6 9h5M5 12h7M6 13h6M5 16h5M6 17h4\"/>",
+  "footnotes": "<path d=\"M5 8h14M5 11h14M5 14h14M6 6h1v2\"/>",
+  "highlight": "<rect x=\"5\" y=\"10\" width=\"14\" height=\"4\" rx=\"0.5\"/><path d=\"M8 12h8\"/>",
+  "letterhead": "<path d=\"M5 8h14M5 10h14M5 13h14\"/>",
+  "fieldRow": "<path d=\"M5 9h4M10 9h9M5 13h14\"/>",
+  "contents": "<path d=\"M5 8h9M6 10h8M6 12h8M6 14h7M6 16h8\"/>",
+  "aside": "<path d=\"M5 8v10M7 8h11M7 11h11M7 14h9\"/>",
+  "postscript": "<path d=\"M5 10h14M5 13h12\"/>",
+  "mantra": "<path d=\"M8 10h8M6 12h12M7 14h10\"/>",
+  "emojiStat": "<path d=\"M8 7c0-.6.4-1 1-1h6c.6 0 1 .4 1 1v6c0 .6-.4 1-1 1H9c-.6 0-1-.4-1-1V7z\"/><circle cx=\"10.5\" cy=\"9\" r=\"0.7\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"13.5\" cy=\"9\" r=\"0.7\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M10 11.5c.8.8 1.2.8 2 0\"/>",
+  "monogram": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M9 15h6M9 9h6\"/>",
+  "flag": "<path d=\"M5 6v13\"/><path d=\"M5 6h10c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H5\"/>",
+  "logoText": "<path d=\"M4 12h16\"/><path d=\"M7 9v6M12 9v6M17 9v6\"/><circle cx=\"7\" cy=\"9\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"12\" cy=\"9\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"17\" cy=\"9\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/>",
+  "profileCard": "<path d=\"M4 5h16v14H4z\"/><circle cx=\"12\" cy=\"8\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"4\" y1=\"14\" x2=\"20\" y2=\"14\" stroke-dasharray=\"2,2\"/>",
+  "peopleList": "<circle cx=\"6\" cy=\"6.5\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M4 9.5c0-.8.6-1.5 1.5-1.5h1c.9 0 1.5.7 1.5 1.5v1.5H4v-1.5z\"/><circle cx=\"12\" cy=\"6.5\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M10 9.5c0-.8.6-1.5 1.5-1.5h1c.9 0 1.5.7 1.5 1.5v1.5h-4v-1.5z\"/><circle cx=\"18\" cy=\"6.5\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M16 9.5c0-.8.6-1.5 1.5-1.5h1c.9 0 1.5.7 1.5 1.5v1.5h-4v-1.5z\"/><line x1=\"4\" y1=\"13\" x2=\"20\" y2=\"13\"/><line x1=\"4\" y1=\"16\" x2=\"20\" y2=\"16\"/><line x1=\"4\" y1=\"19\" x2=\"20\" y2=\"19\"/>",
+  "bigNumber": "<path d=\"M5 8h12M5 12h10M5 15h8M3 6h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z\"/>",
+  "percentBig": "<circle cx=\"8\" cy=\"8\" r=\"2\"/><line x1=\"16\" y1=\"16\" x2=\"8\" y2=\"8\"/><circle cx=\"16\" cy=\"16\" r=\"2\"/><path d=\"M6 16h12M4 8a8 8 0 0 1 13.8-5.2\"/>",
+  "deltaStat": "<path d=\"M12 6v9l3-3M5 18h14M4 6h16M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z\"/>",
+  "moneyStat": "<circle cx=\"12\" cy=\"10\" r=\"3.5\"/><line x1=\"9\" y1=\"10\" x2=\"15\" y2=\"10\"/><line x1=\"12\" y1=\"6.5\" x2=\"12\" y2=\"13.5\"/><path d=\"M5 18h14M4 6h16M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z\"/>",
+  "counterPair": "<rect x=\"4\" y=\"9\" width=\"4\" height=\"4\" rx=\"0.5\"/><text x=\"6\" y=\"13\" text-anchor=\"middle\" font-size=\"2\" fill=\"currentColor\">24</text><rect x=\"13\" y=\"9\" width=\"4\" height=\"4\" rx=\"0.5\"/><text x=\"15\" y=\"13\" text-anchor=\"middle\" font-size=\"2\" fill=\"currentColor\">18</text><line x1=\"3\" y1=\"17\" x2=\"21\" y2=\"17\"/>",
+  "targetMeter": "<circle cx=\"12\" cy=\"11\" r=\"5\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"19\"/><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"5\"/><line x1=\"7\" y1=\"11\" x2=\"5\" y2=\"11\"/><line x1=\"19\" y1=\"11\" x2=\"21\" y2=\"11\"/><circle cx=\"12\" cy=\"11\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "unitStat": "<path d=\"M6 10h6M6 14h5M5 18h14M4 6h16M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z\"/>",
+  "progressBars": "<rect x=\"4\" y=\"7\" width=\"14\" height=\"2.5\" rx=\"1\"/><rect x=\"5\" y=\"7.25\" width=\"11\" height=\"2\" rx=\"0.75\" fill=\"currentColor\" stroke=\"none\"/><rect x=\"4\" y=\"11\" width=\"10\" height=\"2.5\" rx=\"1\"/><rect x=\"5\" y=\"11.25\" width=\"7\" height=\"2\" rx=\"0.75\" fill=\"currentColor\" stroke=\"none\"/><rect x=\"4\" y=\"15\" width=\"8\" height=\"2.5\" rx=\"1\"/><rect x=\"5\" y=\"15.25\" width=\"5\" height=\"2\" rx=\"0.75\" fill=\"currentColor\" stroke=\"none\"/>",
+  "lollipopChart": "<circle cx=\"5\" cy=\"8\" r=\"1.2\" fill=\"currentColor\"/><line x1=\"5\" y1=\"9.2\" x2=\"5\" y2=\"17\"/><circle cx=\"10\" cy=\"6\" r=\"1.2\" fill=\"currentColor\"/><line x1=\"10\" y1=\"7.2\" x2=\"10\" y2=\"17\"/><circle cx=\"15\" cy=\"10\" r=\"1.2\" fill=\"currentColor\"/><line x1=\"15\" y1=\"11.2\" x2=\"15\" y2=\"17\"/><circle cx=\"20\" cy=\"7\" r=\"1.2\" fill=\"currentColor\"/><line x1=\"20\" y1=\"8.2\" x2=\"20\" y2=\"17\"/><line x1=\"4\" y1=\"17\" x2=\"21\" y2=\"17\"/>",
+  "winLossBar": "<line x1=\"5\" y1=\"12\" x2=\"6\" y2=\"12\"/><line x1=\"7\" y1=\"12\" x2=\"8\" y2=\"12\"/><line x1=\"9\" y1=\"12\" x2=\"10\" y2=\"12\" opacity=\"0.4\"/><line x1=\"11\" y1=\"12\" x2=\"12\" y2=\"12\"/><line x1=\"13\" y1=\"12\" x2=\"14\" y2=\"12\"/><line x1=\"15\" y1=\"12\" x2=\"16\" y2=\"12\" opacity=\"0.4\"/><line x1=\"17\" y1=\"12\" x2=\"18\" y2=\"12\"/><line x1=\"19\" y1=\"12\" x2=\"20\" y2=\"12\"/>",
+  "dotMatrix": "<circle cx=\"5\" cy=\"6\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"6\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"11\" cy=\"6\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"14\" cy=\"6\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"17\" cy=\"6\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"5\" cy=\"9\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"9\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"11\" cy=\"9\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"14\" cy=\"9\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"17\" cy=\"9\" r=\"0.9\"/><circle cx=\"5\" cy=\"12\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"12\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"11\" cy=\"12\" r=\"0.9\"/><circle cx=\"14\" cy=\"12\" r=\"0.9\"/><circle cx=\"17\" cy=\"12\" r=\"0.9\"/><circle cx=\"5\" cy=\"15\" r=\"0.9\"/><circle cx=\"8\" cy=\"15\" r=\"0.9\"/><circle cx=\"11\" cy=\"15\" r=\"0.9\"/><circle cx=\"14\" cy=\"15\" r=\"0.9\"/><circle cx=\"17\" cy=\"15\" r=\"0.9\"/>",
+  "rangeBar": "<line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><circle cx=\"6\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"18\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"13\" cy=\"12\" r=\"1.5\" fill=\"currentColor\"/>",
+  "bubbleScale": "<circle cx=\"6\" cy=\"12\" r=\"3.5\"/><circle cx=\"13\" cy=\"9\" r=\"2.5\"/><circle cx=\"16\" cy=\"14\" r=\"2\"/><circle cx=\"19\" cy=\"11\" r=\"1.2\"/>",
+  "starBar": "<path d=\"M 6 6 L 6.8 8 L 9 8 L 7.2 9.5 L 8 11.5 L 6 10 L 4 11.5 L 4.8 9.5 L 3 8 L 5.2 8 Z\" fill=\"currentColor\"/><path d=\"M 11 6 L 11.8 8 L 14 8 L 12.2 9.5 L 13 11.5 L 11 10 L 9 11.5 L 9.8 9.5 L 8 8 L 10.2 8 Z\" fill=\"currentColor\"/><path d=\"M 16 6 L 16.8 8 L 19 8 L 17.2 9.5 L 18 11.5 L 16 10 L 14 11.5 L 14.8 9.5 L 13 8 L 15.2 8 Z\" fill=\"currentColor\"/><path d=\"M 21 6 L 21.8 8 L 24 8 L 22.2 9.5 L 23 11.5 L 21 10 L 19 11.5 L 19.8 9.5 L 18 8 L 20.2 8 Z\"/>",
+  "columnLabels": "<rect x=\"4\" y=\"12\" width=\"3\" height=\"6\" fill=\"currentColor\"/><text x=\"5.5\" y=\"20\" font-size=\"3\" text-anchor=\"middle\" fill=\"currentColor\">Q1</text><rect x=\"9\" y=\"8\" width=\"3\" height=\"10\" fill=\"currentColor\"/><text x=\"10.5\" y=\"20\" font-size=\"3\" text-anchor=\"middle\" fill=\"currentColor\">Q2</text><rect x=\"14\" y=\"14\" width=\"3\" height=\"4\" fill=\"currentColor\"/><text x=\"15.5\" y=\"20\" font-size=\"3\" text-anchor=\"middle\" fill=\"currentColor\">Q3</text><rect x=\"19\" y=\"6\" width=\"3\" height=\"12\" fill=\"currentColor\"/><text x=\"20.5\" y=\"20\" font-size=\"3\" text-anchor=\"middle\" fill=\"currentColor\">Q4</text>",
+  "deltaList": "<line x1=\"4\" y1=\"6\" x2=\"20\" y2=\"6\"/><polyline points=\"16,4 18,6 16,8\"/><line x1=\"4\" y1=\"11\" x2=\"20\" y2=\"11\"/><polyline points=\"16,13 18,11 16,9\"/><line x1=\"4\" y1=\"16\" x2=\"20\" y2=\"16\"/><polyline points=\"16,14 18,16 16,18\"/>",
+  "gaugeMini": "<path d=\"M 6 12 A 6 6 0 0 1 18 12\"/><circle cx=\"12\" cy=\"12\" r=\"1\" fill=\"currentColor\"/><path d=\"M 12 7 L 12 6\"/>",
+  "histogram": "<rect x=\"3\" y=\"13\" width=\"1.5\" height=\"7\" fill=\"currentColor\"/><rect x=\"5\" y=\"9\" width=\"1.5\" height=\"11\" fill=\"currentColor\"/><rect x=\"7\" y=\"6\" width=\"1.5\" height=\"14\" fill=\"currentColor\"/><rect x=\"9\" y=\"4\" width=\"1.5\" height=\"16\" fill=\"currentColor\"/><rect x=\"11\" y=\"8\" width=\"1.5\" height=\"12\" fill=\"currentColor\"/><rect x=\"13\" y=\"11\" width=\"1.5\" height=\"9\" fill=\"currentColor\"/><rect x=\"15\" y=\"10\" width=\"1.5\" height=\"10\" fill=\"currentColor\"/><rect x=\"17\" y=\"5\" width=\"1.5\" height=\"15\" fill=\"currentColor\"/><rect x=\"19\" y=\"12\" width=\"1.5\" height=\"8\" fill=\"currentColor\"/><rect x=\"21\" y=\"14\" width=\"1.5\" height=\"6\" fill=\"currentColor\"/>",
+  "fullDate": "<line x1=\"5\" y1=\"7\" x2=\"19\" y2=\"7\"/><line x1=\"5\" y1=\"10\" x2=\"19\" y2=\"10\"/><line x1=\"5\" y1=\"13\" x2=\"19\" y2=\"13\"/><line x1=\"5\" y1=\"16\" x2=\"19\" y2=\"16\"/>",
+  "monthName": "<rect x=\"5\" y=\"7\" width=\"14\" height=\"10\" rx=\"1\"/><line x1=\"5\" y1=\"11\" x2=\"19\" y2=\"11\"/>",
+  "timeOfDay": "<path d=\"M12 4 L16 8 L16 16 L8 16 L8 8 Z\"/><circle cx=\"12\" cy=\"10\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "quarterProgress": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 3 A 9 9 0 0 1 18.36 18.36\"/><circle cx=\"12\" cy=\"12\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/><text x=\"12\" y=\"17\" text-anchor=\"middle\" font-size=\"4\" fill=\"currentColor\">Q</text>",
+  "daysLeftMonth": "<rect x=\"5\" y=\"6\" width=\"14\" height=\"12\" rx=\"1\"/><line x1=\"5\" y1=\"10\" x2=\"19\" y2=\"10\"/><line x1=\"8\" y1=\"4\" x2=\"8\" y2=\"6\"/><line x1=\"16\" y1=\"4\" x2=\"16\" y2=\"6\"/><text x=\"12\" y=\"15\" text-anchor=\"middle\" font-size=\"5\" fill=\"currentColor\">5</text>",
+  "unixClock": "<rect x=\"5\" y=\"6\" width=\"14\" height=\"12\" rx=\"1\"/><text x=\"12\" y=\"14\" text-anchor=\"middle\" font-size=\"6\" fill=\"currentColor\">1718896800</text>",
+  "tzPair": "<circle cx=\"8\" cy=\"10\" r=\"5\"/><circle cx=\"16\" cy=\"10\" r=\"5\"/><line x1=\"8\" y1=\"6\" x2=\"8\" y2=\"14\"/><line x1=\"16\" y1=\"6\" x2=\"16\" y2=\"14\"/><line x1=\"5\" y1=\"10\" x2=\"11\" y2=\"10\"/><line x1=\"13\" y1=\"10\" x2=\"19\" y2=\"10\"/>",
+  "nextWeekday": "<rect x=\"5\" y=\"7\" width=\"14\" height=\"10\" rx=\"1\"/><line x1=\"5\" y1=\"10\" x2=\"19\" y2=\"10\"/><path d=\"M14 14 L16 16 L18 14\"/>",
+  "daylight": "<circle cx=\"12\" cy=\"7\" r=\"3\"/><path d=\"M12 10v6\"/><path d=\"M12 3v2M12 19v2\"/><path d=\"M5 16h14\"/><path d=\"M18.5 10.5l1.4-1.4M4.1 10.5l-1.4-1.4\"/>",
+  "moonProgress": "<circle cx=\"12\" cy=\"12\" r=\"7.5\"/><path d=\"M12 4.5a7.5 7.5 0 0 1 0 15\" fill=\"currentColor\" stroke=\"none\"/>",
+  "seasonProgress": "<circle cx=\"12\" cy=\"12\" r=\"7.5\"/><path d=\"M12 4.5L16.5 19H7.5Z\" fill=\"currentColor\" stroke=\"none\"/>",
+  "goldenHour": "<circle cx=\"12\" cy=\"12\" r=\"4.5\"/><path d=\"M12 3.5v2M12 18.5v2\"/><path d=\"M3.5 12h2M18.5 12h2\"/><path d=\"M5.7 5.7l1.4 1.4M16.9 16.9l1.4 1.4\"/><path d=\"M18.3 5.7l-1.4 1.4M7.1 16.9l-1.4 1.4\"/>",
+  "goalProgress": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><path d=\"M12 5A7 7 0 0 1 18.5 15.5\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/><circle cx=\"12\" cy=\"9\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/>",
+  "stepsToday": "<path d=\"M6 12l1.5-2 2 1.5 2-3 2 1.5 2-2V18\"/><path d=\"M6 18h12\"/><path d=\"M12 20c0-0.5-0.5-1-1-1s-1 0.5-1 1\"/>",
+  "streakPair": "<path d=\"M5 18l2-5 1.5 2 1.5-3 1.5 2 1.5-4 2 3\"/><path d=\"M12 18l2-4 1.5 1.5 1.5-2.5 1.5 2 1.5-3V18\"/><line x1=\"5\" y1=\"18\" x2=\"19\" y2=\"18\"/>",
+  "bookList": "<rect x=\"4\" y=\"4\" width=\"7\" height=\"14\" rx=\"1\"/><line x1=\"4\" y1=\"7\" x2=\"11\" y2=\"7\"/><line x1=\"4\" y1=\"10\" x2=\"11\" y2=\"10\"/><rect x=\"13\" y=\"4\" width=\"7\" height=\"14\" rx=\"1\"/><line x1=\"13\" y1=\"7\" x2=\"20\" y2=\"7\"/><line x1=\"13\" y1=\"10\" x2=\"20\" y2=\"10\"/>",
+  "moodToday": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><circle cx=\"10\" cy=\"10\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"14\" cy=\"10\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M10 14c1 0.5 1.5 1 2 1s1-0.5 2-1\"/>",
+  "budgetLine": "<rect x=\"4\" y=\"6\" width=\"16\" height=\"10\" rx=\"1\"/><path d=\"M4 12h7\"/><path d=\"M11 12h9\"/><path d=\"M11 9h9\"/><line x1=\"11\" y1=\"6\" x2=\"11\" y2=\"16\"/>",
+  "welcomeSign": "<path d=\"M5 6h14c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2z\"/><path d=\"M12 9v6M9 12h6\"/>",
+  "priceTag": "<path d=\"M5 9l6-4h8v12H11l-6-4v-4z\"/><circle cx=\"12\" cy=\"13\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M8 11h8\"/>",
+  "todaySpecial": "<path d=\"M5 6h14c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2z\"/><path d=\"M5 11h14\"/><path d=\"M7 8v1M17 8v1\"/>",
+  "phoneNumber": "<path d=\"M6 3h12c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z\"/><circle cx=\"12\" cy=\"19\" r=\"1\"/><path d=\"M7 5h10\"/>",
+  "socialHandle": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M10 10l4-4M14 10l-4-4M10 10l-2 2M14 10l2 2M12 10v4\"/>",
+  "wayfinding": "<path d=\"M5 8h10M5 12h10M5 16h10M17 7v3l2-1.5L17 7z\"/><path d=\"M7 8v8M7 16v4\"/>",
 };
 
-/** The icon component for a block type (falls back to a generic block mark). */
+/** The icon for a block type (falls back to a generic block mark). */
 export function BlockIcon({ type, class: c }: { type: WidgetType; class?: string }): JSX.Element {
-  const Comp = BLOCK_ICONS[type] ?? FALLBACK;
-  return <Comp class={c} />;
+  const inner = BLOCK_ICON_PATHS[type] ?? FALLBACK;
+  return (
+    <svg
+      class={c}
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: inner }}
+    />
+  );
 }
