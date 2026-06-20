@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <!--
+    CSP: this shell only ever navigates to HOST. It loads no remote scripts and
+    inlines no styles of consequence; the single inline <script> below is allowed
+    via 'unsafe-inline'. Everything the user sees comes from HOST, not this file.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' http: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>GlanceOS</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #101418;
+      color: #8a939c;
+      overflow: hidden;
+    }
+    #boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font: 400 2.2vw system-ui, -apple-system, sans-serif;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <!-- Shown for the split second before we redirect to the runtime. -->
+  <div id="boot">Loading GlanceOS&#8230;</div>
+
+  <script>
+    // ----------------------------------------------------------------------
+    // CHANGE ME: point this at YOUR self-hosted GlanceOS server base URL.
+    // This is the ONE thing you must edit before packaging. No trailing slash.
+    // Examples: "http://glanceos.local:8080"  or  "http://192.168.1.50:8080"
+    // ----------------------------------------------------------------------
+    var HOST = "http://glanceos.local:8080";
+
+    // Shell version, reported to the server only so the fleet view can show
+    // what is running this screen. Bump it when you change this file.
+    var NATIVE = "webos-1.0.0";
+
+    // The exact contract. The runtime does ALL the work in ?tv=1 mode:
+    // fullscreen, wake-lock, D-pad spatial nav, burn-in pixel-shift,
+    // wake/sleep blanking, overscan-safe margins, device register + QR claim,
+    // and SSE live updates. This shell is dumb glass — it only navigates here.
+    var TARGET = HOST + "/screen/?tv=1&platform=webos&native=" + encodeURIComponent(NATIVE);
+
+    // ----------------------------------------------------------------------
+    // Optional: keep the panel awake at the OS level via the webOS power API.
+    // The runtime already requests a web wake-lock; this is belt-and-braces.
+    // Guarded behind typeof checks so the app runs WITHOUT webOSTV.js loaded
+    // (the default app ships no SDK and stays dependency-free).
+    // ----------------------------------------------------------------------
+    try {
+      if (typeof webOS !== "undefined" && webOS.service && typeof webOS.service.request === "function") {
+        webOS.service.request("luna://com.webos.service.tvpower", {
+          method: "power/setScreenSaver",
+          parameters: { enable: false },
+          onFailure: function () { /* no SDK / not permitted: ignore, web wake-lock covers us */ }
+        });
+      }
+    } catch (e) { /* dumb glass never fails loudly */ }
+
+    // ----------------------------------------------------------------------
+    // Remote keys. On webOS the 5-way D-pad and magic-remote pointer already
+    // emit standard KeyboardEvent.key values (ArrowUp/Down/Left/Right, Enter)
+    // straight to the page, and the runtime listens for them — so we do NOT
+    // reimplement navigation here. The only webOS-specific key is the remote
+    // Back button (keyCode 461). We translate that one press into the runtime's
+    // back contract and otherwise stay out of the way.
+    // ----------------------------------------------------------------------
+    document.addEventListener("keydown", function (ev) {
+      if (ev.keyCode === 461) {
+        // Let the runtime's own back handling take over once we are on HOST.
+        // Before redirect there is nothing to go back to, so just swallow it
+        // (disableBackHistoryAPI in appinfo.json stops webOS from exiting).
+        ev.preventDefault();
+      }
+      // All other keys (Arrows, Enter, etc.) are intentionally left untouched
+      // so they reach the runtime page unmodified.
+    });
+
+    // Give the document focus so key events are delivered to the page, then go.
+    try { window.focus(); } catch (e) {}
+    window.location.replace(TARGET);
+  </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Placeholder TV banner (320x180 dp aspect). This vector keeps the build green so
+  'gradlew assembleDebug' works out of the box. For a real launcher tile, drop a
+  320x180 PNG at app/src/main/res/drawable-xhdpi/banner.png (or any density folder)
+  and it will override this vector. See README "Assets".
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0B0B0F"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M44,72 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
+    <path
+        android:fillColor="#0B0B0F"
+        android:pathData="M44,72 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M96,58h8v44h-8z M112,58h8v44h-8z" />
+</vector>

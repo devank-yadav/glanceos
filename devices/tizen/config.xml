@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://glanceos/tizen"
+        version="1.0.0"
+        viewmodes="maximized">
+
+    <!-- Tizen application identity.
+         The 10-char prefix (GlanceOS0) is the package id and MUST match the
+         signing certificate's author you use in `tizen package`. The suffix
+         after the dot is the application id. -->
+    <tizen:application id="GlanceOS0.GlanceOS"
+                       package="GlanceOS0"
+                       required_version="6.0"/>
+
+    <!-- Dumb glass: this widget's only content is a redirect shim. It renders
+         nothing of its own; the GlanceOS web runtime draws everything. -->
+    <content src="index.html"/>
+
+    <name>GlanceOS</name>
+    <author email="self-hosted@glanceos.local">GlanceOS (self-hosted)</author>
+    <description>Thin TV shell that loads the self-hosted GlanceOS web runtime fullscreen.</description>
+
+    <!-- App icon shown in the TV launcher. Replace icon.png with your own 512x512. -->
+    <icon src="icon.png"/>
+
+    <!-- TV profile. -->
+    <tizen:profile name="tv"/>
+
+    <!-- Network access: the shell must reach the self-hosted server over HTTP. -->
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+
+    <!-- TV remote / D-pad input device API, used to register directional keys. -->
+    <feature name="http://tizen.org/feature/network.internet"/>
+
+    <!-- Allow loading the remote runtime from any origin (you point HOST at your
+         own LAN server; the page itself is the only thing it ever loads). -->
+    <access origin="*" subdomains="true"/>
+
+    <!-- Fullscreen, no chrome. -->
+    <tizen:setting screen-orientation="landscape"
+                   context-menu="disable"
+                   background-support="disable"
+                   encryption="disable"
+                   install-location="auto"
+                   hwkey-event="enable"/>
+
+</widget>

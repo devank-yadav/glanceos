@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>GlanceOS</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Always full-screen kiosk glass. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
+
+	<!-- App Transport Security.
+	     GlanceOS self-hosts as plain HTTP on the LAN by default (see the project's
+	     docs/DEVICE-API.md and ARCHITECTURE threat model: the server is reachable
+	     only on the local network, so TLS is not required for v1). iOS/tvOS block
+	     cleartext HTTP unless you declare an exception.
+
+	     RECOMMENDED (least privilege): NSAllowsLocalNetworking — permits cleartext
+	     ONLY to local-network hosts such as http://glanceos.local:8080 or
+	     http://192.168.x.x:8080, while still blocking arbitrary public cleartext.
+	     This works for the mDNS .local hostname and private LAN IPs.
+
+	     If — and only if — your server is reachable by a non-local hostname over
+	     plain HTTP, replace the dict below with:
+	         <key>NSAllowsArbitraryLoads</key><true/>
+	     That is broader (allows ANY cleartext load); prefer NSAllowsLocalNetworking
+	     and put GlanceOS on the LAN. If you front your server with HTTPS, you can
+	     drop the NSAppTransportSecurity key entirely. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
+	<!-- tvOS asks for a reason string the first time the app touches the local
+	     network (it talks to your LAN GlanceOS server). -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>GlanceOS connects to your self-hosted dashboard server on your local network.</string>
+
+	<key>UILaunchScreen</key>
+	<dict/>
+</dict>
+</plist>

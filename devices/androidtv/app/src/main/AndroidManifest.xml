@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Talk to your self-hosted server. That is the only thing the shell needs. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Optional: lets the OS-level wake-lock keep the panel awake more reliably
+         on some Android TV builds. The activity also sets FLAG_KEEP_SCREEN_ON. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- This is a 10-foot leanback app. Required=false so it can still install on
+         a phone/tablet for testing, and so it stays sideload-friendly. -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:allowBackup="false"
+        android:banner="@drawable/banner"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.GlanceOSTV"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: the server is plain HTTP on your LAN by design
+             (threat model documented in the GlanceOS ARCHITECTURE doc). Point
+             GLANCEOS_URL at https:// and you can drop this. -->
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode|smallestScreenSize|screenLayout"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <!-- LEANBACK_LAUNCHER: shows on the Fire TV / Android TV home row.
+                     LAUNCHER: also adb-launchable and visible on non-TV devices. -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

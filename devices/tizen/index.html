@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- CSP: this shim runs no external scripts. It only navigates the webview to
+       HOST. connect-src/default-src stay wide so the redirect target (your own
+       LAN server) is reachable; we never inline-fetch anything ourselves. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' http: https: data:; script-src 'self' 'unsafe-inline';">
+  <title>GlanceOS</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: #888;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #msg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Shown only for the brief moment before the redirect, or if HOST is wrong. -->
+  <div id="msg">Loading GlanceOS&hellip;</div>
+  <script src="main.js"></script>
+</body>
+</html>

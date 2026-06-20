@@ -1,0 +1,44 @@
+# glanceos-kiosk.service — boot the GlanceOS Pi kiosk.
+#
+# Launches the kiosk launcher on boot, restarts on failure, after the network
+# is up. install-kiosk.sh sets User= to your login user and, if it falls back
+# to the X path, rewrites ExecStart to use xinit instead of cage.
+#
+# Install: /etc/systemd/system/glanceos-kiosk.service
+#   sudo systemctl daemon-reload && sudo systemctl enable glanceos-kiosk
+
+[Unit]
+Description=GlanceOS Pi kiosk (Chromium fullscreen on the GlanceOS runtime)
+# Don't open the URL before the LAN is reachable — the runtime registers on load.
+After=network-online.target systemd-user-sessions.service
+Wants=network-online.target
+
+[Service]
+# install-kiosk.sh rewrites this to your login user.
+User=pi
+PAMName=login
+
+# Run on the first virtual terminal so the kiosk owns the screen.
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+
+# cage is a single-app Wayland kiosk compositor: it runs the launcher
+# fullscreen and exits when it exits. The X fallback (set by the installer)
+# replaces this line with:
+#   ExecStart=/usr/bin/xinit /usr/local/bin/glanceos-start-kiosk -- :0 vt1 -nocursor
+ExecStart=/usr/bin/cage -- /usr/local/bin/glanceos-start-kiosk
+
+# Come right back if Chromium or the session dies.
+Restart=always
+RestartSec=3
+
+# Give the GPU/display a moment after a crash loop; don't hammer.
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Install]
+WantedBy=graphical.target
