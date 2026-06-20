@@ -10,6 +10,7 @@ process.env.GLANCEOS_RATE_LIMIT = "off"; // the integration flow makes bursts of
 const { migrate } = await import("./db");
 const { seedTemplates } = await import("./seed");
 const { buildApp } = await import("./api");
+const { hmacSign } = await import("./secrets");
 
 migrate();
 seedTemplates();
@@ -20,13 +21,17 @@ const json = (body: unknown) => ({
   headers: { "content-type": "application/json" } as Record<string, string>,
 });
 
-const authed = (cookie: string, body?: unknown) => ({
-  ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  headers: {
-    ...(body !== undefined ? { "content-type": "application/json" } : {}),
-    cookie,
-  } as Record<string, string>,
-});
+const authed = (cookie: string, body?: unknown) => {
+  const token = /glanceos_session=([a-f0-9]+)/.exec(cookie)?.[1] ?? "";
+  return {
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    headers: {
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+      cookie,
+      "x-csrf-token": hmacSign(`csrf:${token}`), // double-submit token for mutating verbs
+    } as Record<string, string>,
+  };
+};
 
 function cookieOf(res: Response): string {
   const match = /glanceos_session=([a-f0-9]+)/.exec(res.headers.get("set-cookie") ?? "");
@@ -185,7 +190,7 @@ describe("multi-user auth, pairing, setups, hub", () => {
     const builtin = hub.find((i: { author: string }) => i.author === "GlanceOS");
     expect((await app.request(`/api/layouts/${builtin.id}`, { method: "PUT", ...authed(cookieA, { document: LOCAL_LAYOUT }) })).status).toBe(404);
     expect((await app.request(`/api/layouts/${builtin.id}`, { method: "PATCH", ...authed(cookieA, { published: false }) })).status).toBe(404);
-    expect((await app.request(`/api/layouts/${builtin.id}`, { method: "DELETE", headers: { cookie: cookieA } })).status).toBe(404);
+    expect((await app.request(`/api/layouts/${builtin.id}`, { method: "DELETE", ...authed(cookieA) })).status).toBe(404);
   });
 
   it("composes preview-state without bumping versions", async () => {
@@ -210,7 +215,7 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(dup.status).toBe(201);
     expect((await dup.json()).name).toBe("Desk copy");
 
-    expect((await app.request(`/api/layouts/${setupId}`, { method: "DELETE", headers: { cookie: cookieA } })).status).toBe(200);
+    expect((await app.request(`/api/layouts/${setupId}`, { method: "DELETE", ...authed(cookieA) })).status).toBe(200);
     const devices = await (await app.request("/api/devices", { headers: { cookie: cookieA } })).json();
     expect(devices[0]).toMatchObject({ layoutId: null, layoutName: null });
   });
@@ -281,18 +286,18 @@ describe("multi-user auth, pairing, setups, hub", () => {
   it("accepts an image upload and rejects bad type / oversized", async () => {
     const fd = new FormData();
     fd.append("file", new File([new Uint8Array([1, 2, 3, 4])], "logo.png", { type: "image/png" }));
-    const res = await app.request("/api/uploads", { method: "POST", body: fd, headers: { cookie: cookieA } });
+    const res = await app.request("/api/uploads", { method: "POST", body: fd, ...authed(cookieA) });
     expect(res.status).toBe(201);
     const { url } = await res.json();
     expect(url).toMatch(/^\/uploads\/[\w-]+\.png$/);
 
     const bad = new FormData();
     bad.append("file", new File(["plain"], "x.txt", { type: "text/plain" }));
-    expect((await app.request("/api/uploads", { method: "POST", body: bad, headers: { cookie: cookieA } })).status).toBe(400);
+    expect((await app.request("/api/uploads", { method: "POST", body: bad, ...authed(cookieA) })).status).toBe(400);
 
     const big = new FormData();
     big.append("file", new File([new Uint8Array(2 * 1024 * 1024 + 16)], "big.png", { type: "image/png" }));
-    expect((await app.request("/api/uploads", { method: "POST", body: big, headers: { cookie: cookieA } })).status).toBe(413);
+    expect((await app.request("/api/uploads", { method: "POST", body: big, ...authed(cookieA) })).status).toBe(413);
 
     // unauthenticated upload is rejected by the session guard
     const noauth = new FormData();
@@ -322,7 +327,7 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(payload.state.data.wt.items.length).toBeGreaterThan(0);
 
     // revoking turns the link off (404), and a bogus token never resolves
-    expect((await app.request(`/api/layouts/${layout.id}/share`, { method: "DELETE", headers: { cookie: cookieA } })).status).toBe(200);
+    expect((await app.request(`/api/layouts/${layout.id}/share`, { method: "DELETE", ...authed(cookieA) })).status).toBe(200);
     expect((await app.request(`/api/public/board/${share.token}`)).status).toBe(404);
     expect((await app.request("/api/public/board/nope")).status).toBe(404);
   });
@@ -341,6 +346,11 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(ok.status).toBe(200);
     expect((await ok.json()).state.layout.name).toBe("Locked");
     expect((await app.request(`/api/public/board/${share.token}`, { headers: { cookie: `glanceos_share_${share.token.slice(0, 12)}=forged` } })).status).toBe(401); // forged cookie rejected
+  });
+
+  it("rejects a config-plane mutation without a CSRF token (403)", async () => {
+    const noCsrf = await app.request("/api/layouts", { method: "POST", body: JSON.stringify({ name: "X" }), headers: { "content-type": "application/json", cookie: cookieA } });
+    expect(noCsrf.status).toBe(403);
   });
 
   it("manages the account (rename, password, delete) and logs out everywhere", async () => {
@@ -365,7 +375,7 @@ describe("multi-user auth, pairing, setups, hub", () => {
     // log-out-everywhere invalidates a separate user's session
     const reg2 = await app.request("/api/auth/register", { method: "POST", ...json({ name: "Sess", email: "sess@example.com", password: "sess-pass-1" }) });
     const cookieS = cookieOf(reg2);
-    expect((await app.request("/api/account/logout-everywhere", { method: "POST", headers: { cookie: cookieS } })).status).toBe(200);
+    expect((await app.request("/api/account/logout-everywhere", { method: "POST", ...authed(cookieS) })).status).toBe(200);
     expect((await app.request("/api/devices", { headers: { cookie: cookieS } })).status).toBe(401);
   });
 

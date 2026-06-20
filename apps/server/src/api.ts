@@ -61,6 +61,7 @@ const publicBase = (c: Context): string =>
   process.env.GLANCEOS_PUBLIC_URL?.replace(/\/+$/, "") ?? new URL(c.req.url).origin;
 
 const SESSION_COOKIE = "glanceos_session";
+const CSRF_COOKIE = "glanceos_csrf";
 
 // The device plane authenticates with deviceId+secret and must work unclaimed;
 // everything else is the config plane and needs a user session.
@@ -172,11 +173,22 @@ export function buildApp(): Hono<Env> {
 
   // ---- session guard for the config plane ----
 
+  // A session's CSRF token is HMAC(session token) — stateless double-submit. The
+  // server sets it in a readable (non-HttpOnly) cookie at login; the config app
+  // echoes it in x-csrf-token on every mutating call. A cross-site page can read
+  // neither the cookie nor set the header, so forged POST/PUT/PATCH/DELETE fail.
+  const csrfFor = (sessionToken: string) => hmacSign(`csrf:${sessionToken}`);
+  const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
   app.use("/api/*", async (c, next) => {
     const path = c.req.path;
     if (path.startsWith("/api/auth/") || path.startsWith("/api/public/") || DEVICE_PLANE.has(path)) return next();
-    const userId = sessionUserId(getCookie(c, SESSION_COOKIE));
-    if (!userId) return c.json({ error: "unauthorized" }, 401);
+    const sessionToken = getCookie(c, SESSION_COOKIE);
+    const userId = sessionUserId(sessionToken);
+    if (!userId || !sessionToken) return c.json({ error: "unauthorized" }, 401);
+    if (MUTATING.has(c.req.method) && !hmacVerify(`csrf:${sessionToken}`, c.req.header("x-csrf-token") ?? "")) {
+      return c.json({ error: "bad or missing CSRF token" }, 403);
+    }
     c.set("userId", userId);
     return next();
   });
@@ -193,15 +205,15 @@ export function buildApp(): Hono<Env> {
   app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
+  // Account mutations are brute-force / abuse targets: cap per user.
+  app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
+  app.use("/api/account", async (c, next) => (c.req.method === "DELETE" ? limiter("acct-del", 5, 60 * 60_000, userKey)(c, next) : next()));
 
   const issueSession = (c: Context, userId: string) => {
     const session = createSession(userId);
-    setCookie(c, SESSION_COOKIE, session.token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      path: "/",
-      maxAge: Math.floor((session.expiresAt - Date.now()) / 1000),
-    });
+    const maxAge = Math.floor((session.expiresAt - Date.now()) / 1000);
+    setCookie(c, SESSION_COOKIE, session.token, { httpOnly: true, sameSite: "Lax", path: "/", maxAge });
+    setCookie(c, CSRF_COOKIE, csrfFor(session.token), { httpOnly: false, sameSite: "Lax", path: "/", maxAge }); // readable by the config app
   };
 
   // ---- auth ----
@@ -234,6 +246,7 @@ export function buildApp(): Hono<Env> {
   app.post("/api/auth/logout", (c) => {
     destroySession(getCookie(c, SESSION_COOKIE));
     deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    deleteCookie(c, CSRF_COOKIE, { path: "/" });
     return c.json({ ok: true });
   });
 

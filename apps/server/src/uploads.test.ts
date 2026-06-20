@@ -9,6 +9,7 @@ process.env.GLANCEOS_UPLOAD_QUOTA_MB = "0.001"; // ~1048 bytes, so two small ima
 const { migrate, db } = await import("./db");
 const { saveUpload, userUsage, gcUploads } = await import("./uploads");
 const { buildApp } = await import("./api");
+const { hmacSign } = await import("./secrets");
 migrate();
 const app = buildApp();
 
@@ -47,8 +48,10 @@ describe("upload usage + GC", () => {
 
   it("rejects an upload that exceeds the per-user quota with 413", async () => {
     const reg = await app.request("/api/auth/register", { method: "POST", body: JSON.stringify({ name: "Q", email: "q@e.test", password: "calm-glass-q" }), headers: { "content-type": "application/json" } });
-    const cookie = `glanceos_session=${/glanceos_session=([a-f0-9]+)/.exec(reg.headers.get("set-cookie") ?? "")![1]}`;
-    const upload = (n: number) => { const f = new FormData(); f.append("file", new File([new Uint8Array(n)], "i.png", { type: "image/png" })); return app.request("/api/uploads", { method: "POST", body: f, headers: { cookie } }); };
+    const token = /glanceos_session=([a-f0-9]+)/.exec(reg.headers.get("set-cookie") ?? "")![1];
+    const cookie = `glanceos_session=${token}`;
+    const csrf = hmacSign(`csrf:${token}`);
+    const upload = (n: number) => { const f = new FormData(); f.append("file", new File([new Uint8Array(n)], "i.png", { type: "image/png" })); return app.request("/api/uploads", { method: "POST", body: f, headers: { cookie, "x-csrf-token": csrf } }); };
     expect((await upload(600)).status).toBe(201); // first fits (under ~1048)
     expect((await upload(600)).status).toBe(413); // 600 + 600 > quota
   });

@@ -16,8 +16,26 @@ export function rateCheck(key: string, limit: number, windowMs: number, now = Da
   return { ok: true, retryAfter: 0 };
 }
 
-const clientIp = (c: Context): string =>
-  c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
+// x-forwarded-for is attacker-controllable unless the request actually came
+// through a proxy we trust. By default we IGNORE it and key on the real socket
+// peer (fail-closed, no spoofing). Set GLANCEOS_TRUSTED_PROXIES to the proxy
+// peer IP(s) — or "*" to trust any peer — to honor XFF behind a reverse proxy.
+const TRUSTED_PROXIES = new Set((process.env.GLANCEOS_TRUSTED_PROXIES ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+const TRUST_ANY_PROXY = TRUSTED_PROXIES.has("*");
+
+function peerIp(c: Context): string {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress ?? "local";
+}
+
+const clientIp = (c: Context): string => {
+  const peer = peerIp(c);
+  if (TRUST_ANY_PROXY || TRUSTED_PROXIES.has(peer)) {
+    const xff = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip");
+    if (xff) return xff;
+  }
+  return peer;
+};
 
 /** Hono middleware: cap requests per window, keyed by IP (default) or a custom key. */
 export function limiter(bucket: string, max: number, windowMs: number, keyFn?: (c: Context) => string) {
