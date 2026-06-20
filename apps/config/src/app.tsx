@@ -147,6 +147,7 @@ export function App() {
         <main id="main" class="shell-main page-enter">
           {page.name === "screens" && <ScreensPage />}
           {page.name === "fleet" && <FleetPage />}
+          {page.name === "groups" && <GroupsPage />}
           {page.name === "setups" && <SetupsPage />}
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
