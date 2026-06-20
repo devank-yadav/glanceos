@@ -131,11 +131,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [convertId, setConvertId] = useState<string | null>(null);
   // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
   const [menuId, setMenuId] = useState<string | null>(null);
-  const [sidebarPinned, setSidebarPinned] = useState(() => {
+  // The blocks panel is always docked (no floating mode); the top-bar button
+  // just shows/hides it. Remembers the last shown/hidden choice.
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
     const s = localStorage.getItem(SIDEBAR_PIN_KEY);
     return s ? (JSON.parse(s) as boolean) : true;
   });
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
@@ -400,8 +401,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   }, [selectedKey]);
 
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_PIN_KEY, JSON.stringify(sidebarPinned));
-  }, [sidebarPinned]);
+    localStorage.setItem(SIDEBAR_PIN_KEY, JSON.stringify(sidebarOpen));
+  }, [sidebarOpen]);
 
   // Point a block at (or unbind it from) a live data source.
   const setSource = (id: string, src: unknown) =>
@@ -582,13 +583,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
     ? { x: Math.min(Math.max(8, primaryBox.x * scale), Math.max(8, stageW - 280)), y: Math.min(Math.max(8, primaryBox.y * scale + 28), Math.max(8, stageH - 360)) }
     : null;
 
-  // Sidebar visibility: pinned = docked & always shown; unpinned = a floating
-  // panel toggled open/closed (Notion-style).
-  const sideShown = sidebarPinned || sidebarOpen;
-  const toggleSidebar = () => {
-    if (sideShown) { setSidebarOpen(false); setSidebarPinned(false); }
-    else setSidebarOpen(true);
-  };
+  // The docked blocks panel, simply shown or hidden from the top bar.
+  const sideShown = sidebarOpen;
+  const toggleSidebar = () => setSidebarOpen((v) => !v);
 
   const openShare = () => {
     setShareOpen(true); setShareCopied(false);
@@ -627,7 +624,15 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <span class="crumb-sep" aria-hidden="true">/</span>
           <input class="title-input crumb-current" aria-label="Board name" value={state.present.name} onInput={(e) => stageEdit((d) => { d.name = (e.currentTarget as HTMLInputElement).value || "Untitled"; })} />
         </nav>
-        {saveLabel && <span class={`chip save-${saveState}`}>{saveLabel}</span>}
+        {saveLabel && (
+          <span class={`chip save-chip save-${saveState}`}>
+            {saveState === "saving" ? <span class="save-spinner" aria-hidden="true" />
+              : saveState === "saved" ? <Icon.check />
+                : saveState === "error" ? <Icon.warning />
+                  : null}
+            <span>{saveLabel}</span>
+          </span>
+        )}
         <span class="spacer" />
         <span class="muted hide-narrow">{liveOn > 0 ? `Live on ${liveOn}` : "Not attached"}</span>
         <select class="size-select" title="Screen size" value={sizeKey} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setSizeKey(v); localStorage.setItem(SIZE_KEY, v); }}>
@@ -817,12 +822,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
             )}
           </PreviewStage>
         </div>
-        <aside class={`studio-side ${sidebarPinned ? "pinned" : "unpinned"}${sideShown ? " open" : ""}`}>
+        <aside class={`studio-side pinned${sideShown ? " open" : ""}`}>
           <div class="sidebar-header">
             <h3>Blocks</h3>
             <span class="spacer" />
-            <button class={`icon-btn${sidebarPinned ? " on" : ""}`} title={sidebarPinned ? "Unpin" : "Pin open"} onClick={() => { setSidebarPinned((p) => !p); setSidebarOpen(true); }}><Icon.pin /></button>
-            <button class="icon-btn" title="Hide panel" onClick={() => { setSidebarOpen(false); setSidebarPinned(false); }}><Icon.panelToggle /></button>
+            <button class="icon-btn" title="Hide panel" onClick={() => setSidebarOpen(false)}><Icon.panelToggle /></button>
           </div>
           <Palette
             stageRef={stageRef}

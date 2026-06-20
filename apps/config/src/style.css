@@ -578,6 +578,17 @@ input[type="checkbox"] {
   border-color: rgba(192, 57, 43, 0.4);
   background: rgba(192, 57, 43, 0.08);
 }
+/* Consistent save chip: icon + label, with a quiet spinner while saving. */
+.chip.save-chip svg { width: 13px; height: 13px; }
+.chip.save-saving { color: var(--muted); }
+.save-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.6px solid color-mix(in srgb, var(--muted) 40%, transparent);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
 
 /* ---------- topbar ---------- */
 
@@ -1856,33 +1867,22 @@ ul.tasks li:last-child {
 
 /* ---------- sidebar: palette + properties ---------- */
 
+/* The blocks panel is always docked + opaque (a glassy/translucent panel was
+   unreadable in dark mode); the top-bar toggle collapses its width to hide it. */
 .studio-side {
   width: 320px;
   flex: none;
   border-left: 1px solid var(--glass-border);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: width 0.24s var(--ease);
 }
 
-/* unpinned = a floating panel that slides in over the stage (Notion-style) */
-.studio-side.unpinned {
-  position: fixed;
-  top: 52px;
-  right: 0;
-  bottom: 0;
-  z-index: 46;
-  box-shadow: var(--shadow-lg);
-}
-
-.studio-side.unpinned:not(.open) {
+.studio-side:not(.open) {
   width: 0;
   border: none;
-  box-shadow: none;
 }
 
 .sidebar-header {
@@ -2017,27 +2017,35 @@ ul.tasks li:last-child {
   margin-bottom: 12px;
 }
 
+/* Sticky so you always know which section you're scrolling through. */
 .palette-cat {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--faint);
-  margin: 6px 0 6px;
+  background: var(--bg);
+  margin: 0 -4px;
+  padding: 8px 4px 5px;
 }
 
+/* One block per row: full labels, clearly left-aligned, easy to scan. */
 .palette-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: flex-start; /* override the base button's centering — labels left */
+  gap: 8px;
   border: 1px solid var(--rule);
   border-radius: 9px;
-  padding: 7px 9px;
+  padding: 7px 10px;
   cursor: grab;
   touch-action: none;
   user-select: none;
