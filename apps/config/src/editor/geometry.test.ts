@@ -11,7 +11,7 @@ const block = (id: string, width = 1): WidgetT =>
 const doc = (rows: Array<{ id: string; h: number; blocks: WidgetT[] }>): LayoutT => ({
   schemaVersion: 3,
   name: "t",
-  theme: { mode: "light" },
+  theme: { mode: "light", fontScale: "m" },
   gap: 2,
   align: "top",
   rows,

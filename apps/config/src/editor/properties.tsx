@@ -373,10 +373,21 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
           <span>Theme</span>
           <select
             value={doc.theme.mode}
-            onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { mode: (e.currentTarget as HTMLSelectElement).value as "light" | "dark" } })}
+            onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, mode: (e.currentTarget as HTMLSelectElement).value as "light" | "dark" } })}
           >
             <option value="light">light</option>
             <option value="dark">dark</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Font size</span>
+          <select
+            value={doc.theme.fontScale ?? "m"}
+            onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, fontScale: (e.currentTarget as HTMLSelectElement).value as "s" | "m" | "l" } })}
+          >
+            <option value="s">small</option>
+            <option value="m">medium</option>
+            <option value="l">large</option>
           </select>
         </label>
         <label class="field">

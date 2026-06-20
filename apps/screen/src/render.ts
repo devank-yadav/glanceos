@@ -35,6 +35,9 @@ export function renderPayload(payload: StreamPayloadT): void {
   }
 
   document.body.classList.toggle("dark", state.layout.theme.mode === "dark");
+  // Per-board font scale (s/m/l) → a multiplier the CSS reads via var(--font-scale).
+  const FONT_SCALE: Record<string, number> = { s: 0.85, m: 1, l: 1.18 };
+  document.body.style.setProperty("--font-scale", String(FONT_SCALE[state.layout.theme.fontScale ?? "m"] ?? 1));
 
   // Document flow: rows stack at their own height (units out of PAGE_UNITS); a
   // blank remainder track absorbs the slack and is positioned per the board's

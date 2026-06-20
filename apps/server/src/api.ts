@@ -22,7 +22,7 @@ import {
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
-import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload } from "./uploads";
+import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
 import { limiter } from "./ratelimit";
 import { isConnected, subscribe } from "./hub";
 import {
@@ -761,6 +761,9 @@ export function buildApp(): Hono<Env> {
     if (!isAllowedMime(file.type)) return c.json({ error: "unsupported type — use PNG, JPEG, WebP or GIF" }, 400);
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: "image too large (max 2 MB)" }, 413);
+    if (userUsage(userId) + buf.length > UPLOAD_QUOTA_BYTES) {
+      return c.json({ error: `upload quota reached (${Math.round(UPLOAD_QUOTA_BYTES / (1024 * 1024))} MB) — delete some images first` }, 413);
+    }
     return c.json(saveUpload(userId, buf, file.type, file.name), 201);
   });
   // Serve uploaded bytes (unguessable id; referenced by image blocks + public boards).

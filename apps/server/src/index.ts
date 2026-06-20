@@ -6,6 +6,7 @@ import { gcRateLimits } from "./ratelimit";
 import { undecryptableSecretCount } from "./rotate";
 import { seedTemplates } from "./seed";
 import { pushAllConnected, pushRotatingDevices, pushScheduledDevices } from "./state";
+import { gcUploads } from "./uploads";
 
 migrate();
 seedTemplates();
@@ -44,3 +45,8 @@ setInterval(() => {
 
 // Drop expired rate-limit windows so the map stays bounded.
 setInterval(() => gcRateLimits(), 5 * 60 * 1000);
+
+// Reclaim upload disk: orphan files always; unreferenced rows only when opted in.
+setInterval(() => {
+  try { gcUploads({ reclaimUnreferenced: process.env.GLANCEOS_GC_UNREFERENCED_UPLOADS === "1" }); } catch { /* never crash the loop */ }
+}, 6 * 60 * 60 * 1000);

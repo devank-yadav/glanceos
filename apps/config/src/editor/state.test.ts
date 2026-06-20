@@ -5,7 +5,7 @@ import { editorReducer, initialEditor, type EditorState } from "./state";
 const doc = (name: string): LayoutT => ({
   schemaVersion: 3,
   name,
-  theme: { mode: "light" },
+  theme: { mode: "light", fontScale: "m" },
   gap: 1,
   align: "top",
   rows: [],

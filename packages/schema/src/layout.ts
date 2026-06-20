@@ -565,7 +565,11 @@ export const Row = z.object({
 export const Layout = z.object({
   schemaVersion: z.literal(3),
   name: z.string().min(1),
-  theme: z.object({ mode: z.enum(["light", "dark"]).default("light") }).default({ mode: "light" }),
+  // fontScale is optional with a default → existing v3 docs parse unchanged (no migration).
+  theme: z.object({
+    mode: z.enum(["light", "dark"]).default("light"),
+    fontScale: z.enum(["s", "m", "l"]).default("m"),
+  }).default({ mode: "light", fontScale: "m" }),
   gap: z.number().int().min(0).max(8).default(2),
   // where the (often shorter-than-screen) content sits vertically — v0.6, optional
   align: z.enum(["top", "center", "bottom"]).default("top"),

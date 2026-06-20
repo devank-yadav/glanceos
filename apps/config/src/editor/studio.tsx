@@ -81,7 +81,7 @@ const ZOOMS: Array<{ label: string; value: number | null }> = [
   { label: "125%", value: 1.25 },
 ];
 
-const PLACEHOLDER: LayoutT = { schemaVersion: 3, name: "Loading…", theme: { mode: "light" }, gap: 2, align: "top", rows: [] };
+const PLACEHOLDER: LayoutT = { schemaVersion: 3, name: "Loading…", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top", rows: [] };
 const KNOWN = new Set(BLOCKS.map((b) => b.type));
 
 export interface DragLayer {
