@@ -14,8 +14,9 @@ import {
 } from "./auth";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
-  registerDevice, setDevicePlaylist, setRefresh, updateDevice, type DeviceRow,
+  registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, updateDevice, type DeviceRow,
 } from "./devices";
+import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
@@ -84,9 +85,15 @@ function deviceSummary(d: DeviceRow) {
     firmware: d.firmware,
     lastSeen: d.last_seen,
     resolution: `${profile.width}×${profile.height}`,
+    timezone: d.timezone,
+    renderOpts: safeJsonObj(d.render_opts),
     createdAt: d.created_at,
   };
 }
+
+const safeJsonObj = (s: string): Record<string, unknown> => {
+  try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
+};
 
 function telemetryFromHeaders(c: Context): { battery?: number; rssi?: number; firmware?: string } {
   const num = (v: string | undefined) => (v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : undefined);
@@ -316,6 +323,27 @@ export function buildApp(): Hono<Env> {
       return c.json({ error: "device not found" }, 404);
     }
     return c.json({ ok: true });
+  });
+
+  // Time-of-day schedules + the device timezone (owner-scoped).
+  app.get("/api/devices/:id/schedules", (c) => {
+    const id = c.req.param("id");
+    const device = getDevice(id);
+    if (!device || device.user_id !== c.get("userId")) return c.json({ error: "device not found" }, 404);
+    return c.json({ timezone: device.timezone, schedules: listSchedules(id) });
+  });
+
+  app.put("/api/devices/:id/schedules", async (c) => {
+    const id = c.req.param("id");
+    const userId = c.get("userId");
+    const device = getDevice(id);
+    if (!device || device.user_id !== userId) return c.json({ error: "device not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { timezone?: string | null; schedules?: Schedule[] };
+    if (body.timezone !== undefined) setDeviceTimezone(id, body.timezone, userId);
+    if (Array.isArray(body.schedules)) setSchedules(id, body.schedules);
+    await pushDevice(id);
+    const updated = getDevice(id)!;
+    return c.json({ timezone: updated.timezone, schedules: listSchedules(id) });
   });
 
   // Grayscale PNG preview of exactly what a screen would show on e-ink.

@@ -4,10 +4,14 @@ import { devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from ".
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
+import { activeScheduledLayout, hasSchedules } from "./schedules";
 import { resolveWidgetData } from "./widgets";
 
-/** The layout a device shows right now — its playlist's current item, else its setup. */
+/** The layout a device shows right now — an active time-of-day schedule wins,
+ *  then its playlist's current item, then its plain setup. */
 export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
+  const scheduled = activeScheduledLayout(device.id, now, device.timezone);
+  if (scheduled) return scheduled;
   if (device.playlist_id) return currentPlaylistLayout(device.playlist_id, now);
   return device.layout_id;
 }
@@ -55,6 +59,12 @@ export async function pushDevicesUsingLayout(layoutId: number): Promise<void> {
 /** Re-push connected rotating screens so they advance to the playlist's current item. */
 export async function pushRotatingDevices(): Promise<void> {
   const ids = connectedDeviceIds().filter((id) => getDevice(id)?.playlist_id);
+  await Promise.all(ids.map((id) => pushDevice(id)));
+}
+
+/** Re-push connected scheduled screens so they flip at window boundaries. */
+export async function pushScheduledDevices(): Promise<void> {
+  const ids = connectedDeviceIds().filter((id) => hasSchedules(id));
   await Promise.all(ids.map((id) => pushDevice(id)));
 }
 

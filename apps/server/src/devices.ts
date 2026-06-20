@@ -19,6 +19,8 @@ export interface DeviceRow {
   rssi: number | null;
   firmware: string | null;
   last_seen: number | null;
+  timezone: string | null;
+  render_opts: string;
 }
 
 export interface DeviceProfile {
@@ -66,6 +68,14 @@ export function setRefresh(id: string, seconds: number, userId: string): DeviceR
     Math.max(5, Math.min(86_400, Math.round(seconds))),
     id,
   );
+  return getDevice(id) ?? null;
+}
+
+/** Set a device's IANA timezone for schedule wall-clock (null/"" → server tz). */
+export function setDeviceTimezone(id: string, tz: string | null, userId: string): DeviceRow | null {
+  const device = getDevice(id);
+  if (!device || device.user_id !== userId) return null;
+  db.prepare("UPDATE devices SET timezone = ? WHERE id = ?").run(tz?.trim() || null, id);
   return getDevice(id) ?? null;
 }
 

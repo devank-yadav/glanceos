@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type Playlist, type QueueState, type SetupSummary, type TaskItem } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
+import { IconButton } from "../components/IconButton";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
@@ -47,7 +48,7 @@ export function ScreensPage() {
         ) : (
           <div class="cards">
             {devices.map((d) => (
-              <DeviceCard key={d.id} device={d} playlists={playlists} onChanged={refresh} onPick={() => setPickerFor(d.id)} />
+              <DeviceCard key={d.id} device={d} playlists={playlists} setups={setups} onChanged={refresh} onPick={() => setPickerFor(d.id)} />
             ))}
           </div>
         )}
@@ -111,10 +112,11 @@ function ClaimForm({ onClaimed }: { onClaimed: (deviceId: string) => Promise<voi
   );
 }
 
-function DeviceCard({ device, playlists, onChanged, onPick }: { device: DeviceSummary; playlists: Playlist[]; onChanged: () => Promise<void>; onPick: () => void }) {
+function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: DeviceSummary; playlists: Playlist[]; setups: SetupSummary[]; onChanged: () => Promise<void>; onPick: () => void }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(device.name ?? "");
   const [previewing, setPreviewing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +158,7 @@ function DeviceCard({ device, playlists, onChanged, onPick }: { device: DeviceSu
           trigger={<Icon.list />}
           items={[
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
+            { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
             { label: "Rename", icon: <Icon.pencil />, onClick: () => setEditing(true) },
             { label: "Disconnect", icon: <Icon.x />, danger: true, onClick: disconnect },
           ]}
@@ -192,6 +195,85 @@ function DeviceCard({ device, playlists, onChanged, onPick }: { device: DeviceSu
             {[60, 300, 900, 1800, 3600, 21600].map((s) => <option key={s} value={String(s)}>{fmtDuration(s)}</option>)}
           </select>
         </label>
+      </div>
+
+      <Modal open={scheduling} onClose={() => setScheduling(false)} title={`Schedule — ${device.name ?? "screen"}`}>
+        {scheduling && <ScheduleEditor deviceId={device.id} setups={setups} onClose={() => setScheduling(false)} onSaved={onChanged} />}
+      </Modal>
+    </div>
+  );
+}
+
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // bit 0 = Sunday
+const minToTime = (m: number): string => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const timeToMin = (t: string): number => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+
+interface SchedRule { layoutId: number; enabled: boolean; priority: number; daysMask: number; startMin: number; endMin: number }
+
+function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: string; setups: SetupSummary[]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [tz, setTz] = useState("");
+  const [rules, setRules] = useState<SchedRule[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    api.get<{ timezone: string | null; schedules: SchedRule[] }>(`/api/devices/${deviceId}/schedules`)
+      .then((r) => { setTz(r.timezone ?? ""); setRules(r.schedules.map((s) => ({ layoutId: s.layoutId, enabled: s.enabled, priority: s.priority, daysMask: s.daysMask, startMin: s.startMin, endMin: s.endMin }))); })
+      .catch(() => setRules([]));
+  }, [deviceId]);
+
+  const update = (i: number, patch: Partial<SchedRule>) => setRules((rs) => rs!.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  const toggleDay = (i: number, day: number) => update(i, { daysMask: rules![i]!.daysMask ^ (1 << day) });
+  const addRule = () => setRules((rs) => [...(rs ?? []), { layoutId: setups[0]?.id ?? 0, enabled: true, priority: (rs?.length ?? 0) + 1, daysMask: 127, startMin: 9 * 60, endMin: 17 * 60 }]);
+  const removeRule = (i: number) => setRules((rs) => rs!.filter((_, k) => k !== i));
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put(`/api/devices/${deviceId}/schedules`, { timezone: tz.trim() || null, schedules: rules ?? [] });
+      toast.success("Schedule saved");
+      await onSaved();
+      onClose();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); setBusy(false); }
+  };
+
+  if (rules === null) return <div class="skeleton skeleton-line" />;
+  if (setups.length === 0) return <p class="muted">Create a setup first, then schedule it here.</p>;
+
+  return (
+    <div class="sched-editor">
+      <p class="muted" style={{ marginTop: 0 }}>Show different boards by time of day. The highest-priority active window wins; outside every window the screen falls back to its playlist or assigned setup.</p>
+      <label class="field grow">
+        <span>Timezone <em>(IANA, e.g. America/New_York — blank = server)</em></span>
+        <input type="text" value={tz} placeholder="Server timezone" onInput={(e) => setTz((e.currentTarget as HTMLInputElement).value)} />
+      </label>
+
+      {rules.map((r, i) => (
+        <div class="sched-rule card" key={i}>
+          <div class="row spread">
+            <select value={String(r.layoutId)} onChange={(e) => update(i, { layoutId: Number((e.currentTarget as HTMLSelectElement).value) })}>
+              {setups.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+            </select>
+            <span class="row sched-rule-right">
+              <label class="checkbox"><input type="checkbox" checked={r.enabled} onChange={(e) => update(i, { enabled: (e.currentTarget as HTMLInputElement).checked })} /> <span>On</span></label>
+              <IconButton icon={<Icon.x />} label="Remove rule" onClick={() => removeRule(i)} />
+            </span>
+          </div>
+          <div class="sched-days">
+            {DAY_LABELS.map((d, day) => (
+              <button key={day} type="button" class={`sched-day${r.daysMask & (1 << day) ? " on" : ""}`} aria-pressed={!!(r.daysMask & (1 << day))} onClick={() => toggleDay(i, day)}>{d}</button>
+            ))}
+          </div>
+          <div class="row sched-times">
+            <label class="field"><span>From</span><input type="time" value={minToTime(r.startMin)} onInput={(e) => update(i, { startMin: timeToMin((e.currentTarget as HTMLInputElement).value) })} /></label>
+            <label class="field"><span>To</span><input type="time" value={minToTime(r.endMin >= 1440 ? 1439 : r.endMin)} onInput={(e) => update(i, { endMin: timeToMin((e.currentTarget as HTMLInputElement).value) })} /></label>
+          </div>
+        </div>
+      ))}
+
+      <div class="row spread" style={{ marginTop: "10px" }}>
+        <button class="ghost" onClick={addRule}><Icon.plus /> Add rule</button>
+        <button class="primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save schedule"}</button>
       </div>
     </div>
   );

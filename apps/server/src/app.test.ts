@@ -248,6 +248,29 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(playlists.find((p: { id: number }) => p.id === pl.id).items).toHaveLength(2);
   });
 
+  it("a time-of-day schedule wins over the device's playlist", async () => {
+    const sched = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Scheduled", document: LOCAL_LAYOUT }) })).json();
+    // an always-on window (every day, all minutes) → schedule layout should always be active
+    const put = await app.request(`/api/devices/${device.deviceId}/schedules`, {
+      method: "PUT",
+      ...authed(cookieA, { timezone: "UTC", schedules: [{ layoutId: sched.id, enabled: true, priority: 1, daysMask: 127, startMin: 0, endMin: 1440 }] }),
+    });
+    expect(put.status).toBe(200);
+    expect((await put.json()).schedules).toHaveLength(1);
+
+    const me = await (await app.request("/api/devices/me", {
+      headers: { "x-device-id": device.deviceId, "x-device-secret": device.deviceSecret },
+    })).json();
+    expect(me.state.layout.name).toBe("Scheduled"); // schedule beats the playlist assigned earlier
+
+    // clearing schedules restores playlist behavior
+    await app.request(`/api/devices/${device.deviceId}/schedules`, { method: "PUT", ...authed(cookieA, { schedules: [] }) });
+    const after = await (await app.request("/api/devices/me", {
+      headers: { "x-device-id": device.deviceId, "x-device-secret": device.deviceSecret },
+    })).json();
+    expect(["Rot A", "Rot B"]).toContain(after.state.layout.name);
+  });
+
   it("shares a board by public read-only link, gated and revocable", async () => {
     const layout = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Shared", document: LOCAL_LAYOUT }) })).json();
 

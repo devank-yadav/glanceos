@@ -2701,3 +2701,16 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .share-right { gap: 8px; }
 .share-popover .ghost.danger { color: var(--bad); }
 .share-popover a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ---------- device schedule editor ---------- */
+.sched-editor .sched-rule { padding: 12px; margin-top: 10px; }
+.sched-rule-right { gap: 10px; align-items: center; }
+.sched-days { display: flex; gap: 6px; margin: 10px 0; }
+.sched-day {
+  width: 30px; height: 30px; border-radius: 999px; flex: none;
+  border: 1px solid var(--rule); background: var(--bg); color: var(--muted);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.sched-day.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.sched-times { gap: 12px; }
+.sched-times .field { flex: 1; }
