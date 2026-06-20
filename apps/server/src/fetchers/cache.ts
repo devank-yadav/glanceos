@@ -3,8 +3,10 @@
 // any error return null so the screen shows a calm placeholder (never crashes).
 // Per-input caching keeps every keyless source far under its rate limits.
 
+import { lookup as lookupCb, type LookupAddress, type LookupOptions } from "node:dns";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import { Agent, fetch } from "undici";
 
 interface Entry {
   at: number;
@@ -50,9 +52,22 @@ const UA = "GlanceOS/0.6 (self-hosted calm dashboard)";
 // network or a cloud metadata endpoint. Trusted-LAN installs can opt out.
 const ALLOW_PRIVATE = process.env.GLANCEOS_ALLOW_PRIVATE_EGRESS === "1";
 
-function isPrivate(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
+/** True for loopback/private/link-local/CGNAT/metadata addresses, in IPv4,
+ *  IPv6, AND IPv4-mapped-IPv6 form (dotted `::ffff:a.b.c.d` or hex
+ *  `::ffff:hhhh:hhhh`) — the latter were the SSRF bypass. Exported for tests. */
+export function isPrivate(ip: string): boolean {
+  const v = ip.toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, ""); // strip [] and zone id
+  // IPv4-mapped IPv6, dotted tail: judge the embedded v4.
+  const dotted = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(v);
+  if (dotted) return isPrivate(dotted[1]!);
+  // IPv4-mapped IPv6, hex tail (::ffff:a9fe:a9fe == 169.254.169.254): reconstruct.
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v);
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16), lo = parseInt(hex[2]!, 16);
+    return isPrivate(`${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`);
+  }
+  if (net.isIPv4(v)) {
+    const [a, b] = v.split(".").map(Number);
     return (
       a === 0 || a === 127 || a === 10 ||
       (a === 169 && b === 254) || // link-local + cloud metadata 169.254.169.254
@@ -61,9 +76,25 @@ function isPrivate(ip: string): boolean {
       (a === 100 && b >= 64 && b <= 127) // CGNAT
     );
   }
-  const v = ip.toLowerCase().replace(/^\[|\]$/g, "");
-  return v === "::1" || v === "::" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80") || v.startsWith("::ffff:127.") || v.startsWith("::ffff:10.") || v.startsWith("::ffff:192.168.");
+  return v === "::1" || v === "::" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80");
 }
+
+// A custom DNS lookup that REFUSES private addresses at connect time. The
+// validating dispatcher below routes every undici connection — including each
+// redirect hop — through this, so the resolved IP we connect to is the one we
+// checked (closing the DNS-rebind TOCTOU) and a public URL that 302s to a
+// private IP is also blocked. SNI/Host stay the original hostname.
+type LookupCb = (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family: number) => void;
+function safeLookup(hostname: string, options: LookupOptions, cb: LookupCb): void {
+  lookupCb(hostname, options, (err, address, family) => {
+    if (err) return cb(err, "", 0);
+    const list: LookupAddress[] = Array.isArray(address) ? address : [{ address: address as string, family: family as number }];
+    if (list.some((a) => isPrivate(a.address))) return cb(Object.assign(new Error("blocked private address"), { code: "EBLOCKED" }), "", 0);
+    cb(null, address as string | LookupAddress[], family as number);
+  });
+}
+// One shared dispatcher; null when egress to private hosts is explicitly allowed.
+const safeDispatcher = ALLOW_PRIVATE ? undefined : new Agent({ connect: { lookup: safeLookup as never } });
 
 export async function assertSafeUrl(raw: string): Promise<void> {
   if (ALLOW_PRIVATE) return;
@@ -74,9 +105,8 @@ export async function assertSafeUrl(raw: string): Promise<void> {
     throw new Error("invalid url");
   }
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("blocked scheme");
-  // Resolve every address the host maps to; block if ANY is private. (Resolve-
-  // then-fetch leaves a narrow DNS-rebind TOCTOU window — acceptable for a
-  // self-hosted tool; a literal-IP host is caught here directly.)
+  // Fast pre-check for a clear error before opening a socket; the validating
+  // dispatcher is the real enforcement (it also covers rebind + redirect hops).
   const results = await lookup(u.hostname, { all: true });
   if (results.length === 0 || results.some((r) => isPrivate(r.address))) throw new Error("blocked address");
 }
@@ -85,9 +115,10 @@ export async function getJSON<T>(url: string, headers: Record<string, string> = 
   await assertSafeUrl(url);
   const res = await fetch(url, {
     signal: AbortSignal.timeout(8000),
+    dispatcher: safeDispatcher,
     headers: { "user-agent": UA, accept: "application/json", ...headers },
   });
-  if (!res.ok) throw httpError(res);
+  if (!res.ok) throw httpError(res as unknown as Response);
   return (await res.json()) as T;
 }
 
@@ -95,9 +126,10 @@ export async function getText(url: string, headers: Record<string, string> = {})
   await assertSafeUrl(url);
   const res = await fetch(url, {
     signal: AbortSignal.timeout(8000),
+    dispatcher: safeDispatcher,
     headers: { "user-agent": UA, ...headers },
   });
-  if (!res.ok) throw httpError(res);
+  if (!res.ok) throw httpError(res as unknown as Response);
   return await res.text();
 }
 
@@ -106,10 +138,11 @@ export async function postJSON<T>(url: string, body: unknown, headers: Record<st
   const res = await fetch(url, {
     method: "POST",
     signal: AbortSignal.timeout(8000),
+    dispatcher: safeDispatcher,
     headers: { "user-agent": UA, "content-type": "application/json", accept: "application/json", ...headers },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw httpError(res);
+  if (!res.ok) throw httpError(res as unknown as Response);
   return (await res.json()) as T;
 }
 
