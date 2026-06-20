@@ -36,7 +36,7 @@ androidtv/
   settings.gradle.kts
   build.gradle.kts              root: AGP + Kotlin plugin versions
   gradle.properties             AndroidX on
-  gradlew / gradlew.bat         wrapper scripts (jar generated on first build — see below)
+  gradlew / gradlew.bat         wrapper scripts (jar committed — ./gradlew works with no system Gradle)
   gradle/wrapper/gradle-wrapper.properties
   app/
     build.gradle.kts            module: applicationId, SDK levels, GLANCEOS_URL BuildConfig
@@ -50,20 +50,18 @@ androidtv/
 
 ## Prerequisites
 
-- A JDK 17 (Android Gradle Plugin 8.5 needs Java 17).
-- **Either** Android Studio (Hedgehog or newer — easiest), **or** the Android command-line tools (`sdkmanager`, `cmdline-tools`) with platform `android-34` and build-tools 34.x installed, plus `adb` on your `PATH`.
+- **JDK 17** (Android Gradle Plugin 8.5 needs Java 17–21; a newer JDK like 24 will be rejected). On macOS: `brew install --cask temurin@17`.
+- The **Android SDK** — *either* Android Studio (easiest, also gives you `adb` and a click-to-build), *or* the command-line tools (`sdkmanager`) with platform `android-34` + build-tools 34.x. Headless setup:
+  ```
+  brew install --cask android-commandlinetools
+  sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+  yes | sdkmanager --licenses
+  export ANDROID_HOME="$(brew --prefix)/share/android-commandlinetools"   # so Gradle finds the SDK
+  ```
+  `adb` is in `$ANDROID_HOME/platform-tools` (or `brew install android-platform-tools`).
 - The Fire TV stick / Android TV and your computer on the **same LAN**, with the device set to allow ADB ("Developer options → ADB debugging" + "Apps from Unknown Sources").
 
-### One-time: generate the wrapper jar
-
-This repo ships the wrapper *scripts* and *properties* but not the binary `gradle-wrapper.jar` (no binaries committed). Generate it once from a system Gradle 8.x:
-
-```
-cd devices/androidtv
-gradle wrapper --gradle-version 8.7
-```
-
-Or just open the `devices/androidtv` folder in Android Studio — it creates the wrapper jar automatically on first sync. After that, './gradlew' works on its own.
+The **Gradle wrapper jar is committed**, so `./gradlew` works with just a JDK + the SDK — **no Android Studio and no system Gradle required**. (The wrapper downloads Gradle 8.7 itself on first run.)
 
 ## Set the host
 
@@ -127,6 +125,6 @@ These are placeholders only — no binary assets are authored here.
 ## Caveats
 
 - `assembleDebug` produces an **unsigned-for-distribution, debug-signed** APK — fine for personal sideloading to your own stick, not for any store. A real release build (`assembleRelease`) needs **your own keystore**; create one with `keytool -genkeypair -v -keystore glanceos-release.jks -alias glanceos -keyalg RSA -keysize 2048 -validity 10000` and wire it into a `signingConfigs` block (kept out of git — see `.gitignore`).
-- The `gradle-wrapper.jar` is generated once (see above), not committed, because this repo avoids binaries.
+- The `gradle-wrapper.jar` (Gradle 8.7, the official one) **is committed**, so `./gradlew assembleDebug` works with no Android Studio and no system Gradle — just a JDK 17 + the SDK.
 - Old Fire TV WebViews are old Chromiums; the GlanceOS runtime already targets `es2017` for exactly this reason, so it runs fine — but very old sticks can be sluggish on heavy boards.
-- This app has not been run through a build or installed on hardware from this authoring environment (no Android toolchain here). The sources are complete and conventional; expect to run `gradle wrapper` once and supply real banner/icon art before it looks finished on the home row.
+- This app has not been built or installed on hardware from the authoring environment (no Android toolchain there). The sources are complete and conventional; supply real banner/icon art before it looks finished on the home row.
