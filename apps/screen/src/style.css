@@ -1083,3 +1083,18 @@ body.tv [data-focusable]:focus {
   outline-offset: 0.4vmin;
   border-radius: 0.6vmin;
 }
+
+/* ---------- TV mode: asleep (outside the wake window) ---------- */
+.tv-asleep {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  background: #000;
+}
+.tv-asleep-clock {
+  color: #1c1c1c; /* barely visible — alive, but minimal burn-in */
+  font-size: calc(6vmin * var(--font-scale, 1));
+  padding: 4vmin;
+  font-variant-numeric: tabular-nums;
+}

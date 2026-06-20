@@ -1,4 +1,5 @@
 import type { StreamPayloadT } from "@glanceos/schema";
+import { startPixelShift, stopPixelShift } from "./burnin";
 import { qrSvg } from "./qr";
 import { applySafeArea, enableTvMode } from "./tv";
 import { WIDGETS } from "./widgets";
@@ -32,7 +33,12 @@ export function renderPayload(payload: StreamPayloadT): void {
   }
   const state = payload.state;
   // TV-mode devices carry display settings server-side; apply before painting.
-  if (state.tv?.enabled) { enableTvMode(); applySafeArea(state.tv.safeArea); }
+  if (state.tv?.enabled) {
+    enableTvMode();
+    applySafeArea(state.tv.safeArea);
+    if (state.tv.power === "off") { stopPixelShift(root); renderAsleep(); return; } // outside the wake window
+    if (state.tv.burnIn?.pixelShift) startPixelShift(root); else stopPixelShift(root);
+  }
   if (!state.layout) {
     renderMessage("Claimed and ready", "Pick a setup for this screen in the config studio.");
     return;
@@ -106,6 +112,23 @@ function renderClaim(code: string): void {
     wrap.appendChild(qr);
   } catch { /* no QR, the code still shows */ }
   wrap.appendChild(el("claim-hint", "Scan to open the GlanceOS app, or enter this code there to claim the screen."));
+  root.appendChild(wrap);
+}
+
+// Outside the wake window: a near-black screen with a faint, slowly-updating
+// clock — confirms the panel is alive without burning a static board overnight.
+function renderAsleep(): void {
+  document.body.classList.add("dark");
+  const wrap = el("tv-asleep");
+  const clock = el("tv-asleep-clock");
+  const paint = () => {
+    const d = new Date();
+    clock.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  paint();
+  const t = window.setInterval(paint, 30_000);
+  cleanups.push(() => window.clearInterval(t));
+  wrap.appendChild(clock);
   root.appendChild(wrap);
 }
 

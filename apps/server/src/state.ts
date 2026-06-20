@@ -1,10 +1,10 @@
-import type { StreamPayloadT, TvStateT } from "@glanceos/schema";
+import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { connLookupFor } from "./connections";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
-import { activeScheduledLayout, hasSchedules } from "./schedules";
+import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
 
 /** The layout a device shows right now — an active time-of-day schedule wins,
@@ -16,19 +16,36 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
   return device.layout_id;
 }
 
-// The TV settings the screen applies (undefined for non-TV devices). power is
-// always "on" here; the wake-window computation is wired in a later phase.
-export function tvStateFor(device: DeviceRow): TvStateT | undefined {
+/** Pure: is the display awake at this wall-clock minute/weekday? Outside the wake
+ *  window (or on an inactive day) → "off"; no window → always "on". Handles an
+ *  overnight window (start > end). */
+export function wakePower(wake: WakeWindowT | undefined, minute: number, weekday: number): "on" | "off" {
+  if (!wake) return "on";
+  if ((wake.daysMask & (1 << weekday)) === 0) return "off";
+  const inWindow = wake.startMin <= wake.endMin
+    ? minute >= wake.startMin && minute < wake.endMin
+    : minute >= wake.startMin || minute < wake.endMin;
+  return inWindow ? "on" : "off";
+}
+
+// The TV settings the screen applies (undefined for non-TV devices), incl. the
+// display-power state computed from the wake window in the device's timezone.
+export function tvStateFor(device: DeviceRow, now = Date.now()): TvStateT | undefined {
   const p = deviceProfile(device);
   if (!p.tvMode) return undefined;
-  return { enabled: true, safeArea: p.safeArea, burnIn: p.burnIn, power: "on" };
+  let power: "on" | "off" = "on";
+  if (p.wake) {
+    const { weekday, minute } = wallClock(now, device.timezone);
+    power = wakePower(p.wake, minute, weekday);
+  }
+  return { enabled: true, safeArea: p.safeArea, burnIn: p.burnIn, power };
 }
 
 export async function composeState(device: DeviceRow, now = Date.now()): Promise<StreamPayloadT> {
   if (!device.claimed_at) {
     return { claimed: false, claimCode: device.claim_code ?? "------" };
   }
-  const tv = tvStateFor(device);
+  const tv = tvStateFor(device, now);
   const layoutId = currentLayoutId(device, now);
   const layout = layoutId ? getLayout(layoutId) : undefined;
   if (!layout) {
