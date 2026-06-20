@@ -88,6 +88,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   const [name, setName] = useState(device.name ?? "");
   const [previewing, setPreviewing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [tving, setTving] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +136,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           items={[
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
             { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
+            { label: "TV mode…", icon: <Icon.monitor />, onClick: () => setTving(true) },
             { label: "Rename", icon: <Icon.pencil />, onClick: () => setEditing(true) },
             { label: "Disconnect", icon: <Icon.x />, danger: true, onClick: disconnect },
           ]}
@@ -190,6 +192,10 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
 
       <Modal open={scheduling} onClose={() => setScheduling(false)} title={`Schedule — ${device.name ?? "screen"}`}>
         {scheduling && <ScheduleEditor deviceId={device.id} setups={setups} onClose={() => setScheduling(false)} onSaved={onChanged} />}
+      </Modal>
+
+      <Modal open={tving} onClose={() => setTving(false)} title={`TV mode — ${device.name ?? "screen"}`}>
+        {tving && <TvEditor device={device} onClose={() => setTving(false)} onSaved={onChanged} />}
       </Modal>
     </div>
   );
@@ -281,6 +287,68 @@ function fmtAgo(ms: number): string {
   if (d < 3_600_000) return `${Math.round(d / 60_000)}m ago`;
   if (d < 86_400_000) return `${Math.round(d / 3_600_000)}h ago`;
   return `${Math.round(d / 86_400_000)}d ago`;
+}
+
+const minToHHMM = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const hhmmToMin = (s: string): number => { const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+
+/** Per-device TV / large-display settings: kiosk mode, overscan, burn-in, sleep. */
+function TvEditor({ device, onClose, onSaved }: { device: DeviceSummary; onClose: () => void; onSaved: () => Promise<void> }) {
+  const t = device.tv;
+  const [tvMode, setTvMode] = useState(t.tvMode);
+  const [overscan, setOverscan] = useState(t.safeArea?.top ?? 0);
+  const [pixelShift, setPixelShift] = useState(t.burnIn?.pixelShift ?? false);
+  const [sleep, setSleep] = useState(!!t.wake);
+  const [wakeStart, setWakeStart] = useState(minToHHMM(t.wake?.startMin ?? 420));
+  const [wakeEnd, setWakeEnd] = useState(minToHHMM(t.wake?.endMin ?? 1380));
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const toast = useToast();
+  const tvUrl = `${location.origin}/screen/?tv=1`;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.patch(`/api/devices/${device.id}`, {
+        tv: {
+          tvMode,
+          safeArea: { top: overscan, right: overscan, bottom: overscan, left: overscan },
+          burnIn: { pixelShift, dim: false, screensaverAfterMin: 0 },
+          wake: sleep ? { startMin: hhmmToMin(wakeStart), endMin: hhmmToMin(wakeEnd), daysMask: 127 } : null,
+        },
+      });
+      toast.success("TV settings saved");
+      await onSaved();
+      onClose();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); setBusy(false); }
+  };
+
+  return (
+    <div class="tv-editor">
+      <label class="tv-check"><input type="checkbox" checked={tvMode} onChange={(e) => setTvMode((e.currentTarget as HTMLInputElement).checked)} /> <span>Kiosk mode — fullscreen, screen wake-lock, D-pad/remote navigation</span></label>
+      <label class="field"><span>Overscan-safe margin · {overscan}%</span>
+        <input type="range" min="0" max="15" value={overscan} onInput={(e) => setOverscan(Number((e.currentTarget as HTMLInputElement).value))} />
+        <span class="field-hint muted">Pulls content in from the edges so a TV's bezel/overscan doesn't clip it.</span>
+      </label>
+      <label class="tv-check"><input type="checkbox" checked={pixelShift} onChange={(e) => setPixelShift((e.currentTarget as HTMLInputElement).checked)} /> <span>Burn-in protection (slow pixel-shift)</span></label>
+      <label class="tv-check"><input type="checkbox" checked={sleep} onChange={(e) => setSleep((e.currentTarget as HTMLInputElement).checked)} /> <span>Sleep the display outside set hours</span></label>
+      {sleep && (
+        <div class="row tv-wake">
+          <label class="field"><span>Wake</span><input type="time" value={wakeStart} onInput={(e) => setWakeStart((e.currentTarget as HTMLInputElement).value)} /></label>
+          <label class="field"><span>Sleep</span><input type="time" value={wakeEnd} onInput={(e) => setWakeEnd((e.currentTarget as HTMLInputElement).value)} /></label>
+        </div>
+      )}
+      <div class="tv-launch">
+        <span class="muted">Open GlanceOS on the TV's browser:</span>
+        <code>{tvUrl}</code>
+        <button class="ghost" onClick={() => { navigator.clipboard?.writeText(tvUrl); setCopied(true); }}>{copied ? "Copied ✓" : "Copy"}</button>
+      </div>
+      <div class="row spread" style={{ marginTop: "4px" }}>
+        <span />
+        <button class="primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save TV settings"}</button>
+      </div>
+    </div>
+  );
 }
 
 /** Post-claim (and change-setup) picker: existing setup, new blank, or the hub. */

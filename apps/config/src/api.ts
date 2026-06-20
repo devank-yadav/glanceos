@@ -28,6 +28,12 @@ export interface DeviceSummary {
   resolution: string;
   timezone: string | null;
   renderOpts: { algo?: string; threshold?: number; gamma?: number };
+  tv: {
+    tvMode: boolean;
+    safeArea?: { top: number; right: number; bottom: number; left: number };
+    burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
+    wake?: { startMin: number; endMin: number; daysMask: number };
+  };
   createdAt: number;
 }
 

@@ -2809,3 +2809,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .restore-block p { margin: 0 0 10px; font-size: 13px; }
 .restore-row { gap: 8px; align-items: center; }
 .restore-row input[type="file"] { font-size: 12px; }
+
+/* ---------- per-device TV settings editor ---------- */
+.tv-editor { display: flex; flex-direction: column; gap: 12px; }
+.tv-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.tv-check input { margin-top: 2px; flex: none; }
+.tv-wake { gap: 12px; }
+.tv-launch { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 12px; font-size: 13px; }
+.tv-launch code { background: var(--input-bg); padding: 3px 8px; border-radius: 6px; font-size: 12px; }

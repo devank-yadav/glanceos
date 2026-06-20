@@ -18,7 +18,8 @@ import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
-  registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, setRenderOpts, updateDevice, type DeviceRow,
+  registerDevice, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
+  updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
@@ -96,6 +97,7 @@ function deviceSummary(d: DeviceRow) {
     resolution: `${profile.width}×${profile.height}`,
     timezone: d.timezone,
     renderOpts: safeJsonObj(d.render_opts),
+    tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake },
     createdAt: d.created_at,
   };
 }
@@ -356,10 +358,14 @@ export function buildApp(): Hono<Env> {
     const userId = c.get("userId");
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
+      tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null };
     };
     if (body.renderOpts !== undefined) {
       // validate/clamp via toDitherOpts so junk can't reach the render pipeline
       if (!setRenderOpts(id, { ...toDitherOpts(body.renderOpts) }, userId)) return c.json({ error: "device not found" }, 404);
+    }
+    if (body.tv !== undefined) {
+      if (!setDeviceTvSettings(id, userId, body.tv)) return c.json({ error: "device not found" }, 404);
     }
     // Assigning a playlist clears the single layout, and vice-versa.
     if (body.playlistId !== undefined) {

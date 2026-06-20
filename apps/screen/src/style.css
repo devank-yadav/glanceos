@@ -1098,3 +1098,9 @@ body.tv [data-focusable]:focus {
   padding: 4vmin;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- old smart-TV browsers without CSS grid: stack rows ---------- */
+@supports not (display: grid) {
+  .page { display: flex; flex-direction: column; }
+  .board-row { flex: 1 1 auto; }
+}
