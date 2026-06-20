@@ -909,32 +909,6 @@ ul.tasks li:last-child {
   margin: 0;
 }
 
-.thumb {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  aspect-ratio: 16 / 9;
-  background: var(--soft);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 6px;
-}
-
-.thumb-row {
-  display: flex;
-  gap: 2px;
-  flex-basis: 0;
-  min-height: 0;
-}
-
-.thumb-cell {
-  background: var(--thumb-bg);
-  border-radius: 2px;
-  flex-basis: 0;
-  min-width: 0;
-  min-height: 0;
-}
-
 /* ============================================================
    LANDING
    ============================================================ */

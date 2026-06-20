@@ -49,12 +49,21 @@ export function BoardPreview({
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
+  // Post the draft state once the iframe is up. We can't be sure whether the
+  // runtime's own state listener is attached yet (with many cached previews the
+  // ready ping can race), so post on ready AND retry a couple of times — the
+  // runtime just re-renders the same board, so extra posts are harmless.
   useEffect(() => {
     if (!ready) return;
-    iframeRef.current?.contentWindow?.postMessage(
-      { type: "glanceos:state", payload: { claimed: true, state: { layoutVersion: 0, layout: doc, data: data ?? {}, deviceName: deviceName ?? "Preview" } } },
-      targetOrigin(),
-    );
+    const send = () =>
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "glanceos:state", payload: { claimed: true, state: { layoutVersion: 0, layout: doc, data: data ?? {}, deviceName: deviceName ?? "Preview" } } },
+        targetOrigin(),
+      );
+    send();
+    const t1 = setTimeout(send, 200);
+    const t2 = setTimeout(send, 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [ready, doc, data, deviceName]);
 
   return (
@@ -68,6 +77,7 @@ export function BoardPreview({
         loading="lazy"
         title={deviceName ? `${deviceName} preview` : "Board preview"}
         style={{ transform: `scale(${scale})`, transformOrigin: "top left", visibility: scale ? "visible" : "hidden" }}
+        onLoad={() => setReady(true)}
       />
     </div>
   );

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type HubItem } from "../api";
+import { BoardPreview } from "../components/BoardPreview";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
-import { Thumb } from "../thumb";
 
 export function HubPage() {
   const [items, setItems] = useState<HubItem[] | null>(null);
@@ -55,7 +55,7 @@ export function HubPage() {
           <div class="cards hub-cards">
             {items.map((item) => (
               <div key={item.id} class="card hub-card">
-                <Thumb doc={item.document} />
+                <BoardPreview doc={item.document} deviceName={item.name} />
                 <h3 class="card-title">{item.name}</h3>
                 <p class="muted hub-byline">by {item.author}</p>
                 {item.description && <p class="hub-desc">{item.description}</p>}
