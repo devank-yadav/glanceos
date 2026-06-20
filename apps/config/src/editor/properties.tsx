@@ -1,6 +1,6 @@
 import type { LayoutT, WidgetT } from "@glanceos/schema";
 import type { VNode } from "preact";
-import { blockFor, type WidgetType } from "./blocks";
+import { BINDABLE, blockFor, type WidgetType } from "./blocks";
 import { Icon } from "./icons";
 
 // The right-hand panel: props of the selected block, or board settings when
@@ -262,6 +262,11 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.style = { ...target.style, ...patch } as typeof target.style;
     });
+  const editVisibility = (v: string) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.visibility = v === "whenData" ? "whenData" : undefined;
+    });
   const props = block.props as Record<string, unknown>;
   const fields = PROP_FIELDS[block.type];
   const style = block.style;
@@ -275,6 +280,24 @@ export function BlockFields({
         ))}
         {fields.length === 0 && <p class="muted">Nothing to configure.</p>}
       </div>
+      {block.type === "text" && (
+        <label class="field">
+          <span>Format</span>
+          <select value={(props.format as string) ?? "plain"} onChange={(e) => editProp("format", (e.currentTarget as HTMLSelectElement).value)}>
+            <option value="plain">Plain text</option>
+            <option value="markdown">Markdown (**bold**, *italic*, [link](url))</option>
+          </select>
+        </label>
+      )}
+      {BINDABLE.has(block.type) && (
+        <label class="field">
+          <span>Visibility</span>
+          <select value={block.visibility ?? "always"} onChange={(e) => editVisibility((e.currentTarget as HTMLSelectElement).value)}>
+            <option value="always">Always show</option>
+            <option value="whenData">Only when its source has data</option>
+          </select>
+        </label>
+      )}
       <h4>Emphasis</h4>
       <div class="row wrap">
         <label class="field checkbox">

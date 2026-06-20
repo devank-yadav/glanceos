@@ -4,6 +4,7 @@ import type {
   QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
 } from "@glanceos/schema";
 import { isoWeek, moonPhase, sunTimes } from "./astro";
+import { renderInlineMarkdown } from "./markdown";
 import { barSvg, nums, ringSvg, romanTime, seasonOf, sparkSvg, zodiacOf } from "./viz";
 
 // The whole widget contract: take a cell, render into it, optionally return a
@@ -132,7 +133,9 @@ const tasks: Render = (el, _w, data) => {
 
 const text: Render = (el, widget) => {
   if (widget.type !== "text") return;
-  const node = div("text-content", widget.props.content);
+  const node = div("text-content");
+  if (widget.props.format === "markdown") renderInlineMarkdown(widget.props.content, node);
+  else node.textContent = widget.props.content;
   if (widget.props.align === "center") node.classList.add("center");
   el.appendChild(node);
 };

@@ -29,6 +29,8 @@ export const TasksProps = z.object({
 export const TextProps = z.object({
   content: z.string().default(""),
   align: z.enum(["left", "center"]).default("left"),
+  // "markdown" enables a safe inline subset (bold/italic/links); "plain" is verbatim.
+  format: z.enum(["plain", "markdown"]).default("plain"),
 });
 export const QueueProps = z.object({
   queueId: z.string().min(1).default("default"),
@@ -331,7 +333,7 @@ export const BlockSource = z.object({
 });
 export type BlockSourceT = z.infer<typeof BlockSource>;
 
-const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional() };
+const b = { id: z.string().min(1), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),

@@ -68,6 +68,8 @@ export function renderPayload(payload: StreamPayloadT): void {
     rowEl.style.gap = gap;
     rowEl.style.gridRow = String(offset + i + 1);
     for (const block of row.blocks) {
+      // Conditional visibility: a "whenData" block hides when its bound source resolved to nothing.
+      if (block.visibility === "whenData" && state.data[block.id] == null) continue;
       // A cached bundle older than the document may not know this type — skip, don't blank.
       const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
       if (!render) continue;
