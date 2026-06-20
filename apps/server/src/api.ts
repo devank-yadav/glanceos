@@ -18,8 +18,9 @@ import {
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
-import { dataDir } from "./db";
+import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload } from "./uploads";
+import { limiter } from "./ratelimit";
 import { isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
@@ -119,6 +120,31 @@ function setupSummary(l: ReturnType<typeof listSetups>[number]) {
 export function buildApp(): Hono<Env> {
   const app = new Hono<Env>();
 
+  // ---- liveness/readiness probes (before the API guard; no auth) ----
+  app.get("/health", (c) => c.json({ ok: true }));
+  app.get("/ready", (c) => {
+    try { db.prepare("SELECT 1").get(); return c.json({ ready: true }); }
+    catch { return c.json({ ready: false }, 503); }
+  });
+
+  // ---- security headers (+ CSP on document/asset responses) ----
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Frame-Options", "SAMEORIGIN");
+    c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    const path = c.req.path;
+    if (!path.startsWith("/api") && !path.startsWith("/uploads")) {
+      c.header(
+        "Content-Security-Policy",
+        // 'self' scripts/styles; the studio embeds /screen in an iframe (frame-src);
+        // SSE + fetch are same-origin (connect-src); boards may show remote images.
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data: blob: https: http:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'",
+      );
+    }
+  });
+
   // ---- speed: gzip everything that isn't the API (never the SSE stream),
   // and let browsers cache hashed assets forever ----
 
@@ -148,6 +174,19 @@ export function buildApp(): Hono<Env> {
     c.set("userId", userId);
     return next();
   });
+
+  // ---- rate limits (in-memory; GLANCEOS_RATE_LIMIT=off disables) ----
+  const deviceKey = (c: Context) => c.req.query("id") || c.req.header("id") || c.req.header("x-device-id") || "anon";
+  const userKey = (c: Context) => c.get("userId") || "anon";
+  app.use("/api/auth/login", limiter("auth", 10, 60_000));
+  app.use("/api/auth/register", limiter("auth", 10, 60_000));
+  app.use("/api/devices/register", limiter("register", 30, 60_000));
+  app.use("/api/devices/claim", limiter("claim", 30, 60_000));
+  app.use("/api/devices/me/display", limiter("display", 120, 60_000, deviceKey));
+  app.use("/api/devices/me/telemetry", limiter("telemetry", 120, 60_000, deviceKey));
+  app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
+  app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
+  app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
 
   const issueSession = (c: Context, userId: string) => {
     const session = createSession(userId);

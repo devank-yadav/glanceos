@@ -9,7 +9,11 @@ type Browser = Awaited<ReturnType<typeof launchChromium>>;
 
 async function launchChromium() {
   const { chromium } = await import("playwright");
-  return chromium.launch({ args: ["--no-sandbox", "--disable-gpu"] });
+  const b = await chromium.launch({ args: ["--no-sandbox", "--disable-gpu"] });
+  // If Chromium crashes, drop the singleton so the next render relaunches it
+  // instead of throwing forever on a dead browser.
+  b.on("disconnected", () => { browserPromise = null; });
+  return b;
 }
 
 let browserPromise: Promise<Browser> | null = null;
@@ -29,13 +33,7 @@ export async function renderAvailable(): Promise<boolean> {
   }
 }
 
-/** Screenshot the board at w×h and return an 8-bit grayscale buffer. */
-export async function renderGray(
-  baseUrl: string,
-  payload: StreamPayloadT,
-  w: number,
-  h: number,
-): Promise<Uint8Array> {
+async function attemptRender(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Uint8Array> {
   const page = await (await browser()).newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   try {
     await page.goto(`${baseUrl}/screen/?preview=1`, { waitUntil: "load", timeout: 12_000 });
@@ -45,8 +43,23 @@ export async function renderGray(
     const { data } = await sharp(png).greyscale().raw().toBuffer({ resolveWithObject: true });
     return new Uint8Array(data);
   } finally {
-    await page.close();
+    await page.close().catch(() => {});
   }
+}
+
+/** Screenshot the board at w×h and return an 8-bit grayscale buffer. One retry
+ *  (resetting the browser) so a crashed/zombie Chromium self-heals. */
+export async function renderGray(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Uint8Array> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await attemptRender(baseUrl, payload, w, h);
+    } catch (e) {
+      lastErr = e;
+      browserPromise = null; // force a fresh browser on the retry
+    }
+  }
+  throw lastErr;
 }
 
 /** Expand a 1-bit buffer back to a grayscale PNG (for the dashboard preview). */

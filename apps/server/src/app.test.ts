@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 // The DB module reads this at import time — set it before anything loads.
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-test-"));
+process.env.GLANCEOS_RATE_LIMIT = "off"; // the integration flow makes bursts of auth/poll calls
 
 const { migrate } = await import("./db");
 const { seedTemplates } = await import("./seed");

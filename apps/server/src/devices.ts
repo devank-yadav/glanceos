@@ -45,6 +45,16 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
   };
 }
 
+// Validate telemetry: out-of-range / junk values become null so COALESCE keeps
+// the last good reading (a bogus battery=999 never overwrites a real one).
+const cleanBattery = (v?: number): number | null => (typeof v === "number" && v >= 0 && v <= 100 ? Math.round(v) : null);
+const cleanRssi = (v?: number): number | null => (typeof v === "number" && v >= -120 && v <= 0 ? Math.round(v) : null);
+const cleanFirmware = (v?: string): string | null => {
+  if (typeof v !== "string") return null;
+  const s = v.replace(/[^\x20-\x7e]/g, "").slice(0, 32).trim();
+  return s || null;
+};
+
 /** Record a device "checking in" (display poll) with optional telemetry. */
 export function recordTelemetry(
   id: string,
@@ -54,9 +64,9 @@ export function recordTelemetry(
     "UPDATE devices SET last_seen = ?, battery = COALESCE(?, battery), rssi = COALESCE(?, rssi), firmware = COALESCE(?, firmware) WHERE id = ?",
   ).run(
     Date.now(),
-    t.battery ?? null,
-    t.rssi ?? null,
-    t.firmware ?? null,
+    cleanBattery(t.battery),
+    cleanRssi(t.rssi),
+    cleanFirmware(t.firmware),
     id,
   );
 }
