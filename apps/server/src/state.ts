@@ -1,6 +1,6 @@
-import type { StreamPayloadT } from "@glanceos/schema";
+import type { StreamPayloadT, TvStateT } from "@glanceos/schema";
 import { connLookupFor } from "./connections";
-import { devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
+import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
@@ -16,17 +16,26 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
   return device.layout_id;
 }
 
+// The TV settings the screen applies (undefined for non-TV devices). power is
+// always "on" here; the wake-window computation is wired in a later phase.
+export function tvStateFor(device: DeviceRow): TvStateT | undefined {
+  const p = deviceProfile(device);
+  if (!p.tvMode) return undefined;
+  return { enabled: true, safeArea: p.safeArea, burnIn: p.burnIn, power: "on" };
+}
+
 export async function composeState(device: DeviceRow, now = Date.now()): Promise<StreamPayloadT> {
   if (!device.claimed_at) {
     return { claimed: false, claimCode: device.claim_code ?? "------" };
   }
+  const tv = tvStateFor(device);
   const layoutId = currentLayoutId(device, now);
   const layout = layoutId ? getLayout(layoutId) : undefined;
   if (!layout) {
     // First-class state: claimed, waiting for the user to pick a setup.
     return {
       claimed: true,
-      state: { layoutVersion: 0, layout: null, data: {}, deviceName: device.name ?? undefined },
+      state: { layoutVersion: 0, layout: null, data: {}, deviceName: device.name ?? undefined, tv },
     };
   }
   return {
@@ -36,6 +45,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
       layout: layout.document,
       data: await resolveWidgetData(layout.document, device.user_id ?? "", connLookupFor(device.user_id ?? "")),
       deviceName: device.name ?? undefined,
+      tv,
     },
   };
 }

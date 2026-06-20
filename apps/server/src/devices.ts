@@ -28,7 +28,14 @@ export interface DeviceProfile {
   height: number;
   rotation: number;
   colorDepth: string;
+  tvMode?: boolean;
+  safeArea?: { top: number; right: number; bottom: number; left: number };
+  burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
+  wake?: { startMin: number; endMin: number; daysMask: number };
 }
+
+const clamp = (n: unknown, lo: number, hi: number, dflt = 0): number =>
+  typeof n === "number" && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
 
 export function deviceProfile(device: DeviceRow): DeviceProfile {
   let p: Record<string, unknown> = {};
@@ -37,12 +44,44 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
   } catch {
     /* malformed profile → defaults below */
   }
-  return {
+  const out: DeviceProfile = {
     width: typeof p.width === "number" && p.width > 0 ? Math.round(p.width) : 800,
     height: typeof p.height === "number" && p.height > 0 ? Math.round(p.height) : 480,
     rotation: typeof p.rotation === "number" ? p.rotation : 0,
     colorDepth: typeof p.colorDepth === "string" ? p.colorDepth : "mono",
   };
+  if (p.tvMode === true) out.tvMode = true;
+  if (p.safeArea && typeof p.safeArea === "object") {
+    const s = p.safeArea as Record<string, unknown>;
+    out.safeArea = { top: clamp(s.top, 0, 25), right: clamp(s.right, 0, 25), bottom: clamp(s.bottom, 0, 25), left: clamp(s.left, 0, 25) };
+  }
+  if (p.burnIn && typeof p.burnIn === "object") {
+    const b = p.burnIn as Record<string, unknown>;
+    out.burnIn = { pixelShift: b.pixelShift === true, dim: b.dim === true, screensaverAfterMin: clamp(b.screensaverAfterMin, 0, 1440) };
+  }
+  if (p.wake && typeof p.wake === "object") {
+    const w = p.wake as Record<string, unknown>;
+    out.wake = { startMin: clamp(w.startMin, 0, 1439), endMin: clamp(w.endMin, 0, 1439), daysMask: clamp(w.daysMask, 0, 127, 127) };
+  }
+  return out;
+}
+
+/** Merge TV settings into a device's stored profile JSON (config-plane writer). */
+export function setDeviceTvSettings(
+  id: string,
+  userId: string,
+  patch: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null },
+): DeviceRow | null {
+  const device = getDevice(id);
+  if (!device || device.user_id !== userId) return null;
+  let p: Record<string, unknown> = {};
+  try { p = JSON.parse(device.profile) as Record<string, unknown>; } catch { /* defaults */ }
+  if (patch.tvMode !== undefined) p.tvMode = patch.tvMode;
+  if (patch.safeArea !== undefined) p.safeArea = patch.safeArea;
+  if (patch.burnIn !== undefined) p.burnIn = patch.burnIn;
+  if (patch.wake !== undefined) { if (patch.wake === null) delete p.wake; else p.wake = patch.wake; }
+  db.prepare("UPDATE devices SET profile = ? WHERE id = ?").run(JSON.stringify(p), id);
+  return getDevice(id) ?? null;
 }
 
 // Validate telemetry: out-of-range / junk values become null so COALESCE keeps

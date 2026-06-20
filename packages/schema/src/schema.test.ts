@@ -143,3 +143,29 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(parseDocument(templates[0]).name).toBe("Personal dashboard");
   });
 });
+
+describe("TV / large-display profile (v1.7, optional → back-compatible)", () => {
+  it("parses a profile with TV settings", async () => {
+    const { DeviceProfile } = await import("./device");
+    const p = DeviceProfile.parse({ width: 1920, height: 1080, tvMode: true, safeArea: { top: 5, right: 5, bottom: 5, left: 5 }, burnIn: { pixelShift: true, screensaverAfterMin: 60 }, wake: { startMin: 420, endMin: 1380 } });
+    expect(p.tvMode).toBe(true);
+    expect(p.safeArea?.top).toBe(5);
+    expect(p.burnIn?.pixelShift).toBe(true);
+    expect(p.burnIn?.dim).toBe(false); // defaulted
+    expect(p.wake?.daysMask).toBe(127); // defaulted
+  });
+
+  it("still parses an old profile with no TV fields (no migration)", async () => {
+    const { DeviceProfile } = await import("./device");
+    const p = DeviceProfile.parse({ width: 800, height: 480 });
+    expect(p.tvMode).toBeUndefined();
+    expect(p.safeArea).toBeUndefined();
+  });
+
+  it("parses ScreenState with an optional tv block", async () => {
+    const { ScreenState } = await import("./device");
+    const s = ScreenState.parse({ layoutVersion: 1, layout: null, data: {}, tv: { enabled: true, power: "on" } });
+    expect(s.tv?.enabled).toBe(true);
+    expect(ScreenState.parse({ layoutVersion: 1, layout: null, data: {} }).tv).toBeUndefined();
+  });
+});
