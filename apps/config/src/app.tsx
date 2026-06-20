@@ -18,6 +18,7 @@ import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
+import { SharedPage } from "./pages/shared";
 import { navigate, useRoute } from "./router";
 
 // The Studio (and zod with it) lives in its own chunk: the shell loads tiny,
@@ -152,6 +153,7 @@ export function App() {
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
           {page.name === "integrations" && <IntegrationsPage />}
+          {page.name === "shared" && <SharedPage />}
           {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />

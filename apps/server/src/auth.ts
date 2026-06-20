@@ -83,6 +83,13 @@ export function getUser(id: string): PublicUser | null {
   return row ? toPublic(row) : null;
 }
 
+/** Look up an account by email (case-insensitive, per the UNIQUE collation). Used
+ *  to resolve a share grantee. Returns null if no such account exists. */
+export function getUserByEmail(email: string): PublicUser | null {
+  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email.trim()) as UserRow | undefined;
+  return row ? toPublic(row) : null;
+}
+
 export function createSession(userId: string): { token: string; expiresAt: number } {
   const token = randomBytes(32).toString("hex");
   const now = Date.now();

@@ -3,6 +3,7 @@ import { api, type LayoutRecord, type SetupSummary } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Menu } from "../components/Menu";
+import { ShareDialog } from "../components/ShareDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { StatChip } from "../components/StatChip";
@@ -76,6 +77,7 @@ export function SetupsPage() {
 function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [description, setDescription] = useState(setup.description);
   const toast = useToast();
   const confirm = useConfirm();
@@ -122,6 +124,7 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
         <Menu
           trigger={<Icon.list />}
           items={[
+            { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
             { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
             { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
             { label: setup.published ? "Hub settings" : "Publish to hub…", icon: <Icon.upload />, onClick: () => setPublishing((v) => !v) },
@@ -148,6 +151,7 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
           <button disabled={busy} onClick={togglePublish}>{setup.published ? "Unpublish" : "Publish"}</button>
         </div>
       )}
+      {sharing && <ShareDialog kind="layout" targetId={String(setup.id)} targetName={setup.name} onClose={() => setSharing(false)} />}
     </div>
   );
 }

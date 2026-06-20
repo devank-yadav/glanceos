@@ -39,6 +39,9 @@ import {
   setShareToken, shareExpired, updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
 import {
+  createShare, getReadableLayout, getWritableLayout, listSharesByOwner, revokeShare, sharedLayouts, updateShareAccess,
+} from "./shares";
+import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
 } from "./playlists";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
@@ -705,14 +708,16 @@ export function buildApp(): Hono<Env> {
   });
 
   app.get("/api/layouts/:id", (c) => {
-    const layout = getOwnedLayout(Number(c.req.param("id")), c.get("userId"));
+    // Readable = owner OR a viewer/editor the board was shared with.
+    const layout = getReadableLayout(Number(c.req.param("id")), c.get("userId"));
     if (!layout) return c.json({ error: "not found" }, 404);
     return c.json(layout);
   });
 
   app.put("/api/layouts/:id", async (c) => {
     const id = Number(c.req.param("id"));
-    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    // Writable = owner OR a shared editor.
+    if (!getWritableLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { document?: unknown };
     const parsed = safeParseDocument(body.document);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.issues }, 400);
@@ -767,6 +772,42 @@ export function buildApp(): Hono<Env> {
     clearShareToken(Number(c.req.param("id")), c.get("userId"));
     return c.json({ ok: true });
   });
+
+  // ---- user-to-user sharing (board/screen → another account, viewer|editor) ----
+  app.get("/api/shares", (c) => c.json(listSharesByOwner(c.get("userId"))));
+
+  app.post("/api/shares", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { kind?: "layout" | "device"; targetId?: string; email?: string; access?: "viewer" | "editor" };
+    if ((body.kind !== "layout" && body.kind !== "device") || !body.targetId || !body.email || (body.access !== "viewer" && body.access !== "editor")) {
+      return c.json({ error: "kind, targetId, email and access are required" }, 400);
+    }
+    const r = createShare(c.get("userId"), body.kind, body.targetId, body.email, body.access);
+    if (!r.ok) {
+      const status = r.error === "no_user" ? 404 : r.error === "self" ? 400 : 403;
+      return c.json({ error: r.error === "no_user" ? "no account with that email" : r.error === "self" ? "you can't share with yourself" : "you don't own that item" }, status);
+    }
+    return c.json(r.share, 201);
+  });
+
+  app.patch("/api/shares/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { access?: "viewer" | "editor" };
+    if (body.access !== "viewer" && body.access !== "editor") return c.json({ error: "access required" }, 400);
+    return updateShareAccess(c.req.param("id"), c.get("userId"), body.access)
+      ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+  });
+
+  app.delete("/api/shares/:id", (c) =>
+    revokeShare(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // Boards shared WITH the caller (a lean summary + access + owner label).
+  app.get("/api/shared/layouts", (c) =>
+    c.json(sharedLayouts(c.get("userId")).map(({ layout, access, ownerName }) => ({
+      id: layout.id,
+      name: layout.name,
+      access,
+      ownerName,
+      widgetCount: layout.document.rows.reduce((n, r) => n + r.blocks.length, 0),
+    }))));
 
   // Public board state (no auth) — honors expiry + optional password, then
   // resolves live data under the OWNER's connections. A protected board is
