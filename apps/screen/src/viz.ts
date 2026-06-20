@@ -66,16 +66,11 @@ export function romanTime(d: Date): string {
   return `${toRoman(h)}:${toRoman(d.getMinutes())}`;
 }
 
-export function seasonOf(month: number, hemisphere: "north" | "south"): { emoji: string; name: string } {
-  const north: Array<{ emoji: string; name: string }> = [
-    { emoji: "❄", name: "Winter" },
-    { emoji: "🌱", name: "Spring" },
-    { emoji: "☀", name: "Summer" },
-    { emoji: "🍂", name: "Autumn" },
-  ];
+export function seasonOf(month: number, hemisphere: "north" | "south"): { name: string } {
+  const north = ["Winter", "Spring", "Summer", "Autumn"];
   let i = month <= 1 || month === 11 ? 0 : month <= 4 ? 1 : month <= 7 ? 2 : 3;
   if (hemisphere === "south") i = (i + 2) % 4;
-  return north[i]!;
+  return { name: north[i]! };
 }
 
 const ZODIAC: Array<{ sign: string; emoji: string; until: [number, number] }> = [

@@ -3,23 +3,20 @@
 const SYNODIC = 29.530588853;
 const REF_NEW_MOON = Date.UTC(2000, 0, 6, 18, 14, 0); // a known new moon
 
-const PHASES: Array<[string, string]> = [
-  ["🌑", "New moon"],
-  ["🌒", "Waxing crescent"],
-  ["🌓", "First quarter"],
-  ["🌔", "Waxing gibbous"],
-  ["🌕", "Full moon"],
-  ["🌖", "Waning gibbous"],
-  ["🌗", "Last quarter"],
-  ["🌘", "Waning crescent"],
+const PHASE_NAMES = [
+  "New moon", "Waxing crescent", "First quarter", "Waxing gibbous",
+  "Full moon", "Waning gibbous", "Last quarter", "Waning crescent",
 ];
 
-export function moonPhase(date: Date): { emoji: string; name: string; illumination: number } {
+export function moonPhase(date: Date): { name: string; illumination: number; waxing: boolean } {
   let age = ((date.getTime() - REF_NEW_MOON) / 86_400_000) % SYNODIC;
   if (age < 0) age += SYNODIC;
   const idx = Math.floor((age / SYNODIC) * 8 + 0.5) % 8;
-  const [emoji, name] = PHASES[idx]!;
-  return { emoji, name, illumination: Math.round(((1 - Math.cos((2 * Math.PI * age) / SYNODIC)) / 2) * 100) };
+  return {
+    name: PHASE_NAMES[idx]!,
+    illumination: Math.round(((1 - Math.cos((2 * Math.PI * age) / SYNODIC)) / 2) * 100),
+    waxing: age < SYNODIC / 2, // lit limb grows on the right in the first half of the cycle
+  };
 }
 
 // Sunrise/sunset via the well-known SunCalc algorithm (Astronomical Almanac).

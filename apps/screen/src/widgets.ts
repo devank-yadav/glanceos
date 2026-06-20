@@ -6,6 +6,7 @@ import type {
 import { isoWeek, moonPhase, sunTimes } from "./astro";
 import { renderInlineMarkdown } from "./markdown";
 import { barSvg, nums, ringSvg, romanTime, seasonOf, sparkSvg, zodiacOf } from "./viz";
+import { CHECK_OFF, CHECK_ON, moonGlyph, seasonGlyph, STAR_EMPTY, STAR_FULL, stars } from "./glyphs";
 
 // The whole widget contract: take a cell, render into it, optionally return a
 // cleanup. All user-supplied strings go through textContent — never markup.
@@ -17,6 +18,15 @@ function div(className: string, text?: string): HTMLDivElement {
   const d = document.createElement("div");
   d.className = className;
   if (text !== undefined) d.textContent = text;
+  return d;
+}
+
+// Like div(), but the content is trusted inline SVG markup from glyphs.ts
+// (never user input) — used for the computed nature/rating glyphs.
+function glyph(className: string, svg: string): HTMLDivElement {
+  const d = document.createElement("div");
+  d.className = className;
+  d.innerHTML = svg;
   return d;
 }
 
@@ -214,7 +224,7 @@ const checklist: Render = (el, w, data) => {
     const done = /^(\[?x\]?|✓)\s+/i.test(raw);
     const label = raw.replace(/^(\[?x\]?|\[?\s?\]?|✓|-)\s+/i, "");
     const row = div("li");
-    row.appendChild(div("li-marker", done ? "☑" : "☐"));
+    row.appendChild(glyph("li-marker", done ? CHECK_ON : CHECK_OFF));
     const t = div("li-text", label);
     if (done) t.classList.add("li-done");
     row.appendChild(t);
@@ -328,7 +338,7 @@ const progress: Render = (el, w, data) => {
 const rating: Render = (el, w) => {
   if (w.type !== "rating") return;
   const full = Math.round(w.props.value);
-  el.appendChild(div("rating-stars", "★★★★★".slice(0, full) + "☆☆☆☆☆".slice(0, 5 - full)));
+  el.appendChild(glyph("rating-stars", stars(full, 5)));
   if (w.props.label) el.appendChild(div("rating-label", w.props.label));
 };
 
@@ -473,7 +483,7 @@ const moonPhaseR: Render = (el, w) => {
   el.append(emoji, name);
   return every(3_600_000, () => {
     const m = moonPhase(new Date());
-    emoji.textContent = m.emoji;
+    emoji.innerHTML = moonGlyph(m.illumination, m.waxing);
     name.textContent = `${m.name} · ${m.illumination}%`;
   });
 };
@@ -914,7 +924,7 @@ const seasonClock: Render = (el, w) => {
   if (w.type !== "seasonClock") return;
   heading2(el, w.props.label);
   const s = seasonOf(new Date().getMonth(), w.props.hemisphere);
-  el.appendChild(div("season-emoji", s.emoji));
+  el.appendChild(glyph("season-emoji", seasonGlyph(s.name)));
   el.appendChild(div("season-name", s.name));
 };
 
@@ -1569,7 +1579,7 @@ const checklistProgress: Render = (el, w) => {
   const list = div("list");
   for (const it of items) {
     const row = div("li");
-    row.append(div("li-marker", it.done ? "☑" : "☐"));
+    row.append(glyph("li-marker", it.done ? CHECK_ON : CHECK_OFF));
     const t = div("li-text", it.text);
     if (it.done) t.classList.add("li-done");
     row.appendChild(t);
@@ -1876,7 +1886,7 @@ const starBar: Render = (el, w) => {
   if (w.props.label) heading2(el, w.props.label);
   const row = div("starbar");
   const n = Math.round(w.props.value);
-  for (let i = 0; i < w.props.max; i++) row.appendChild(div("sb-star", i < n ? "★" : "☆"));
+  for (let i = 0; i < w.props.max; i++) row.appendChild(glyph("sb-star", i < n ? STAR_FULL : STAR_EMPTY));
   el.appendChild(row);
 };
 const columnLabels: Render = (el, w) => {
@@ -2041,7 +2051,7 @@ const moonProgress: Render = (el, w) => {
   if (w.props.label) heading2(el, w.props.label);
   const m = moonPhase(new Date());
   const row = div("metric-row");
-  row.append(div("moon-emoji", m.emoji), div("stat-value", `${m.illumination}%`));
+  row.append(glyph("moon-emoji", moonGlyph(m.illumination, m.waxing)), div("stat-value", `${m.illumination}%`));
   el.appendChild(row);
   el.appendChild(div("stat-label", m.name));
 };
@@ -2054,7 +2064,7 @@ const seasonProgress: Render = (el, w) => {
   const doy = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86_400_000);
   const pct = Math.round((((doy + 10) % 91.3) / 91.3) * 100);
   const row = div("metric-row");
-  row.append(div("moon-emoji", s.emoji), div("stat-value", s.name));
+  row.append(glyph("moon-emoji", seasonGlyph(s.name)), div("stat-value", s.name));
   el.appendChild(row);
   el.appendChild(pctBar(pct));
 };
