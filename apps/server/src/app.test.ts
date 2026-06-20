@@ -363,3 +363,53 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect((await app.request("/api/devices", { headers: { cookie: cookieA } })).status).toBe(401);
   });
 });
+
+describe("backup export → import", () => {
+  const reg = async (name: string, email: string) =>
+    cookieOf(await app.request("/api/auth/register", { method: "POST", ...json({ name, email, password: "calm-glass-imp" }) }));
+
+  it("round-trips a user's data into another account (append), without secrets", async () => {
+    const cookieX = await reg("Xan", "x@example.com");
+    const lay = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieX, { name: "Board X", document: LOCAL_LAYOUT }) })).json();
+    const pl = await (await app.request("/api/playlists", { method: "POST", ...authed(cookieX, { name: "Loop X", intervalSeconds: 7 }) })).json();
+    await app.request(`/api/playlists/${pl.id}`, { method: "PATCH", ...authed(cookieX, { layoutIds: [lay.id] }) });
+    await app.request("/api/connections", { method: "POST", ...authed(cookieX, { provider: "todoist", label: "My Todoist", secret: "sekret-token-123" }) });
+    await app.request("/api/tasks", { method: "POST", ...authed(cookieX, { text: "X task" }) });
+
+    const dump = await (await app.request("/api/account/export", { headers: { cookie: cookieX } })).json();
+    expect(dump.playlistItems).toHaveLength(1); // the export fix — items are present
+    expect(JSON.stringify(dump)).not.toContain("sekret-token"); // secrets never exported
+
+    const cookieY = await reg("Yad", "y@example.com");
+    const r = await (await app.request("/api/account/import", { method: "POST", ...authed(cookieY, { dump, mode: "append" }) })).json();
+    expect(r).toMatchObject({ ok: true, layouts: 1, playlists: 1, playlistItems: 1, connections: 1, tasks: 1 });
+
+    const yLayouts = await (await app.request("/api/layouts", { headers: { cookie: cookieY } })).json() as { name: string }[];
+    expect(yLayouts.some((l) => l.name === "Board X")).toBe(true);
+    const yPlaylists = await (await app.request("/api/playlists", { headers: { cookie: cookieY } })).json() as { name: string; items: unknown[] }[];
+    expect(yPlaylists.find((p) => p.name === "Loop X")!.items).toHaveLength(1); // playlist item remapped
+    const yConns = await (await app.request("/api/connections", { headers: { cookie: cookieY } })).json() as { id: string; label: string; status: string }[];
+    const yConn = yConns.find((cc) => cc.label === "My Todoist")!;
+    expect(yConn.status).toBe("needs_auth"); // no secret imported
+    expect("secret" in yConn).toBe(false);
+  });
+
+  it("rejects a non-backup file and skips a malformed board", async () => {
+    const cookie = await reg("Zoe", "z@example.com");
+    expect((await app.request("/api/account/import", { method: "POST", ...authed(cookie, { dump: { format: "nope" }, mode: "append" }) })).status).toBe(400);
+    const dump = { format: "glanceos-backup", version: 1, layouts: [{ id: 1, name: "Bad", document: "{not json" }, { id: 2, name: "Good", document: JSON.stringify(LOCAL_LAYOUT) }] };
+    const r = await (await app.request("/api/account/import", { method: "POST", ...authed(cookie, { dump, mode: "append" }) })).json();
+    expect(r.layouts).toBe(1); // only the good board
+    expect(r.skipped).toBeGreaterThanOrEqual(1); // the malformed one
+  });
+
+  it("replace wipes the user's own boards first", async () => {
+    const cookie = await reg("Rae", "r@example.com");
+    await app.request("/api/layouts", { method: "POST", ...authed(cookie, { name: "Pre A", document: LOCAL_LAYOUT }) });
+    await app.request("/api/layouts", { method: "POST", ...authed(cookie, { name: "Pre B", document: LOCAL_LAYOUT }) });
+    const dump = { format: "glanceos-backup", version: 1, layouts: [{ id: 9, name: "Only", document: JSON.stringify(LOCAL_LAYOUT) }] };
+    await app.request("/api/account/import", { method: "POST", ...authed(cookie, { dump, mode: "replace" }) });
+    const layouts = await (await app.request("/api/layouts", { headers: { cookie } })).json() as { name: string }[];
+    expect(layouts.map((l) => l.name).sort()).toEqual(["Only"]); // Pre A/B wiped
+  });
+});

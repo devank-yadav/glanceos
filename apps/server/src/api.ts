@@ -13,7 +13,7 @@ import {
   changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
   registrationOpen, sessionUserId, updateUserName, verifyLogin,
 } from "./auth";
-import { dumpUser } from "./backup";
+import { dumpUser, importUser } from "./backup";
 import { requestLogger } from "./logging";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
@@ -740,6 +740,16 @@ export function buildApp(): Hono<Env> {
   app.get("/api/account/export", (c) => {
     c.header("content-disposition", 'attachment; filename="glanceos-backup.json"');
     return c.json(dumpUser(c.get("userId")));
+  });
+  app.post("/api/account/import", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dump?: unknown; mode?: string } | null;
+    if (!body || typeof body.dump !== "object") return c.json({ error: "missing backup data" }, 400);
+    const mode = body.mode === "replace" ? "replace" : "append";
+    try {
+      return c.json({ ok: true, mode, ...importUser(c.get("userId"), body.dump, { mode }) });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "import failed" }, 400);
+    }
   });
 
   // ---- user image uploads ----

@@ -2802,3 +2802,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .share-qr-img { line-height: 0; padding: 8px; background: #fff; border-radius: var(--r-md); border: 1px solid var(--rule); }
 .share-qr-img svg { display: block; }
 .share-qr-save { font-size: 12px; }
+
+/* ---------- account: restore from backup ---------- */
+.restore-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.restore-block h3 { margin: 0 0 4px; font-size: 14px; }
+.restore-block p { margin: 0 0 10px; font-size: 13px; }
+.restore-row { gap: 8px; align-items: center; }
+.restore-row input[type="file"] { font-size: 12px; }
