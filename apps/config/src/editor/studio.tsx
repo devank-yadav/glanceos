@@ -106,7 +106,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
   const [data, setData] = useState<Record<string, unknown>>({});
-  const [liveOn, setLiveOn] = useState(0);
+  const [devices, setDevices] = useState<DeviceSummary[]>([]);
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const liveOn = devices.filter((d) => d.layoutId === layoutId).length;
   const [sizeKey, setSizeKey] = useState(() => {
     const s = localStorage.getItem(SIZE_KEY);
     if (s && SIZES_BY_ID[s]) return s;
@@ -209,8 +211,15 @@ export function Studio({ layoutId }: { layoutId: number }) {
       },
       () => setMissing(true),
     );
-    api.get<DeviceSummary[]>("/api/devices").then((d) => setLiveOn(d.filter((x) => x.layoutId === layoutId).length)).catch(() => {});
+    api.get<DeviceSummary[]>("/api/devices").then(setDevices).catch(() => {});
   }, [layoutId]);
+
+  const refreshDevices = () => api.get<DeviceSummary[]>("/api/devices").then(setDevices).catch(() => {});
+  const toggleDisplayOn = async (device: DeviceSummary) => {
+    const on = device.layoutId === layoutId;
+    await api.patch(`/api/devices/${device.id}`, { layoutId: on ? null : layoutId }).catch(() => {});
+    await refreshDevices();
+  };
 
   useEffect(() => {
     const pane = paneRef.current;
@@ -634,7 +643,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
           </span>
         )}
         <span class="spacer" />
-        <span class="muted hide-narrow">{liveOn > 0 ? `Live on ${liveOn}` : "Not attached"}</span>
+        <button class={`ghost hide-narrow display-on-btn${displayOpen ? " on" : ""}`} title="Choose which screens show this board" onClick={() => { setDisplayOpen((v) => !v); if (!displayOpen) refreshDevices(); }}>
+          <Icon.monitor /> {liveOn > 0 ? `Live on ${liveOn}` : "Display on…"}
+        </button>
         <select class="size-select" title="Screen size" value={sizeKey} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setSizeKey(v); localStorage.setItem(SIZE_KEY, v); }}>
           {SIZE_CATEGORIES.map((cat) => (
             <optgroup key={cat} label={cat}>
@@ -692,6 +703,31 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 </div>
               </>
             )}
+          </div>
+        </>
+      )}
+      {displayOpen && (
+        <>
+          <div class="popover-backdrop" onPointerDown={() => setDisplayOpen(false)} />
+          <div class="display-popover card" role="dialog" aria-label="Display on screens">
+            <h3>Show this board on…</h3>
+            {devices.length === 0 ? (
+              <p class="muted">No screens connected yet.</p>
+            ) : (
+              <ul class="display-list">
+                {devices.map((d) => (
+                  <li key={d.id}>
+                    <label class="display-row">
+                      <input type="checkbox" checked={d.layoutId === layoutId} onChange={() => toggleDisplayOn(d)} />
+                      <span class={d.online ? "dot online" : "dot"} aria-hidden="true" />
+                      <span class="display-name">{d.name ?? "Unnamed screen"}</span>
+                      {d.layoutId !== layoutId && d.layoutName && <span class="muted display-busy">{d.playlistId ? "playlist" : d.layoutName}</span>}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p class="muted display-hint">Checking a screen sets it to show this board directly. Screens driven by a playlist or schedule aren't changed unless you check them.</p>
           </div>
         </>
       )}

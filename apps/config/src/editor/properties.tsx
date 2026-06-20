@@ -1,6 +1,7 @@
 import type { LayoutT, WidgetT } from "@glanceos/schema";
 import type { VNode } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { api, type QueueState, type TaskItem } from "../api";
 import { BINDABLE, blockFor, type WidgetType } from "./blocks";
 import { Icon } from "./icons";
 
@@ -282,6 +283,8 @@ export function BlockFields({
         {fields.length === 0 && <p class="muted">Nothing to configure.</p>}
       </div>
       {block.type === "image" && <ImageUpload onUploaded={(url) => editProp("url", url)} />}
+      {block.type === "tasks" && <TasksItemsEditor listId={(props.listId as string) || "default"} />}
+      {block.type === "queue" && <QueueCounterEditor queueId={(props.queueId as string) || "default"} />}
       {block.type === "text" && (
         <label class="field">
           <span>Format</span>
@@ -337,6 +340,66 @@ function ImageUpload({ onUploaded }: { onUploaded: (url: string) => void }) {
       <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pick} />
       {status && <span class="field-hint muted">{status}</span>}
     </label>
+  );
+}
+
+// Manage the to-do items behind THIS block's list (its listId). Each tasks block
+// with a different listId edits a different list — fully independent. Edits push
+// to live screens server-side, so the board updates without a reload.
+function TasksItemsEditor({ listId }: { listId: string }) {
+  const [items, setItems] = useState<TaskItem[]>([]);
+  const [text, setText] = useState("");
+  const refresh = () => api.get<TaskItem[]>(`/api/tasks?listId=${encodeURIComponent(listId)}`).then(setItems).catch(() => {});
+  useEffect(() => { refresh(); }, [listId]);
+  const add = async () => {
+    if (!text.trim()) return;
+    await api.post("/api/tasks", { listId, text }).catch(() => {});
+    setText("");
+    refresh();
+  };
+  return (
+    <div class="block-data">
+      <h4>List items <span class="muted">· {listId}</span></h4>
+      <div class="row">
+        <label class="field grow"><span>New item</span>
+          <input value={text} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        </label>
+        <button onClick={add}>Add</button>
+      </div>
+      <ul class="tasks">
+        {items.map((item) => (
+          <li key={item.id} class="row spread">
+            <label class="field checkbox">
+              <input type="checkbox" checked={item.done} onChange={() => api.patch(`/api/tasks/${item.id}`, { done: !item.done }).then(refresh)} />
+              <span class={item.done ? "done" : ""}>{item.text}</span>
+            </label>
+            <button class="ghost" onClick={() => api.del(`/api/tasks/${item.id}`).then(refresh)} aria-label="Delete item"><Icon.x /></button>
+          </li>
+        ))}
+        {items.length === 0 && <li class="muted">No items yet.</li>}
+      </ul>
+    </div>
+  );
+}
+
+// Drive THIS block's queue counter (its queueId) — now-serving + waiting.
+function QueueCounterEditor({ queueId }: { queueId: string }) {
+  const [queue, setQueue] = useState<QueueState | null>(null);
+  const refresh = () => api.get<QueueState>(`/api/queues/${encodeURIComponent(queueId)}`).then(setQueue).catch(() => {});
+  useEffect(() => { refresh(); }, [queueId]);
+  const act = (path: string, body?: unknown) => api.post<QueueState>(path, body).then(setQueue).catch(() => {});
+  const base = `/api/queues/${encodeURIComponent(queueId)}`;
+  return (
+    <div class="block-data">
+      <h4>Queue <span class="muted">· {queueId}</span></h4>
+      <p class="muted">Now serving <strong>{queue?.now_serving ?? "—"}</strong> · waiting {queue?.waiting ?? "—"}</p>
+      <div class="row wrap">
+        <button class="primary" onClick={() => act(`${base}/advance`)}>Next +1</button>
+        <button onClick={() => act(`${base}/waiting`, { delta: 1 })}>Waiting +1</button>
+        <button onClick={() => act(`${base}/waiting`, { delta: -1 })}>Waiting −1</button>
+        <button class="danger" onClick={() => act(`${base}/reset`)}>Reset</button>
+      </div>
+    </div>
   );
 }
 
