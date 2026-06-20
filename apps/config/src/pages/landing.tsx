@@ -78,6 +78,19 @@ function MockBoard() {
   );
 }
 
+// Link a screen straight into the runtime in TV mode — so on a TV you just open
+// the home page and click, instead of typing /screen/?tv=1 with the remote. We
+// best-effort tag the platform from the user-agent so the fleet shows the right
+// chip (Fire TV models report "AFT…"; Android TV reports Android + TV/GoogleTV).
+// The server sanitizes the value, so a wrong guess is harmless.
+function screenModeHref(): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  let platform = "";
+  if (/AFT/i.test(ua)) platform = "firetv";
+  else if (/Android/i.test(ua) && /(TV|GoogleTV|BRAVIA)/i.test(ua)) platform = "androidtv";
+  return platform ? `/screen/?tv=1&platform=${platform}` : "/screen/?tv=1";
+}
+
 export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
   const cta = registrationOpen ? "#/register" : "#/login";
   const ctaLabel = registrationOpen ? "Get started" : "Log in";
@@ -92,6 +105,9 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a href="#how">How it works</a>
         </nav>
         <span class="spacer" />
+        <a class="btn ghost-link" href={screenModeHref()}>
+          Screen mode
+        </a>
         <a class="btn ghost-link" href="#/login">
           Log in
         </a>
@@ -116,10 +132,14 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a class="btn solid lg" href={cta}>
             {ctaLabel} →
           </a>
+          <a class="btn glass-btn lg" href={screenModeHref()}>
+            Open screen mode →
+          </a>
           <a class="btn glass-btn lg" href="#how">
             How it works
           </a>
         </div>
+        <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
         <MockBoard />
         <p class="hero-caption">The Studio edits the exact pixels your screens render — zero drift, ever.</p>
       </section>
