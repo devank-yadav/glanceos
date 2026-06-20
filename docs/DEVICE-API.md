@@ -126,3 +126,13 @@ navigation with a 10-ft focus ring; **burn-in** pixel-shift; a **wake/sleep**
 window (outside it the panel shows a faint clock); and a scan-to-pair **QR** on
 the claim screen. These ride the same device protocol above — no new endpoints;
 the per-device settings travel in the `state` payload's optional `tv` block.
+
+### Casting (Chromecast)
+
+With `GLANCEOS_CAST_APP_ID` set to your registered Google Cast receiver App ID
+(pointing at `https://<host>/screen/?cast=1`), the studio's share popover shows a
+**Cast to TV** button. It casts a board's **public share link** — the receiver
+runs the board read-only in share mode, so no device secret crosses the Cast
+channel. Casting is fully opt-in: with no App ID the CSP stays strict and the
+button is hidden. (AirPlay can't be initiated from a web page; it arrives with
+the native tvOS app.)
