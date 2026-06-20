@@ -114,3 +114,15 @@ on wake:
 That's the whole firmware contract. Playlists (a screen rotating through several
 setups) need no device changes — the server returns whichever setup is current
 for this poll.
+
+## TV / kiosk mode (web screens)
+
+Browser-based screens (a smart TV's browser, a Pi/stick in kiosk Chromium, etc.)
+can run in **TV mode** by loading `/screen/?tv=1`, or by enabling **TV mode** for
+a claimed device in the config app (Screens → a device → ⋯ → *TV mode*). TV mode
+adds: true fullscreen + a screen wake-lock; **overscan-safe** margins (a per-device
+percentage that pulls content off the bezels); **D-pad / remote** spatial
+navigation with a 10-ft focus ring; **burn-in** pixel-shift; a **wake/sleep**
+window (outside it the panel shows a faint clock); and a scan-to-pair **QR** on
+the claim screen. These ride the same device protocol above — no new endpoints;
+the per-device settings travel in the `state` payload's optional `tv` block.
