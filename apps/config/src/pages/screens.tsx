@@ -6,6 +6,8 @@ import { BoardPreview } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
+import { LocationPicker } from "../components/LocationPicker";
+import { TimezoneSelect } from "../components/TimezoneSelect";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
@@ -89,6 +91,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   const [previewing, setPreviewing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [tving, setTving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [groups, setGroups] = useState<DisplayGroup[]>([]);
   useEffect(() => { api.get<DisplayGroup[]>("/api/groups").then(setGroups).catch(() => {}); }, []);
   const toast = useToast();
@@ -140,6 +143,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
         <Menu
           trigger={<Icon.list />}
           items={[
+            { label: "Location & time…", icon: <Icon.settings />, onClick: () => setSettingsOpen(true) },
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
             { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
             { label: "TV mode…", icon: <Icon.monitor />, onClick: () => setTving(true) },
@@ -215,6 +219,44 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       <Modal open={tving} onClose={() => setTving(false)} title={`TV mode — ${device.name ?? "screen"}`}>
         {tving && <TvEditor device={device} onClose={() => setTving(false)} onSaved={onChanged} />}
       </Modal>
+
+      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title={`Location & time — ${device.name ?? "screen"}`}>
+        {settingsOpen && <ScreenSettings device={device} onSaved={onChanged} />}
+      </Modal>
+    </div>
+  );
+}
+
+/** Per-screen location (city search) + timezone — drives weather/sun blocks and
+ *  the screen's schedule wall-clock. */
+function ScreenSettings({ device, onSaved }: { device: DeviceSummary; onSaved: () => Promise<void> }) {
+  const [tz, setTz] = useState(device.timezone ?? "");
+  const [locName, setLocName] = useState(device.locationName);
+  const toast = useToast();
+
+  const saveTz = async (next: string) => {
+    setTz(next);
+    try { await api.patch(`/api/devices/${device.id}`, { timezone: next || null }); await onSaved(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const saveLoc = async (loc: { name: string; latitude: number; longitude: number } | null) => {
+    setLocName(loc ? loc.name : null);
+    try { await api.patch(`/api/devices/${device.id}`, { location: loc }); await onSaved(); toast.success(loc ? "Location set" : "Location cleared"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+
+  return (
+    <div class="screen-settings">
+      <div class="field-group">
+        <span class="field-label">Location</span>
+        <p class="muted setting-help">Weather, forecast and sunrise/sunset blocks on this screen use this place (unless a block sets its own).</p>
+        <LocationPicker current={locName} onPick={(l) => saveLoc(l)} onClear={() => saveLoc(null)} />
+      </div>
+      <div class="field-group">
+        <span class="field-label">Timezone</span>
+        <p class="muted setting-help">The screen's wall clock for schedules. Blank uses your account default, then the server.</p>
+        <TimezoneSelect value={tz} onChange={saveTz} placeholder="Account default" />
+      </div>
     </div>
   );
 }
@@ -259,8 +301,8 @@ function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: stri
     <div class="sched-editor">
       <p class="muted" style={{ marginTop: 0 }}>Show different boards by time of day. The highest-priority active window wins; outside every window the screen falls back to its playlist or assigned setup.</p>
       <label class="field grow">
-        <span>Timezone <em>(IANA, e.g. America/New_York — blank = server)</em></span>
-        <input type="text" value={tz} placeholder="Server timezone" onInput={(e) => setTz((e.currentTarget as HTMLInputElement).value)} />
+        <span>Timezone <em>(blank = account default, then server)</em></span>
+        <TimezoneSelect value={tz} onChange={setTz} placeholder="Account default" />
       </label>
 
       {rules.map((r, i) => (

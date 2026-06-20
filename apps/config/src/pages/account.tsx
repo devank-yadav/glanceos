@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api } from "../api";
+import { api, type UserInfo } from "../api";
 import { AVAILABLE, getLocale, setLocale, t } from "../i18n";
 import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
+import { TimezoneSelect } from "../components/TimezoneSelect";
 import { useToast } from "../components/Toast";
 
 // Account management: rename, change password, log out everywhere, export a
 // backup, and delete the account (cascades all data server-side).
 export function AccountPage() {
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [name, setName] = useState("");
+  const [tz, setTz] = useState("");
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [delPw, setDelPw] = useState("");
@@ -20,8 +22,8 @@ export function AccountPage() {
   const confirm = useConfirm();
 
   useEffect(() => {
-    api.get<{ user: { name: string; email: string } | null }>("/api/auth/status")
-      .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); } })
+    api.get<{ user: UserInfo | null }>("/api/auth/status")
+      .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); } })
       .catch(() => {});
   }, []);
 
@@ -44,6 +46,11 @@ export function AccountPage() {
 
   const saveName = async () => {
     try { await api.patch("/api/account", { name }); toast.success("Name updated"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const saveTimezone = async (next: string) => {
+    setTz(next);
+    try { await api.patch("/api/account", { defaultTimezone: next || null }); toast.success("Default timezone saved"); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   const savePassword = async () => {
@@ -74,6 +81,9 @@ export function AccountPage() {
           <h2>Profile</h2>
           <label class="field grow"><span>Name</span><input value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} /></label>
           <label class="field grow"><span>Email</span><input value={user?.email ?? ""} disabled /></label>
+          <label class="field grow"><span>Default timezone <em>(screens with no timezone of their own use this)</em></span>
+            <TimezoneSelect value={tz} onChange={saveTimezone} placeholder="Server timezone" />
+          </label>
           <div class="row"><button class="primary" onClick={saveName}>Save</button></div>
         </section>
 

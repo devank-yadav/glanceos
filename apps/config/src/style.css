@@ -2864,6 +2864,22 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .account-section h2 { margin: 0 0 4px; font-size: 15px; }
 .account-section .row { margin-top: 2px; }
 .danger-zone { border-color: color-mix(in srgb, var(--bad) 35%, var(--rule)); }
+
+/* ---------- timezone select + location picker (per-screen Settings, account) ---------- */
+.tz-select { display: flex; flex-direction: column; gap: 5px; }
+.tz-select .tz-filter { font-size: 13px; }
+.tz-select select { width: 100%; }
+.screen-settings { display: flex; flex-direction: column; gap: 18px; }
+.screen-settings .field-group { display: flex; flex-direction: column; gap: 7px; }
+.screen-settings .field-label { font-size: 13px; font-weight: 600; }
+.setting-help { font-size: 12.5px; margin: 0; }
+.location-picker { display: flex; flex-direction: column; gap: 7px; }
+.location-current { font-size: 13.5px; }
+.location-hint { font-size: 12px; margin: 2px 0 0; }
+.location-results { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--r-sm); overflow: hidden; max-height: 220px; overflow-y: auto; }
+.location-results li + li { border-top: 1px solid var(--rule); }
+.location-result { width: 100%; text-align: left; justify-content: flex-start; border: none; border-radius: 0; background: transparent; padding: 8px 11px; font-size: 13.5px; }
+.location-result:hover { background: var(--hover-bg); }
 .danger-zone h2 { color: var(--bad); }
 .ghost.danger { color: var(--bad); }
 

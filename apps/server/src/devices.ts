@@ -22,6 +22,9 @@ export interface DeviceRow {
   timezone: string | null;
   render_opts: string;
   group_id: number | null;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface DeviceProfile {
@@ -152,6 +155,22 @@ export function setDeviceTimezone(id: string, tz: string | null, userId: string)
   const trimmed = tz?.trim() || null;
   if (trimmed && !isValidTimezone(trimmed)) return null; // reject a bogus zone (caller → 400/404)
   db.prepare("UPDATE devices SET timezone = ? WHERE id = ?").run(trimmed, id);
+  return getDevice(id) ?? null;
+}
+
+/** Set (or clear, with null) a screen's location — weather/astro blocks without
+ *  their own coordinates inherit it. Coordinates are validated to a sane range. */
+export function setDeviceLocation(
+  id: string,
+  loc: { name: string; latitude: number; longitude: number } | null,
+  userId: string,
+): DeviceRow | null {
+  const device = getDevice(id);
+  if (!device || device.user_id !== userId) return null;
+  if (loc && (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude) ||
+    Math.abs(loc.latitude) > 90 || Math.abs(loc.longitude) > 180)) return null;
+  db.prepare("UPDATE devices SET location_name = ?, latitude = ?, longitude = ? WHERE id = ?")
+    .run(loc ? loc.name.trim().slice(0, 120) : null, loc?.latitude ?? null, loc?.longitude ?? null, id);
   return getDevice(id) ?? null;
 }
 

@@ -1,4 +1,5 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
+import { getUser } from "./auth";
 import { connLookupFor } from "./connections";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
@@ -13,7 +14,10 @@ import { resolveWidgetData } from "./widgets";
  *  group schedule → group playlist → group default. No group / no group settings
  *  → exactly the previous behavior. */
 export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
-  const scheduled = activeScheduledLayout(device.id, now, device.timezone);
+  // Wall-clock fallback: screen tz → account default tz → server tz.
+  const accountTz = device.user_id ? getUser(device.user_id)?.defaultTimezone ?? null : null;
+  const deviceTz = device.timezone ?? accountTz;
+  const scheduled = activeScheduledLayout(device.id, now, deviceTz);
   if (scheduled) return scheduled;
   if (device.playlist_id) return currentPlaylistLayout(device.playlist_id, now);
   if (device.layout_id) return device.layout_id;
@@ -21,7 +25,7 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
   if (device.group_id) {
     const group = getGroupRow(device.group_id);
     if (group) {
-      const tz = device.timezone ?? group.timezone;
+      const tz = device.timezone ?? group.timezone ?? accountTz;
       const gSched = activeGroupScheduledLayout(group.id, now, tz);
       if (gSched) return gSched;
       if (group.playlist_id) return currentPlaylistLayout(group.playlist_id, now);
@@ -75,7 +79,12 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
     state: {
       layoutVersion: layout.version,
       layout: layout.document,
-      data: await resolveWidgetData(layout.document, device.user_id ?? "", connLookupFor(device.user_id ?? "")),
+      data: await resolveWidgetData(
+        layout.document,
+        device.user_id ?? "",
+        connLookupFor(device.user_id ?? ""),
+        device.latitude != null && device.longitude != null ? { latitude: device.latitude, longitude: device.longitude } : undefined,
+      ),
       deviceName: device.name ?? undefined,
       tv,
     },

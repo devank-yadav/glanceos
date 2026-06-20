@@ -14,6 +14,16 @@ import { CHECK_OFF, CHECK_ON, moonGlyph, seasonGlyph, STAR_EMPTY, STAR_FULL, sta
 type Cleanup = () => void;
 type Render = (el: HTMLElement, widget: WidgetT, data: unknown) => Cleanup | void;
 
+// A screen's location (server-injected into data[id] when the block was left at
+// the default geo) overrides an astro block's own coordinates; else use props.
+function geoFrom(data: unknown, props: { latitude: number; longitude: number }): { lat: number; lon: number } {
+  const d = data as { latitude?: number; longitude?: number } | null;
+  return {
+    lat: d && typeof d.latitude === "number" ? d.latitude : props.latitude,
+    lon: d && typeof d.longitude === "number" ? d.longitude : props.longitude,
+  };
+}
+
 function div(className: string, text?: string): HTMLDivElement {
   const d = document.createElement("div");
   d.className = className;
@@ -488,14 +498,15 @@ const moonPhaseR: Render = (el, w) => {
   });
 };
 
-const sunriseSunset: Render = (el, w) => {
+const sunriseSunset: Render = (el, w, data) => {
   if (w.type !== "sunriseSunset") return;
   if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
   const wrap = div("sun");
   el.appendChild(wrap);
+  const g = geoFrom(data, w.props);
   return every(60_000, () => {
     wrap.innerHTML = "";
-    const t = sunTimes(new Date(), w.props.latitude, w.props.longitude);
+    const t = sunTimes(new Date(), g.lat, g.lon);
     if (!t) {
       wrap.appendChild(div("placeholder", "polar day/night"));
       return;
@@ -2038,10 +2049,11 @@ const fmtDur = (ms: number): string => {
   const m = Math.max(0, Math.round(ms / 60000));
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 };
-const daylight: Render = (el, w) => {
+const daylight: Render = (el, w, data) => {
   if (w.type !== "daylight") return;
   if (w.props.label) heading2(el, w.props.label);
-  const t = sunTimes(new Date(), w.props.latitude, w.props.longitude);
+  const g = geoFrom(data, w.props);
+  const t = sunTimes(new Date(), g.lat, g.lon);
   if (!t) return placeholder(el, "no daylight data");
   el.appendChild(div("stat-value", fmtDur(t.sunset.getTime() - t.sunrise.getTime())));
   el.appendChild(div("stat-label", "of daylight"));
@@ -2068,10 +2080,11 @@ const seasonProgress: Render = (el, w) => {
   el.appendChild(row);
   el.appendChild(pctBar(pct));
 };
-const goldenHour: Render = (el, w) => {
+const goldenHour: Render = (el, w, data) => {
   if (w.type !== "goldenHour") return;
   if (w.props.label) heading2(el, w.props.label);
-  const t = sunTimes(new Date(), w.props.latitude, w.props.longitude);
+  const g = geoFrom(data, w.props);
+  const t = sunTimes(new Date(), g.lat, g.lon);
   if (!t) return placeholder(el, "no sun data");
   const am = new Date(t.sunrise.getTime() + 3_600_000);
   const pm = new Date(t.sunset.getTime() - 3_600_000);

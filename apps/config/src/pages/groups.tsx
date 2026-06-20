@@ -3,6 +3,7 @@ import { api, type DisplayGroup, type SetupSummary } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { TimezoneSelect } from "../components/TimezoneSelect";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 
@@ -89,7 +90,7 @@ function GroupCard({ group, setups, onChanged, confirm, toast }: {
       </label>
       <label class="field grow">
         <span>Timezone <span class="muted">(for group schedules)</span></span>
-        <input type="text" value={tz} placeholder="Server timezone" onInput={(e) => setTz((e.currentTarget as HTMLInputElement).value)} onBlur={() => tz !== (group.timezone ?? "") && patch({ timezone: tz.trim() || null })} />
+        <TimezoneSelect value={tz} placeholder="Server timezone" onChange={(next) => { setTz(next); if (next !== (group.timezone ?? "")) patch({ timezone: next || null }); }} />
       </label>
       <div class="row wrap group-actions" style={{ gap: "6px" }}>
         <button class="ghost" disabled={group.deviceCount === 0} title="Refresh every live screen in this group" onClick={() => command("reload")}><Icon.convert /> Reload</button>

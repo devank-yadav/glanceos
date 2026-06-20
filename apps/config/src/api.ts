@@ -4,6 +4,7 @@ export interface UserInfo {
   id: string;
   name: string;
   email: string;
+  defaultTimezone: string | null;
 }
 
 export interface AuthStatus {
@@ -27,6 +28,9 @@ export interface DeviceSummary {
   lastSeen: number | null;
   resolution: string;
   timezone: string | null;
+  locationName: string | null;
+  latitude: number | null;
+  longitude: number | null;
   renderOpts: { algo?: string; threshold?: number; gamma?: number };
   tv: {
     tvMode: boolean;

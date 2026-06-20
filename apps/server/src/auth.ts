@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { db } from "./db";
+import { isValidTimezone } from "./devices";
 
 // Multi-user auth. scrypt from node:crypto — for account passwords here, the
 // stdlib KDF beats carrying a native dependency (argon2 is the upgrade path).
@@ -10,11 +11,16 @@ export interface PublicUser {
   id: string;
   name: string;
   email: string;
+  defaultTimezone: string | null;
 }
 
-interface UserRow extends PublicUser {
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
   password_hash: string;
   created_at: number;
+  default_timezone: string | null;
 }
 
 export function hashPassword(password: string): string {
@@ -31,7 +37,7 @@ export function verifyHash(password: string, stored: string): boolean {
 }
 
 function toPublic(row: UserRow): PublicUser {
-  return { id: row.id, name: row.name, email: row.email };
+  return { id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null };
 }
 
 export function userCount(): number {
@@ -52,6 +58,7 @@ export function createUser(name: string, email: string, password: string): Publi
     email: email.trim(),
     password_hash: hashPassword(password),
     created_at: Date.now(),
+    default_timezone: null,
   };
   try {
     db.prepare(
@@ -108,6 +115,14 @@ export function updateUserName(userId: string, name: string): PublicUser | null 
   const trimmed = name.trim();
   if (!trimmed) return null;
   db.prepare("UPDATE users SET name = ? WHERE id = ?").run(trimmed, userId);
+  return getUser(userId);
+}
+
+/** Set (or clear) the account's default timezone. Returns null on a bogus zone. */
+export function updateUserTimezone(userId: string, tz: string | null): PublicUser | null {
+  const trimmed = tz?.trim() || null;
+  if (trimmed && !isValidTimezone(trimmed)) return null;
+  db.prepare("UPDATE users SET default_timezone = ? WHERE id = ?").run(trimmed, userId);
   return getUser(userId);
 }
 

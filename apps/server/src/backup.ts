@@ -12,7 +12,7 @@ export function dumpUser(userId: string): Record<string, unknown> {
     version: 1,
     exportedAt: Date.now(),
     layouts: db.prepare("SELECT id, name, version, document, created_at FROM layouts WHERE user_id = ?").all(userId),
-    devices: db.prepare("SELECT id, name, profile, refresh_seconds, timezone, render_opts, created_at FROM devices WHERE user_id = ?").all(userId),
+    devices: db.prepare("SELECT id, name, profile, refresh_seconds, timezone, location_name, latitude, longitude, render_opts, created_at FROM devices WHERE user_id = ?").all(userId),
     playlists: db.prepare("SELECT id, name, interval_seconds FROM playlists WHERE user_id = ?").all(userId),
     playlistItems: db.prepare(
       "SELECT pi.playlist_id, pi.position, pi.layout_id FROM playlist_items pi JOIN playlists p ON p.id = pi.playlist_id WHERE p.user_id = ?",

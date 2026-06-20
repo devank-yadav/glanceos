@@ -11,7 +11,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
-  registrationOpen, sessionUserId, updateUserName, verifyLogin,
+  registrationOpen, sessionUserId, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
 import {
@@ -23,9 +23,10 @@ import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
-  registerDevice, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
+  registerDevice, setDeviceLocation, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
+import { geocodeSearch } from "./fetchers/geocode";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
@@ -105,6 +106,9 @@ function deviceSummary(d: DeviceRow) {
     lastSeen: d.last_seen,
     resolution: `${profile.width}×${profile.height}`,
     timezone: d.timezone,
+    locationName: d.location_name,
+    latitude: d.latitude,
+    longitude: d.longitude,
     renderOpts: safeJsonObj(d.render_opts),
     tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake },
     platform: profile.platform ?? null,
@@ -223,6 +227,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/devices/me/play-log", limiter("play-log", 120, 60_000, deviceKey));
   app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
+  app.use("/api/geocode", limiter("geocode", 60, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
@@ -389,7 +394,15 @@ export function buildApp(): Hono<Env> {
       name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
       tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null };
       groupId?: number | null;
+      timezone?: string | null;
+      location?: { name: string; latitude: number; longitude: number } | null;
     };
+    if (body.timezone !== undefined && !setDeviceTimezone(id, body.timezone, userId)) {
+      return c.json({ error: "device not found or invalid timezone" }, 400);
+    }
+    if (body.location !== undefined && !setDeviceLocation(id, body.location, userId)) {
+      return c.json({ error: "device not found or invalid location" }, 400);
+    }
     if (body.renderOpts !== undefined) {
       // validate/clamp via toDitherOpts so junk can't reach the render pipeline
       if (!setRenderOpts(id, { ...toDitherOpts(body.renderOpts) }, userId)) return c.json({ error: "device not found" }, 404);
@@ -861,11 +874,29 @@ export function buildApp(): Hono<Env> {
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
-    if (typeof body.name !== "string" || !body.name.trim()) return c.json({ error: "name required" }, 400);
-    const u = updateUserName(c.get("userId"), body.name);
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null };
+    const userId = c.get("userId");
+    let u = getUser(userId);
+    if (typeof body.name === "string") {
+      if (!body.name.trim()) return c.json({ error: "name required" }, 400);
+      u = updateUserName(userId, body.name) ?? u;
+    }
+    if (body.defaultTimezone !== undefined) {
+      u = updateUserTimezone(userId, body.defaultTimezone);
+      if (!u) return c.json({ error: "invalid timezone" }, 400);
+    }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });
+  // City search → coordinates for the per-screen location picker (SSRF-guarded).
+  app.get("/api/geocode", async (c) => c.json(await geocodeSearch(c.req.query("q") ?? "").catch(() => [])));
+  // The canonical IANA zone list (matches the server's own validation) for the
+  // timezone <select>s. Static + cacheable.
+  app.get("/api/timezones", (c) => {
+    c.header("cache-control", "public, max-age=86400");
+    const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+    return c.json(zones.includes("UTC") ? zones : ["UTC", ...zones]);
+  });
+
   app.post("/api/account/password", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { current?: string; next?: string };
     if (!body.next || body.next.length < 8) return c.json({ error: "new password must be at least 8 characters" }, 400);
