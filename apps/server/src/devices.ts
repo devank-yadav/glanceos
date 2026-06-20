@@ -21,6 +21,7 @@ export interface DeviceRow {
   last_seen: number | null;
   timezone: string | null;
   render_opts: string;
+  group_id: number | null;
 }
 
 export interface DeviceProfile {

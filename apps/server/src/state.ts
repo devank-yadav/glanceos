@@ -1,19 +1,34 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { connLookupFor } from "./connections";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
+import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
 
-/** The layout a device shows right now — an active time-of-day schedule wins,
- *  then its playlist's current item, then its plain setup. */
+/** The layout a device shows right now. The device's own settings win — schedule
+ *  → playlist → plain setup — then it falls back to its display group's:
+ *  group schedule → group playlist → group default. No group / no group settings
+ *  → exactly the previous behavior. */
 export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
   const scheduled = activeScheduledLayout(device.id, now, device.timezone);
   if (scheduled) return scheduled;
   if (device.playlist_id) return currentPlaylistLayout(device.playlist_id, now);
-  return device.layout_id;
+  if (device.layout_id) return device.layout_id;
+
+  if (device.group_id) {
+    const group = getGroupRow(device.group_id);
+    if (group) {
+      const tz = device.timezone ?? group.timezone;
+      const gSched = activeGroupScheduledLayout(group.id, now, tz);
+      if (gSched) return gSched;
+      if (group.playlist_id) return currentPlaylistLayout(group.playlist_id, now);
+      if (group.layout_id) return group.layout_id;
+    }
+  }
+  return null;
 }
 
 /** Pure: is the display awake at this wall-clock minute/weekday? Outside the wake
@@ -113,6 +128,11 @@ export async function pushDeviceIds(ids: string[]): Promise<void> {
 /** Push every connected screen belonging to one user (task/queue changes). */
 export async function pushUserDevices(userId: string): Promise<void> {
   await Promise.all(devicesOwnedBy(userId).map((d) => pushDevice(d.id)));
+}
+
+/** Re-push every connected screen in a display group (group default/schedule changed). */
+export async function pushGroupDevices(groupId: number): Promise<void> {
+  await pushDeviceIds(deviceIdsInGroup(groupId));
 }
 
 export async function pushAllConnected(staggerMs = 0): Promise<void> {

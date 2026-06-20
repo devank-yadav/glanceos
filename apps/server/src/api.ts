@@ -14,6 +14,10 @@ import {
   registrationOpen, sessionUserId, updateUserName, verifyLogin,
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
+import {
+  createGroup, deleteGroup, getGroupRow, getOwnedGroup, listGroups, listGroupSchedules,
+  setDeviceGroup, setGroupSchedules, updateGroup, type GroupSchedule,
+} from "./groups";
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
@@ -39,7 +43,7 @@ import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
   composeState, currentLayoutId, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
-  pushRotatingDevices, pushUserDevices,
+  pushGroupDevices, pushRotatingDevices, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
@@ -101,6 +105,8 @@ function deviceSummary(d: DeviceRow) {
     timezone: d.timezone,
     renderOpts: safeJsonObj(d.render_opts),
     tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake },
+    groupId: d.group_id,
+    groupName: d.group_id ? getGroupRow(d.group_id)?.name ?? null : null,
     createdAt: d.created_at,
   };
 }
@@ -365,6 +371,7 @@ export function buildApp(): Hono<Env> {
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
       tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null };
+      groupId?: number | null;
     };
     if (body.renderOpts !== undefined) {
       // validate/clamp via toDitherOpts so junk can't reach the render pipeline
@@ -372,6 +379,9 @@ export function buildApp(): Hono<Env> {
     }
     if (body.tv !== undefined) {
       if (!setDeviceTvSettings(id, userId, body.tv)) return c.json({ error: "device not found" }, 404);
+    }
+    if (body.groupId !== undefined) {
+      if (!setDeviceGroup(id, body.groupId, userId)) return c.json({ error: "device or group not found" }, 404);
     }
     // Assigning a playlist clears the single layout, and vice-versa.
     if (body.playlistId !== undefined) {
@@ -474,6 +484,47 @@ export function buildApp(): Hono<Env> {
   app.delete("/api/playlists/:id", (c) => {
     if (!deletePlaylist(Number(c.req.param("id")), c.get("userId"))) return c.json({ error: "not found" }, 404);
     return c.json({ ok: true });
+  });
+
+  // ---- display groups (signage) ----
+
+  app.get("/api/groups", (c) => c.json(listGroups(c.get("userId"))));
+
+  app.post("/api/groups", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; timezone?: string | null };
+    if (!body.name?.trim()) return c.json({ error: "name required" }, 400);
+    return c.json(createGroup(c.get("userId"), body.name, body.timezone ?? null), 201);
+  });
+
+  app.patch("/api/groups/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; timezone?: string | null; layoutId?: number | null; playlistId?: number | null };
+    const updated = updateGroup(Number(c.req.param("id")), c.get("userId"), body);
+    if (!updated) return c.json({ error: "not found" }, 404);
+    await pushGroupDevices(updated.id);
+    return c.json(updated);
+  });
+
+  app.delete("/api/groups/:id", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!getOwnedGroup(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    deleteGroup(id, c.get("userId"));
+    await pushGroupDevices(id); // members fall back to their own settings
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/groups/:id/schedules", (c) => {
+    const g = getOwnedGroup(Number(c.req.param("id")), c.get("userId"));
+    if (!g) return c.json({ error: "not found" }, 404);
+    return c.json({ timezone: g.timezone, schedules: listGroupSchedules(g.id) });
+  });
+
+  app.put("/api/groups/:id/schedules", async (c) => {
+    const g = getOwnedGroup(Number(c.req.param("id")), c.get("userId"));
+    if (!g) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { schedules?: GroupSchedule[] };
+    setGroupSchedules(g.id, Array.isArray(body.schedules) ? body.schedules : []);
+    await pushGroupDevices(g.id);
+    return c.json({ schedules: listGroupSchedules(g.id) });
   });
 
   // ---- setups ----

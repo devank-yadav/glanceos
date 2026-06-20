@@ -434,3 +434,39 @@ describe("backup export → import", () => {
     expect(layouts.map((l) => l.name).sort()).toEqual(["Only"]); // Pre A/B wiped
   });
 });
+
+describe("display groups (signage)", () => {
+  const reg = async (name: string, email: string) =>
+    cookieOf(await app.request("/api/auth/register", { method: "POST", ...json({ name, email, password: "calm-glass-grp" }) }));
+
+  it("a grouped device with no own board falls back to the group default, but its own board wins", async () => {
+    const cookie = await reg("Gina", "gina@example.com");
+    const group = await (await app.request("/api/groups", { method: "POST", ...authed(cookie, { name: "Lobby" }) })).json();
+    const board = await (await app.request("/api/layouts", { method: "POST", ...authed(cookie, { name: "Lobby board", document: LOCAL_LAYOUT }) })).json();
+    await app.request(`/api/groups/${group.id}`, { method: "PATCH", ...authed(cookie, { layoutId: board.id }) });
+
+    const dev = await (await app.request("/api/devices/register", { method: "POST", ...json({ profile: { width: 1920, height: 1080 } }) })).json();
+    await app.request("/api/devices/claim", { method: "POST", ...authed(cookie, { code: dev.claimCode, name: "Lobby screen" }) });
+    await app.request(`/api/devices/${dev.deviceId}`, { method: "PATCH", ...authed(cookie, { groupId: group.id }) });
+
+    const creds = { "x-device-id": dev.deviceId, "x-device-secret": dev.deviceSecret };
+    const me = await (await app.request("/api/devices/me", { headers: creds })).json();
+    expect(me.state.layout.name).toBe("Lobby board"); // group default
+
+    const own = await (await app.request("/api/layouts", { method: "POST", ...authed(cookie, { name: "Own board", document: LOCAL_LAYOUT }) })).json();
+    await app.request(`/api/devices/${dev.deviceId}`, { method: "PATCH", ...authed(cookie, { layoutId: own.id }) });
+    const me2 = await (await app.request("/api/devices/me", { headers: creds })).json();
+    expect(me2.state.layout.name).toBe("Own board"); // device's own board wins
+
+    const groups = await (await app.request("/api/groups", { headers: { cookie } })).json() as { id: number; deviceCount: number }[];
+    expect(groups.find((g) => g.id === group.id)!.deviceCount).toBe(1);
+  });
+
+  it("groups are per-user (no cross-user read/patch)", async () => {
+    const a = await reg("Ari", "ari@example.com");
+    const b = await reg("Ben", "ben@example.com");
+    const g = await (await app.request("/api/groups", { method: "POST", ...authed(a, { name: "A-only" }) })).json();
+    expect(await (await app.request("/api/groups", { headers: { cookie: b } })).json()).toEqual([]);
+    expect((await app.request(`/api/groups/${g.id}`, { method: "PATCH", ...authed(b, { name: "hijack" }) })).status).toBe(404);
+  });
+});
