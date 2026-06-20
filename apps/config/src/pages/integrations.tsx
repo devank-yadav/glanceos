@@ -142,7 +142,7 @@ export function IntegrationsPage() {
             <h2>Add a connection</h2>
             {cats.map((cat) => (
               <div key={cat} class="provider-cat">
-                <div class="section-title">{CAT_LABEL[cat] ?? cat}</div>
+                <div class="cat-label">{CAT_LABEL[cat] ?? cat}</div>
                 <div class="cards provider-grid">
                   {providers.filter((p) => p.category === cat).sort((a, b) => a.label.localeCompare(b.label)).map((p) => (
                     <button class="card provider-card" key={p.id} onClick={() => setAdding(p)}>

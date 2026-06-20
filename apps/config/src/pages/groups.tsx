@@ -37,8 +37,8 @@ export function GroupsPage() {
           <button class="primary" disabled={!name.trim()} onClick={create}><Icon.plus /> Create</button>
         </span>
       } />
-      <div class="page-body">
-        <p class="muted" style={{ marginTop: 0 }}>A group gives many screens one default board. Assign a screen to a group from its card on <a href="#/">Screens</a>.</p>
+      <div class="shell-content">
+        <p class="muted page-intro" style={{ marginTop: 0 }}>A group gives many screens one default board. Assign a screen to a group from its card on <a href="#/">Screens</a>.</p>
         {groups === null ? <p class="muted">Loading…</p>
           : groups.length === 0 ? <EmptyState icon={<Icon.layers />} title="No groups yet" body="Create a group to manage several screens together — a lobby, a floor, a whole building." />
             : <div class="group-list">{groups.map((g) => <GroupCard key={g.id} group={g} setups={setups} onChanged={refresh} confirm={confirm} toast={toast} />)}</div>}

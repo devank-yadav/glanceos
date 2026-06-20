@@ -15,17 +15,19 @@ export function PageHeader({ title, actions }: { title: string; actions?: Compon
   const section = SECTION[route.name]; // app-wide breadcrumb: glanceos / <section>
   return (
     <header class="page-header glass">
-      <IconButton class="drawer-btn" icon={<Icon.list />} label="Open menu" onClick={openDrawer} />
-      <div class="page-head-text">
-        <nav class="page-crumbs" aria-label="Breadcrumb">
-          <a href="#/">glanceos</a>
-          <span class="crumb-sep" aria-hidden="true">/</span>
-          <span aria-current="page">{section?.label ?? title}</span>
-        </nav>
-        <h1 class="page-title">{title}</h1>
+      <div class="page-header-inner">
+        <IconButton class="drawer-btn" icon={<Icon.list />} label="Open menu" onClick={openDrawer} />
+        <div class="page-head-text">
+          <nav class="page-crumbs" aria-label="Breadcrumb">
+            <a href="#/">glanceos</a>
+            <span class="crumb-sep" aria-hidden="true">/</span>
+            <span aria-current="page">{section?.label ?? title}</span>
+          </nav>
+          <h1 class="page-title">{title}</h1>
+        </div>
+        <span class="spacer" />
+        {actions && <div class="header-actions">{actions}</div>}
       </div>
-      <span class="spacer" />
-      {actions && <div class="header-actions">{actions}</div>}
     </header>
   );
 }

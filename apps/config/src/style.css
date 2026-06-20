@@ -2433,11 +2433,20 @@ textarea:focus-visible,
   top: 0;
   z-index: var(--z-header);
   display: flex;
+  align-items: stretch;
+  height: var(--header-h);
+  border-bottom: 1px solid var(--glass-border);
+}
+/* Inner content shares the exact centered column as .shell-content, so the
+   title/breadcrumb/actions line up with the page body beneath them. */
+.page-header-inner {
+  display: flex;
   align-items: center;
   gap: var(--space-md);
-  height: var(--header-h);
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
   padding: 0 24px;
-  border-bottom: 1px solid var(--glass-border);
 }
 .page-title { font-size: 20px; letter-spacing: -0.02em; margin: 0; }
 .header-actions { display: flex; align-items: center; gap: var(--space-sm); }
@@ -2454,7 +2463,7 @@ textarea:focus-visible,
   .app-shell.drawer-open .sidebar { transform: none; }
   .sidebar-collapse { display: none; }
   .shell-content { padding: 18px 16px 90px; }
-  .page-header { padding: 0 16px; }
+  .page-header-inner { padding: 0 16px; }
 }
 
 /* ---------- toasts ---------- */
@@ -2615,7 +2624,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 
 /* integrations */
 .provider-cat { margin-bottom: 18px; }
-.section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 8px 0; }
+.cat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); font-weight: 600; text-align: left; margin: 8px 0; }
 .conn-error-line { font-size: 12.5px; color: var(--bad); margin: 2px 0; }
 
 /* hub */
@@ -2801,8 +2810,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .dither-controls input[type="range"] { width: 100%; accent-color: var(--fg); }
 
 /* ---------- account page ---------- */
-.account-page { max-width: 560px; }
-.account-section { padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+/* Account stays on the shared content column (so its title + sections line up
+   with the header); the form sections constrain their own readable width,
+   left-aligned under the title rather than re-centered. */
+.account-section { padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
 .account-section h2 { margin: 0 0 4px; font-size: 15px; }
 .account-section .row { margin-top: 2px; }
 .danger-zone { border-color: color-mix(in srgb, var(--bad) 35%, var(--rule)); }
