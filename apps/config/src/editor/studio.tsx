@@ -86,7 +86,7 @@ const PLACEHOLDER: LayoutT = { schemaVersion: 3, name: "Loading…", theme: { mo
 const KNOWN = new Set(BLOCKS.map((b) => b.type));
 
 export interface DragLayer {
-  show(label: string, glyph: string): void;
+  show(label: string): void;
   move(clientX: number, clientY: number): void;
   indicate(box: { x: number; y: number; w: number; h: number } | null): void;
   halo(box: { x: number; y: number; w: number; h: number } | null): void;
@@ -173,17 +173,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
       el.style.height = `${box.h}px`;
     };
     return {
-      show(label, glyph) {
+      show(label) {
         const g = ghostRef.current;
         if (!g) return;
         g.innerHTML = "";
-        const gl = document.createElement("span");
-        gl.className = "drag-card-glyph";
-        gl.textContent = glyph;
         const lb = document.createElement("span");
         lb.className = "drag-card-label";
         lb.textContent = label;
-        g.append(gl, lb);
+        g.append(lb);
         g.style.display = "flex";
       },
       move(x, y) {

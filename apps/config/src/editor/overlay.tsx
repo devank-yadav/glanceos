@@ -93,7 +93,7 @@ export function Overlay({
       d.started = true;
       d.node.classList.add("is-dragging-source");
       rootRef.current!.classList.add("dragging");
-      dragLayer.show(d.label, d.glyph);
+      dragLayer.show(d.label);
     }
     dragLayer.move(e.clientX, e.clientY);
     const { x, y } = toPage(e);

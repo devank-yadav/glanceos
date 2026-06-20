@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { BLOCKS, type WidgetType } from "./blocks";
+import { BlockIcon } from "./blockIcons";
 
 /**
  * Notion-style insert menu: opens at a cell, search autofocused, arrows wrap,
@@ -64,7 +65,7 @@ export function SlashMenu({
               onMouseEnter={() => setActive(i)}
               onClick={() => onInsert(b.type)}
             >
-              <span class="slash-glyph">{b.glyph}</span>
+              <span class="slash-glyph"><BlockIcon type={b.type} /></span>
               <span>
                 <strong>{b.label}</strong>
                 <small>{b.description}</small>

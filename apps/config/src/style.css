@@ -2871,3 +2871,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   .modal { padding: 16px 14px; }
   .cards { gap: 10px; }
 }
+
+/* v2.1: bespoke block icons render inside the existing glyph boxes (palette,
+   slash menu, landing block wall, feature cards). Size the SVG per context. */
+.palette-glyph svg { width: 16px; height: 16px; }
+.slash-glyph svg { width: 17px; height: 17px; }
+.block-chip-glyph svg { width: 14px; height: 14px; }
+.feature-glyph svg { width: 22px; height: 22px; }

@@ -1,17 +1,19 @@
 import { useEffect, useState } from "preact/hooks";
 import { BLOCKS } from "../editor/blocks";
+import { BlockIcon } from "../editor/blockIcons";
+import { Icon } from "../editor/icons";
 
 // The home page: liquid-glass surfaces over a monochrome fog, a monumental
 // hero with a faint suspension-bridge motif, and Notion-calm typography.
 // Pure presentation — the only JS is the ticking clock in the mock board.
 
 const FEATURES = [
-  { glyph: "⌖", title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
-  { glyph: "✎", title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
-  { glyph: "▦", title: "46 calm blocks", body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
-  { glyph: "⇄", title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
-  { glyph: "⧉", title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
-  { glyph: "⌂", title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
+  { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
+  { icon: Icon.pencil, title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
+  { icon: Icon.grid, title: "199 calm blocks", body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
+  { icon: Icon.convert, title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
+  { icon: Icon.layers, title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
+  { icon: Icon.home, title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
 ];
 
 const STEPS = [
@@ -149,7 +151,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         <div class="feature-grid">
           {FEATURES.map((f) => (
             <div key={f.title} class="feature-card glass">
-              <span class="feature-glyph">{f.glyph}</span>
+              <span class="feature-glyph"><f.icon /></span>
               <h3>{f.title}</h3>
               <p>{f.body}</p>
             </div>
@@ -165,7 +167,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         <div class="block-wall">
           {BLOCKS.map((b) => (
             <span key={b.type} class="block-chip" title={b.description}>
-              <span class="block-chip-glyph">{b.glyph}</span>
+              <span class="block-chip-glyph"><BlockIcon type={b.type} /></span>
               {b.label}
             </span>
           ))}

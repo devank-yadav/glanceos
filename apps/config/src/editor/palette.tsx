@@ -2,6 +2,7 @@ import type { LayoutT } from "@glanceos/schema";
 import type { RefObject } from "preact";
 import { useMemo, useRef, useState } from "preact/hooks";
 import { BLOCKS, CATEGORIES, type BlockDef, type WidgetType } from "./blocks";
+import { BlockIcon } from "./blockIcons";
 import { hitTest, indicatorBox, type DropTarget, type PageGeometry } from "./geometry";
 import type { DragLayer } from "./studio";
 
@@ -46,7 +47,7 @@ export function Palette({
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { block, target: null, entered: false };
-    dragLayer.show(block.label, block.glyph);
+    dragLayer.show(block.label);
     dragLayer.move(e.clientX, e.clientY);
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -109,7 +110,7 @@ export function Palette({
                   onPointerUp={onPointerUp}
                   onPointerCancel={onPointerCancel}
                 >
-                  <span class="palette-glyph">{b.glyph}</span>
+                  <span class="palette-glyph"><BlockIcon type={b.type} /></span>
                   <span class="palette-name">{b.label}</span>
                 </button>
               ))}
