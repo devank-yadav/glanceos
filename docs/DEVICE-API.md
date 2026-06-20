@@ -162,3 +162,21 @@ runs the board read-only in share mode, so no device secret crosses the Cast
 channel. Casting is fully opt-in: with no App ID the CSP stays strict and the
 button is hidden. (AirPlay can't be initiated from a web page; it arrives with
 the native tvOS app.)
+
+## Native shells (Pi / Fire TV / Tizen / webOS / tvOS)
+
+The native apps under [`devices/`](../devices/) are **thin glass**: each just
+loads the web runtime fullscreen and lets it do everything (register, QR claim,
+SSE, D-pad nav, wake-lock, burn-in, wake/sleep, overscan). A shell loads:
+
+```
+<HOST>/screen/?tv=1&platform=<id>[&native=<shell version>]
+```
+
+`platform` is a short id the shell self-reports so the fleet can show what's
+running each screen — `pi`, `firetv`, `androidtv`, `tizen`, `webos`, `tvos`. The
+runtime puts `platform`/`nativeVersion` into its **register** profile (sanitized
+server-side: `[\w.+-]`, 24-char cap), and the value surfaces as a chip on the
+**Screens** dashboard. Adding a new shell needs **no** server or schema change —
+just pass a new `?platform=` value. See [`devices/README.md`](../devices/README.md)
+for the per-platform build/sideload steps.
