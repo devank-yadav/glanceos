@@ -15,6 +15,7 @@ import {
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
 import { requestLogger } from "./logging";
+import { hmacSign, hmacVerify } from "./secrets";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
   registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, setRenderOpts, updateDevice, type DeviceRow,
@@ -630,11 +631,31 @@ export function buildApp(): Hono<Env> {
   });
 
   // Public board state (no auth) — honors expiry + optional password, then
-  // resolves live data under the OWNER's connections.
-  app.get("/api/public/board/:token", async (c) => {
-    const found = getLayoutByShareToken(c.req.param("token"));
+  // resolves live data under the OWNER's connections. A protected board is
+  // unlocked via POST .../unlock (password in the body, never the URL), which
+  // sets a short-lived signed cookie the polling GETs present — so the password
+  // never lands in logs / history / referrers.
+  const shareCookie = (token: string) => `glanceos_share_${token.slice(0, 12)}`;
+  const shareUnlockSig = (token: string) => hmacSign(`share-unlock:${token}`);
+
+  app.post("/api/public/board/:token/unlock", async (c) => {
+    const token = c.req.param("token");
+    const found = getLayoutByShareToken(token);
     if (!found || shareExpired(found.expiresAt)) return c.json({ error: "not found" }, 404);
-    if (!verifySharePassword(found.pwHash, c.req.query("pw"))) return c.json({ error: "password_required" }, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { password?: string };
+    if (!verifySharePassword(found.pwHash, body.password)) return c.json({ error: "password_required" }, 401);
+    setCookie(c, shareCookie(token), shareUnlockSig(token), { httpOnly: true, sameSite: "Lax", path: "/", maxAge: 12 * 60 * 60 });
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/public/board/:token", async (c) => {
+    const token = c.req.param("token");
+    const found = getLayoutByShareToken(token);
+    if (!found || shareExpired(found.expiresAt)) return c.json({ error: "not found" }, 404);
+    if (found.pwHash) {
+      const cookie = getCookie(c, shareCookie(token));
+      if (!cookie || !hmacVerify(`share-unlock:${token}`, cookie)) return c.json({ error: "password_required" }, 401);
+    }
     const { record, ownerId } = found;
     const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
     return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });

@@ -34,6 +34,12 @@ function cookieOf(res: Response): string {
   return `glanceos_session=${match![1]}`;
 }
 
+function cookieOfName(res: Response, name: string): string {
+  const m = new RegExp(`${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]+)`).exec(res.headers.get("set-cookie") ?? "");
+  expect(m).not.toBeNull();
+  return `${name}=${m![1]}`;
+}
+
 // No network: only local-data widgets, so /me and preview-state compose offline.
 const LOCAL_LAYOUT = {
   schemaVersion: 3,
@@ -325,11 +331,16 @@ describe("multi-user auth, pairing, setups, hub", () => {
     const layout = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Locked", document: LOCAL_LAYOUT }) })).json();
     const share = await (await app.request(`/api/layouts/${layout.id}/share`, { method: "POST", ...authed(cookieA, { password: "s3cret" }) })).json();
     expect(share.hasPassword).toBe(true);
-    expect((await app.request(`/api/public/board/${share.token}`)).status).toBe(401); // no password
-    expect((await app.request(`/api/public/board/${share.token}?pw=wrong`)).status).toBe(401);
-    const ok = await app.request(`/api/public/board/${share.token}?pw=s3cret`);
+    expect((await app.request(`/api/public/board/${share.token}`)).status).toBe(401); // locked, no cookie
+    // password goes in the POST body, never the URL
+    expect((await app.request(`/api/public/board/${share.token}/unlock`, { method: "POST", ...json({ password: "wrong" }) })).status).toBe(401);
+    const unlocked = await app.request(`/api/public/board/${share.token}/unlock`, { method: "POST", ...json({ password: "s3cret" }) });
+    expect(unlocked.status).toBe(200);
+    const cookie = cookieOfName(unlocked, `glanceos_share_${share.token.slice(0, 12)}`);
+    const ok = await app.request(`/api/public/board/${share.token}`, { headers: { cookie } });
     expect(ok.status).toBe(200);
     expect((await ok.json()).state.layout.name).toBe("Locked");
+    expect((await app.request(`/api/public/board/${share.token}`, { headers: { cookie: `glanceos_share_${share.token.slice(0, 12)}=forged` } })).status).toBe(401); // forged cookie rejected
   });
 
   it("manages the account (rename, password, delete) and logs out everywhere", async () => {

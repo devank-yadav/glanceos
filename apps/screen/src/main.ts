@@ -63,29 +63,37 @@ function bootScreen(): void {
  */
 function bootShare(token: string): void {
   const cacheKey = `glanceos.share.${token}`;
-  const pwKey = `glanceos.share.pw.${token}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try { renderPayload(JSON.parse(cached) as StreamPayloadT); markStale(); } catch { localStorage.removeItem(cacheKey); }
   }
   const load = async () => {
-    const pw = localStorage.getItem(pwKey);
-    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}${pw ? `?pw=${encodeURIComponent(pw)}` : ""}`);
-    if (res.status === 401) { localStorage.removeItem(pwKey); throw { needsPassword: true }; }
+    // The password (if any) is presented via a signed cookie set by /unlock,
+    // never in the URL — so it can't leak to logs / history / referrers.
+    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}`);
+    if (res.status === 401) throw { needsPassword: true };
     if (!res.ok) throw new Error(String(res.status));
     const payload = (await res.json()) as StreamPayloadT;
     localStorage.setItem(cacheKey, JSON.stringify(payload));
     renderPayload(payload);
     markFresh();
   };
-  const start = () => load().then(() => { setInterval(() => load().catch(() => markStale()), 60_000); }).catch((e) => {
-    if ((e as { needsPassword?: boolean })?.needsPassword) {
-      promptPassword(`This board is password protected.`, (pw) => { localStorage.setItem(pwKey, pw); start(); });
-    } else if (!cached) {
-      renderMessage("This board isn't available", "The share link may have been turned off.");
-      markStale();
-    } else { markStale(); }
-  });
+  const unlock = async (pw: string): Promise<boolean> => {
+    const res = await fetch(`/api/public/board/${encodeURIComponent(token)}/unlock`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: pw }),
+    });
+    return res.ok;
+  };
+  function askPassword(msg: string): void {
+    promptPassword(msg, async (pw) => { if (await unlock(pw)) start(); else askPassword("Incorrect password — try again."); });
+  }
+  function start(): void {
+    load().then(() => { setInterval(() => load().catch(() => markStale()), 60_000); }).catch((e) => {
+      if ((e as { needsPassword?: boolean })?.needsPassword) askPassword("This board is password protected.");
+      else if (!cached) { renderMessage("This board isn't available", "The share link may have been turned off."); markStale(); }
+      else markStale();
+    });
+  }
   start();
 }
 
