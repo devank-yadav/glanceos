@@ -27,7 +27,7 @@ import {
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
-import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
+import { listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
 import { limiter } from "./ratelimit";
@@ -376,6 +376,7 @@ export function buildApp(): Hono<Env> {
     if (!body.success) return c.json({ error: "claim code required" }, 400);
     const device = claimDevice(body.data.code, body.data.name, c.get("userId"));
     if (!device) return c.json({ error: "unknown or already-claimed code" }, 404);
+    notifyClaimed(c.get("userId"), device.id, device.name);
     await pushDevice(device.id); // the physical screen flips to "pick a setup"
     return c.json(deviceSummary(device));
   });
@@ -383,6 +384,7 @@ export function buildApp(): Hono<Env> {
   app.patch("/api/devices/:id", async (c) => {
     const id = c.req.param("id");
     const userId = c.get("userId");
+    const prior = getDevice(id);
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
       tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null };
@@ -416,6 +418,12 @@ export function buildApp(): Hono<Env> {
     }
     const device = getDevice(id);
     if (!device || device.user_id !== userId) return c.json({ error: "device not found" }, 404);
+    // Notify only on a genuine content change (assignment differs from before).
+    if (body.playlistId !== undefined && body.playlistId !== null && body.playlistId !== prior?.playlist_id) {
+      notifyContentChanged(userId, id, device.name, getOwnedPlaylist(body.playlistId, userId)?.name ?? "a playlist");
+    } else if (body.layoutId !== undefined && body.layoutId !== null && body.layoutId !== prior?.layout_id) {
+      notifyContentChanged(userId, id, device.name, getOwnedLayout(body.layoutId, userId)?.name ?? "a board");
+    }
     await pushDevice(device.id);
     return c.json(deviceSummary(device));
   });

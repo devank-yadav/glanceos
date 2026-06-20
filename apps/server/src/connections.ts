@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
+import { notifyConnectionIssue } from "./notifications";
 import { ensureFreshOAuthToken } from "./oauth";
 import { PROVIDERS, type AuthKind } from "./providers/registry";
 import type { ConnContext, ConnLookup } from "./providers/resolve";
@@ -111,7 +112,12 @@ export function deleteConnection(id: string, userId: string): boolean {
  *  records it. Called from the resolver path so the Integrations page can badge
  *  needs_auth / rate-limited / error. Best-effort (no-op if the row is gone). */
 export function markConnStatus(id: string, status: "ok" | "needs_auth" | "error", lastError = ""): void {
+  const prev = db.prepare("SELECT user_id, label, status FROM connections WHERE id = ?").get(id) as { user_id: string; label: string; status: string } | undefined;
   db.prepare("UPDATE connections SET status = ?, last_error = ?, updated_at = ? WHERE id = ?").run(status, lastError, Date.now(), id);
+  // Surface a freshly-unhealthy integration in the bell (once per state per day).
+  if (prev && prev.status !== status && (status === "error" || status === "needs_auth")) {
+    notifyConnectionIssue(prev.user_id, prev.label, status);
+  }
 }
 
 function putSecret(connectionId: string, kind: string, plain: string): void {

@@ -36,13 +36,32 @@ export function markAllRead(userId: string): void {
   db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").run(Date.now(), userId);
 }
 
-/** Create unless one already exists for this (device, dedupe_key) today (read or unread). */
-export function createIfAbsent(userId: string, deviceId: string, kind: string, message: string, dedupeKey: string): void {
-  const exists = db.prepare("SELECT 1 FROM notifications WHERE device_id = ? AND dedupe_key = ? LIMIT 1").get(deviceId, dedupeKey);
+/** Create unless one already exists for this (user, dedupe_key) (read or unread).
+ *  deviceId may be null for account-level alerts (e.g. a connection error). */
+export function createIfAbsent(userId: string, deviceId: string | null, kind: string, message: string, dedupeKey: string): void {
+  const exists = db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND dedupe_key = ? LIMIT 1").get(userId, dedupeKey);
   if (exists) return;
   db.prepare(
     "INSERT OR IGNORE INTO notifications (user_id, device_id, kind, message, dedupe_key, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(userId, deviceId, kind, message, dedupeKey, Date.now());
+}
+
+const dayOf = (now = Date.now()): number => Math.floor(now / 86_400_000);
+
+/** A screen was just claimed (one-time). */
+export function notifyClaimed(userId: string, deviceId: string, name: string | null): void {
+  createIfAbsent(userId, deviceId, "claimed", `${name ?? "A screen"} was connected`, `claimed:${deviceId}`);
+}
+
+/** The board/playlist a screen shows was changed (once per target per day). */
+export function notifyContentChanged(userId: string, deviceId: string, name: string | null, what: string): void {
+  createIfAbsent(userId, deviceId, "content", `${name ?? "A screen"} now shows ${what}`, `content:${what}:${dayOf()}`);
+}
+
+/** An integration/connection went unhealthy (account-level; once per state per day). */
+export function notifyConnectionIssue(userId: string, label: string, status: "needs_auth" | "error"): void {
+  const msg = status === "needs_auth" ? `${label} needs to be re-authorized` : `${label} stopped responding`;
+  createIfAbsent(userId, null, `conn_${status}`, msg, `conn:${label}:${status}:${dayOf()}`);
 }
 
 export interface AlertOpts { offlineMs: number; lowBatteryPct: number }
@@ -61,6 +80,10 @@ export function checkDeviceForAlerts(device: DeviceRow, now: number, isOnline: b
   return null;
 }
 
+// Remembered presence per device so the sweep can spot a screen coming back.
+// In-memory by design: a restart simply re-baselines (no spurious "back online").
+const lastOnline = new Map<string, boolean>();
+
 /** Background sweep across every user's claimed devices. */
 export function runAlertChecks(now = Date.now()): void {
   const opts: AlertOpts = {
@@ -69,7 +92,13 @@ export function runAlertChecks(now = Date.now()): void {
   };
   for (const d of allClaimedDevices()) {
     if (!d.user_id) continue;
-    const alert = checkDeviceForAlerts(d, now, isConnected(d.id), opts);
+    const online = isConnected(d.id);
+    // Recovery: was known-offline, now connected → reassuring one-per-day ping.
+    if (lastOnline.get(d.id) === false && online) {
+      createIfAbsent(d.user_id, d.id, "online", `${d.name ?? "A screen"} is back online`, `online:${d.id}:${Math.floor(now / 86_400_000)}`);
+    }
+    lastOnline.set(d.id, online);
+    const alert = checkDeviceForAlerts(d, now, online, opts);
     if (alert) createIfAbsent(d.user_id, d.id, alert.kind, alert.message, alert.dedupeKey);
   }
 }
