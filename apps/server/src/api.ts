@@ -46,6 +46,9 @@ import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
 } from "./playlists";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
+import {
+  createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
+} from "./inlets";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
@@ -267,6 +270,8 @@ export function buildApp(): Hono<Env> {
   app.use("/api/geocode", limiter("geocode", 60, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
   app.use("/api/data", limiter("data", 120, 60_000, userKey));
+  app.use("/api/inlets", limiter("inlets", 60, 60_000, userKey));
+  app.use("/api/hooks/*", limiter("hooks", 240, 60_000, (c) => c.req.path)); // per-secret (the path)
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
   app.use("/api/account/api-keys", limiter("apikeys", 20, 60_000, userKey));
@@ -970,6 +975,40 @@ export function buildApp(): Hono<Env> {
   });
   app.delete("/api/data/:key", (c) =>
     deleteCustomData(c.get("userId"), c.req.param("key")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // ---- webhook inlets (management is session-only) ----
+  app.get("/api/inlets", (c) => c.json(listInlets(c.get("userId"))));
+  app.post("/api/inlets", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; sinkKind?: string; sinkTarget?: string; requireSignature?: boolean };
+    if (!body.sinkKind || !isSinkKind(body.sinkKind)) return c.json({ error: "sinkKind must be one of task|queue|data|none" }, 400);
+    const { inlet, signingKey } = createInlet(c.get("userId"), {
+      name: body.name ?? "Inlet", sinkKind: body.sinkKind, sinkTarget: body.sinkTarget, requireSignature: !!body.requireSignature,
+    });
+    const url = `${new URL(c.req.url).origin}/api/hooks/${inlet.secret}`;
+    return c.json({ inlet, url, signingKey, example: { text: "Hello from a webhook" } }, 201); // signingKey shown once
+  });
+  app.patch("/api/inlets/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; sinkKind?: string; sinkTarget?: string; enabled?: boolean };
+    if (body.sinkKind !== undefined && !isSinkKind(body.sinkKind)) return c.json({ error: "bad sinkKind" }, 400);
+    const updated = updateInlet(c.req.param("id"), c.get("userId"), { ...body, sinkKind: body.sinkKind as SinkKind | undefined });
+    return updated ? c.json(updated) : c.json({ error: "not found" }, 404);
+  });
+  app.delete("/api/inlets/:id", (c) =>
+    deleteInlet(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // The public inbound webhook — pre-guard skip-listed (no session/CSRF); the URL
+  // secret is the capability, plus an optional HMAC over the raw body.
+  app.post("/api/hooks/:secret", async (c) => {
+    const raw = await c.req.text();
+    const inlet = resolveInlet(c.req.param("secret"));
+    if (!inlet || !inlet.enabled) return c.json({ error: "unknown inlet" }, 404);
+    if (!verifyInletSignature(inlet, raw, c.req.header("x-signature") ?? c.req.header("x-hub-signature-256"))) {
+      return c.json({ error: "bad signature" }, 401);
+    }
+    let payload: Record<string, unknown> = {};
+    try { const p = JSON.parse(raw || "{}"); if (p && typeof p === "object") payload = p as Record<string, unknown>; } catch { /* non-JSON → empty */ }
+    return c.json({ ok: true, ...(await routeInlet(inlet, payload)) });
+  });
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {

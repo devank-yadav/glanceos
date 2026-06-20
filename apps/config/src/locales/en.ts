@@ -10,6 +10,7 @@ const en: Record<string, string> = {
   "nav.playlists": "Playlists",
   "nav.hub": "Hub",
   "nav.integrations": "Integrations",
+  "nav.inlets": "Inlets",
   "nav.shared": "Shared",
   "nav.account": "Account",
   "nav.search": "Search…",

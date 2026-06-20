@@ -16,6 +16,7 @@ const NAV = [
   { name: "playlists", href: "#/playlists", label: "Playlists", icon: <Icon.play /> },
   { name: "hub", href: "#/hub", label: "Hub", icon: <Icon.convert /> },
   { name: "integrations", href: "#/integrations", label: "Integrations", icon: <Icon.link /> },
+  { name: "inlets", href: "#/inlets", label: "Data inlets", icon: <Icon.download /> },
   { name: "shared", href: "#/shared", label: "Shared with me", icon: <Icon.copy /> },
 ];
 

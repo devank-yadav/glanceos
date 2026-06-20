@@ -13,6 +13,7 @@ import { GroupsPage } from "./pages/groups";
 import { HubPage } from "./pages/hub";
 import { Onboarding } from "./pages/onboarding";
 import { DISMISS_KEY, needsOnboarding } from "./onboarding";
+import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
@@ -153,6 +154,7 @@ export function App() {
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
           {page.name === "integrations" && <IntegrationsPage />}
+          {page.name === "inlets" && <InletsPage />}
           {page.name === "shared" && <SharedPage />}
           {page.name === "account" && <AccountPage />}
         </main>
