@@ -1,4 +1,6 @@
 import type { StreamPayloadT } from "@glanceos/schema";
+import { qrSvg } from "./qr";
+import { applySafeArea, enableTvMode } from "./tv";
 import { WIDGETS } from "./widgets";
 
 // Mirrors PAGE_UNITS in @glanceos/schema. Inlined as a literal so the screen
@@ -29,6 +31,8 @@ export function renderPayload(payload: StreamPayloadT): void {
     return;
   }
   const state = payload.state;
+  // TV-mode devices carry display settings server-side; apply before painting.
+  if (state.tv?.enabled) { enableTvMode(); applySafeArea(state.tv.safeArea); }
   if (!state.layout) {
     renderMessage("Claimed and ready", "Pick a setup for this screen in the config studio.");
     return;
@@ -94,7 +98,14 @@ function renderClaim(code: string): void {
   const wrap = el("claim");
   wrap.appendChild(el("claim-brand", "glanceos"));
   wrap.appendChild(el("claim-code", code));
-  wrap.appendChild(el("claim-hint", "Open the config app and enter this code to claim the screen."));
+  // Scan-to-set-up: a big QR to the config app (couch distance). Best-effort —
+  // if the encoder ever throws on an odd origin, just skip it.
+  try {
+    const qr = el("claim-qr");
+    qr.innerHTML = qrSvg(`${location.origin}/?claim=${encodeURIComponent(code)}`, { size: 240 });
+    wrap.appendChild(qr);
+  } catch { /* no QR, the code still shows */ }
+  wrap.appendChild(el("claim-hint", "Scan to open the GlanceOS app, or enter this code there to claim the screen."));
   root.appendChild(wrap);
 }
 

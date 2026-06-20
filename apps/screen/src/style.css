@@ -37,7 +37,13 @@ body {
    split a row by flex weight. The studio's geometry module mirrors this. */
 .page {
   height: 100%;
-  padding: 4vmin;
+  box-sizing: border-box;
+  /* base inset + per-edge TV overscan-safe margin (vars default to 0% = no change) */
+  padding:
+    calc(4vmin + var(--safe-top, 0%))
+    calc(4vmin + var(--safe-right, 0%))
+    calc(4vmin + var(--safe-bottom, 0%))
+    calc(4vmin + var(--safe-left, 0%));
   display: grid;
 }
 
@@ -1015,6 +1021,13 @@ body {
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
 }
+.claim-qr {
+  background: #fff;
+  padding: 2vmin;
+  border-radius: 1.5vmin;
+  line-height: 0;
+}
+.claim-qr svg { display: block; width: 34vmin; height: 34vmin; }
 .claim-hint {
   font-size: calc(2.6vmin * var(--font-scale, 1));
   color: var(--muted);

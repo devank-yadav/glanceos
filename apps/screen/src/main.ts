@@ -2,6 +2,7 @@ import "./style.css";
 import type { StreamPayloadT } from "@glanceos/schema";
 import { ensureIdentity, openStream } from "./api";
 import { markFresh, markStale, renderMessage, renderPayload } from "./render";
+import { enableTvMode } from "./tv";
 
 const CACHE_KEY = "glanceos.lastPayload";
 
@@ -124,8 +125,8 @@ function promptPassword(message: string, onSubmit: (pw: string) => void): void {
 const params = new URLSearchParams(location.search);
 if (params.has("preview")) {
   bootPreview();
-} else if (params.get("share")) {
-  bootShare(params.get("share")!);
 } else {
-  bootScreen();
+  if (params.has("tv")) enableTvMode(); // kiosk chrome up front, so even the claim screen is fullscreen
+  if (params.get("share")) bootShare(params.get("share")!);
+  else bootScreen();
 }
