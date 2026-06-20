@@ -11,6 +11,7 @@ import { ListEditor } from "./listEditor";
 import { Overlay } from "./overlay";
 import { Palette } from "./palette";
 import { Present } from "./present";
+import { castBoard, castConfigured } from "../cast";
 import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
 import { BlockFields, BoardSettings } from "./properties";
@@ -125,6 +126,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [shareDays, setShareDays] = useState(0); // 0 = never
   const [sharePw, setSharePw] = useState("");
+  const [canCast, setCanCast] = useState(false);
+  const [castMsg, setCastMsg] = useState("");
   const [convertId, setConvertId] = useState<string | null>(null);
   // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -196,6 +199,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
       },
     };
   }, []);
+
+  useEffect(() => { castConfigured().then(setCanCast).catch(() => {}); }, []);
 
   useEffect(() => {
     api.get<LayoutRecord>(`/api/layouts/${layoutId}`).then(
@@ -608,6 +613,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (!shareUrl) return;
     navigator.clipboard?.writeText(shareUrl).then(() => setShareCopied(true)).catch(() => {});
   };
+  const doCast = async () => {
+    if (!shareUrl) return;
+    setCastMsg("");
+    try {
+      const token = new URL(shareUrl).searchParams.get("share");
+      if (token) await castBoard(token);
+    } catch (e) { setCastMsg(String(e instanceof Error ? e.message : e)); }
+  };
 
   return (
     <div class="studio">
@@ -650,10 +663,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <div class="row spread share-actions">
                   <button class="ghost danger" onClick={revokeShare} disabled={shareBusy}>Turn off</button>
                   <span class="row share-right">
+                    {canCast && <button class="ghost" onClick={doCast} title="Send this board to a Chromecast">Cast to TV</button>}
                     <a class="ghost" href={shareUrl} target="_blank" rel="noopener noreferrer">Open</a>
                     <button class="primary" onClick={copyShare}>{shareCopied ? "Copied ✓" : "Copy link"}</button>
                   </span>
                 </div>
+                {castMsg && <p class="muted" style={{ marginTop: "6px" }}>{castMsg}</p>}
               </>
             ) : (
               <>
