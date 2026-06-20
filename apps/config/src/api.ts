@@ -34,7 +34,18 @@ export interface DeviceSummary {
     burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
     wake?: { startMin: number; endMin: number; daysMask: number };
   };
+  groupId: number | null;
+  groupName: string | null;
   createdAt: number;
+}
+
+export interface DisplayGroup {
+  id: number;
+  name: string;
+  timezone: string | null;
+  layoutId: number | null;
+  playlistId: number | null;
+  deviceCount: number;
 }
 
 export interface PlaylistItem {

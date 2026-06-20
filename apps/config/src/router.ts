@@ -7,6 +7,7 @@ export type Route =
   | { name: "register" }
   | { name: "screens" }
   | { name: "fleet" }
+  | { name: "groups" }
   | { name: "setups" }
   | { name: "playlists" }
   | { name: "hub" }
@@ -19,6 +20,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/login") return { name: "login" };
   if (path === "/register") return { name: "register" };
   if (path === "/fleet") return { name: "fleet" };
+  if (path === "/groups") return { name: "groups" };
   if (path === "/setups") return { name: "setups" };
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };
@@ -33,6 +35,7 @@ export function parseRoute(hash: string): Route {
 export const SECTION: Record<string, { path: string; label: string }> = {
   screens: { path: "#/", label: "Screens" },
   fleet: { path: "#/fleet", label: "Fleet" },
+  groups: { path: "#/groups", label: "Groups" },
   setups: { path: "#/setups", label: "Setups" },
   playlists: { path: "#/playlists", label: "Playlists" },
   hub: { path: "#/hub", label: "Hub" },

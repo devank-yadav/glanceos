@@ -9,6 +9,7 @@ import { Icon } from "./editor/icons";
 import { useTheme } from "./hooks/useTheme";
 import { AccountPage } from "./pages/account";
 import { FleetPage } from "./pages/fleet";
+import { GroupsPage } from "./pages/groups";
 import { HubPage } from "./pages/hub";
 import { Onboarding } from "./pages/onboarding";
 import { DISMISS_KEY, needsOnboarding } from "./onboarding";
@@ -96,6 +97,7 @@ export function App() {
   const commands = useMemo<Command[]>(() => [
     { id: "nav-screens", label: "Go to Screens", hint: "Page", icon: <Icon.grid />, run: () => navigate("/") },
     { id: "nav-fleet", label: "Go to Fleet", hint: "Page", icon: <Icon.monitor />, run: () => navigate("/fleet") },
+    { id: "nav-groups", label: "Go to Groups", hint: "Page", icon: <Icon.layers />, run: () => navigate("/groups") },
     { id: "nav-setups", label: "Go to Setups", hint: "Page", icon: <Icon.pencil />, run: () => navigate("/setups") },
     { id: "nav-playlists", label: "Go to Playlists", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
     { id: "nav-hub", label: "Go to Hub", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },

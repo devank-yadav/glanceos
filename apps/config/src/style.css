@@ -2817,3 +2817,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .tv-wake { gap: 12px; }
 .tv-launch { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 12px; font-size: 13px; }
 .tv-launch code { background: var(--input-bg); padding: 3px 8px; border-radius: 6px; font-size: 12px; }
+
+/* ---------- display groups (signage) ---------- */
+.group-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.group-card { display: flex; flex-direction: column; gap: 10px; }
+.group-name { font-size: 16px; font-weight: 600; border: 1px solid transparent; background: transparent; padding: 3px 6px; border-radius: 6px; min-width: 0; flex: 1; }
+.group-name:hover { border-color: var(--rule); }
+.group-name:focus { border-color: var(--rule); background: var(--input-bg); outline: none; }
+.group-card .icon-btn { padding: 4px 8px; flex: none; }

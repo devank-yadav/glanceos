@@ -11,6 +11,7 @@ import { NotificationsBell } from "./NotificationsBell";
 const NAV = [
   { name: "screens", href: "#/", label: "Screens", icon: <Icon.grid /> },
   { name: "fleet", href: "#/fleet", label: "Fleet", icon: <Icon.monitor /> },
+  { name: "groups", href: "#/groups", label: "Groups", icon: <Icon.layers /> },
   { name: "setups", href: "#/setups", label: "Setups", icon: <Icon.pencil /> },
   { name: "playlists", href: "#/playlists", label: "Playlists", icon: <Icon.play /> },
   { name: "hub", href: "#/hub", label: "Hub", icon: <Icon.convert /> },

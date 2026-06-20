@@ -44,6 +44,7 @@ export const Icon = {
   list: svg([<path d="M8 6h13M8 12h13M8 18h13" />, <path d="M3 6h.01M3 12h.01M3 18h.01" />]),
   command: svg(<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z" />),
   monitor: svg([<rect x="2" y="4" width="20" height="13" rx="2" />, <path d="M8 21h8M12 17v4" />]),
+  layers: svg([<path d="M12 2 2 7l10 5 10-5-10-5z" />, <path d="m2 17 10 5 10-5" />, <path d="m2 12 10 5 10-5" />]),
   download: svg([<path d="M12 3v12" />, <path d="m7 11 5 5 5-5" />, <path d="M5 21h14" />]),
   copy: svg([<rect x="9" y="9" width="12" height="12" rx="2" />, <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />]),
   upload: svg([<path d="M12 21V9" />, <path d="m7 13 5-5 5 5" />, <path d="M5 3h14" />]),

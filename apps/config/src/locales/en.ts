@@ -5,6 +5,7 @@ const en: Record<string, string> = {
   // navigation
   "nav.screens": "Screens",
   "nav.fleet": "Fleet",
+  "nav.groups": "Groups",
   "nav.setups": "Setups",
   "nav.playlists": "Playlists",
   "nav.hub": "Hub",

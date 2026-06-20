@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type DeviceSummary, type Playlist, type QueueState, type SetupSummary, type TaskItem } from "../api";
+import { api, type DeviceSummary, type DisplayGroup, type Playlist, type QueueState, type SetupSummary, type TaskItem } from "../api";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
@@ -89,6 +89,8 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   const [previewing, setPreviewing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [tving, setTving] = useState(false);
+  const [groups, setGroups] = useState<DisplayGroup[]>([]);
+  useEffect(() => { api.get<DisplayGroup[]>("/api/groups").then(setGroups).catch(() => {}); }, []);
   const toast = useToast();
   const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +106,10 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   };
   const setRefresh = async (seconds: number) => {
     await api.patch(`/api/devices/${device.id}`, { refreshSeconds: seconds });
+    await onChanged();
+  };
+  const setGroup = async (v: string) => {
+    await api.patch(`/api/devices/${device.id}`, { groupId: v ? Number(v) : null });
     await onChanged();
   };
   const disconnect = async () => {
@@ -188,6 +194,15 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
             {[60, 300, 900, 1800, 3600, 21600].map((s) => <option key={s} value={String(s)}>{fmtDuration(s)}</option>)}
           </select>
         </label>
+        {groups.length > 0 && (
+          <label class="field refresh-field">
+            <span>Group</span>
+            <select value={device.groupId ?? ""} onChange={(e) => setGroup((e.currentTarget as HTMLSelectElement).value)}>
+              <option value="">No group</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       <Modal open={scheduling} onClose={() => setScheduling(false)} title={`Schedule — ${device.name ?? "screen"}`}>
