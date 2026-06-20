@@ -1,8 +1,10 @@
+import type { LayoutT } from "@glanceos/schema";
+import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type DeviceSummary, type DisplayGroup, type Playlist, type QueueState, type SetupSummary, type TaskItem } from "../api";
+import { api, type DeviceSummary, type DisplayGroup, type LayoutRecord, type Playlist, type SetupSummary } from "../api";
+import { BoardPreview } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
-import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
@@ -53,8 +55,6 @@ export function ScreensPage() {
             ))}
           </div>
         )}
-
-        <DataPanels />
 
         <Modal open={claiming} onClose={() => setClaiming(false)} title="Connect a screen">
           <ClaimForm onClaimed={onClaimed} />
@@ -148,6 +148,8 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           ]}
         />
       </div>
+
+      <DevicePreview device={device} playlists={playlists} />
 
       <p class="muted setup-line">
         {playlist ? <>Playing <strong>{playlist.name}</strong> · {playlist.items.length} setups</>
@@ -435,80 +437,50 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
   );
 }
 
-/** The data behind tasks/queue widgets. */
-function DataPanels() {
-  return (
-    <details class="data-panels">
-      <summary><Icon.chevron class="data-chevron" /> Widget data · tasks &amp; queue</summary>
-      <div class="cards">
-        <TasksPanel />
-        <QueuePanel />
-      </div>
-    </details>
-  );
-}
+/** A live, scaled mini-render of what a screen is currently showing, with clear
+ *  empty states for offline / unconfigured screens. */
+function DevicePreview({ device, playlists }: { device: DeviceSummary; playlists: Playlist[] }) {
+  const [doc, setDoc] = useState<LayoutT | null>(null);
+  const [failed, setFailed] = useState(false);
+  const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
+  const layoutId = device.layoutId ?? playlist?.items[0]?.layoutId ?? null;
+  const [w, h] = parseResolution(device.resolution);
 
-function TasksPanel() {
-  const [items, setItems] = useState<TaskItem[]>([]);
-  const [text, setText] = useState("");
-
-  const refresh = async () => setItems(await api.get<TaskItem[]>("/api/tasks?listId=default"));
-  useEffect(() => { refresh().catch(() => {}); }, []);
-
-  const add = async () => {
-    if (!text.trim()) return;
-    await api.post("/api/tasks", { listId: "default", text });
-    setText("");
-    await refresh();
-  };
-
-  return (
-    <div class="card">
-      <h3>Tasks</h3>
-      <div class="row">
-        <label class="field grow">
-          <span>New task</span>
-          <input value={text} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        </label>
-        <button onClick={add}>Add</button>
-      </div>
-      <ul class="tasks">
-        {items.map((item) => (
-          <li key={item.id} class="row spread">
-            <label class="field checkbox">
-              <input type="checkbox" checked={item.done} onChange={() => api.patch(`/api/tasks/${item.id}`, { done: !item.done }).then(refresh)} />
-              <span class={item.done ? "done" : ""}>{item.text}</span>
-            </label>
-            <button class="ghost" onClick={() => api.del(`/api/tasks/${item.id}`).then(refresh)} aria-label="Delete task"><Icon.x /></button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function QueuePanel() {
-  const [queue, setQueue] = useState<QueueState | null>(null);
-
-  const refresh = async () => setQueue(await api.get<QueueState>("/api/queues/default"));
   useEffect(() => {
-    refresh().catch(() => {});
-    const t = setInterval(() => refresh().catch(() => {}), 5000);
-    return () => clearInterval(t);
-  }, []);
+    let alive = true;
+    setDoc(null);
+    setFailed(false);
+    if (layoutId === null) return;
+    api.get<LayoutRecord>(`/api/layouts/${layoutId}`)
+      .then((r) => { if (alive) setDoc(r.document); })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [layoutId]);
 
-  const act = async (path: string, body?: unknown) => setQueue(await api.post<QueueState>(path, body));
-
+  if (!device.online) return <PreviewEmpty icon={<Icon.monitor />} label="Not connected" />;
+  if (layoutId === null) return <PreviewEmpty icon={<Icon.monitor />} label="No screen yet" />;
+  if (failed) return <PreviewEmpty icon={<Icon.monitor />} label="Preview unavailable" />;
+  if (!doc) return <div class="device-preview"><div class="board-preview is-loading" style={{ aspectRatio: `${w} / ${h}` }} /></div>;
   return (
-    <div class="card">
-      <h3>Queue operator</h3>
-      <p class="muted">Now serving: <strong>{queue?.now_serving ?? "—"}</strong> · waiting: {queue?.waiting ?? "—"}</p>
-      <div class="row wrap">
-        <button class="primary" onClick={() => act("/api/queues/default/advance")}>Next +1</button>
-        <button onClick={() => act("/api/queues/default/waiting", { delta: 1 })}>Waiting +1</button>
-        <button onClick={() => act("/api/queues/default/waiting", { delta: -1 })}>Waiting −1</button>
-        <button class="danger" onClick={() => act("/api/queues/default/reset")}>Reset</button>
+    <div class="device-preview">
+      {playlist && <span class="preview-tag">Playlist · {playlist.items.length}</span>}
+      <BoardPreview doc={doc} w={w} h={h} deviceName={device.name ?? undefined} />
+    </div>
+  );
+}
+
+function PreviewEmpty({ icon, label }: { icon: ComponentChildren; label: string }) {
+  return (
+    <div class="device-preview">
+      <div class="board-preview is-empty">
+        <span class="preview-empty-icon" aria-hidden="true">{icon}</span>
+        <span class="muted">{label}</span>
       </div>
     </div>
   );
+}
+
+function parseResolution(res: string): [number, number] {
+  const m = /(\d+)\D+(\d+)/.exec(res || "");
+  return m ? [Number(m[1]), Number(m[2])] : [1920, 1080];
 }

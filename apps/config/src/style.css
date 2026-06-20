@@ -732,6 +732,50 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 
+/* ---------- live board preview on screen cards ---------- */
+.device-preview { position: relative; margin: 2px 0 12px; }
+.board-preview {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--thumb-bg);
+}
+.board-preview-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  pointer-events: none; /* it's a glance, not an interactive surface */
+  background: #fff;
+}
+.board-preview.is-empty,
+.board-preview.is-loading {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.board-preview.is-loading { animation: pulse 1.4s var(--ease) infinite; }
+.preview-empty-icon { display: grid; place-items: center; opacity: 0.45; }
+.preview-empty-icon svg { width: 26px; height: 26px; }
+.preview-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  color: var(--fg);
+}
+
 .playlist-items {
   list-style: none;
   margin: 8px 0;
@@ -761,17 +805,6 @@ input[type="checkbox"] {
 
 .claim-card h3 {
   margin-bottom: 8px;
-}
-
-.data-panels {
-  margin-top: 30px;
-}
-
-.data-panels summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 13.5px;
-  margin-bottom: 12px;
 }
 
 ul.tasks {
