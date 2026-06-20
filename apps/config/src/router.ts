@@ -37,6 +37,7 @@ export const SECTION: Record<string, { path: string; label: string }> = {
   playlists: { path: "#/playlists", label: "Playlists" },
   hub: { path: "#/hub", label: "Hub" },
   integrations: { path: "#/integrations", label: "Integrations" },
+  account: { path: "#/account", label: "Account" },
 };
 
 // Remember the last section the user was on, so a full-screen page (the Studio)
@@ -49,7 +50,7 @@ function rememberOrigin(r: Route): void {
   const s = SECTION[r.name];
   if (s) origin = s;
 }
-rememberOrigin(parseRoute(location.hash));
+if (typeof location !== "undefined") rememberOrigin(parseRoute(location.hash)); // guard: importable in a non-DOM test
 
 export function navigate(path: string): void {
   location.hash = path;
