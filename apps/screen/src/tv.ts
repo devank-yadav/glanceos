@@ -1,4 +1,5 @@
 import type { SafeAreaT } from "@glanceos/schema";
+import { enableSpatialNav } from "./nav";
 
 // TV / large-display chrome for the screen runtime: true fullscreen (kiosk),
 // a screen wake-lock so the panel never sleeps, and overscan-safe margins.
@@ -28,6 +29,7 @@ export function enableTvMode(): void {
   if (tvOn) return;
   tvOn = true;
   document.body.classList.add("tv");
+  enableSpatialNav(); // D-pad / remote focus
   requestFullscreen();
   const onGesture = () => { requestFullscreen(); };
   document.addEventListener("pointerdown", onGesture, { once: true });

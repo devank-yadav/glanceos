@@ -1075,3 +1075,11 @@ body.stale .stale-dot {
 .share-gate-msg { font-size: calc(3vmin * var(--font-scale, 1)); color: var(--muted); margin: 0; }
 .share-gate-input { font-size: calc(3vmin * var(--font-scale, 1)); padding: 1.4vmin 2vmin; border: 1px solid var(--rule); border-radius: 1.2vmin; background: var(--bg); color: var(--fg); width: min(60vmin, 80%); }
 .share-gate-btn { font-size: calc(3vmin * var(--font-scale, 1)); padding: 1.4vmin 3vmin; border: none; border-radius: 1.2vmin; background: var(--fg); color: var(--bg); cursor: pointer; }
+
+/* ---------- TV mode: 10-ft remote focus ring ---------- */
+body.tv a:focus,
+body.tv [data-focusable]:focus {
+  outline: 0.5vmin solid var(--fg);
+  outline-offset: 0.4vmin;
+  border-radius: 0.6vmin;
+}
