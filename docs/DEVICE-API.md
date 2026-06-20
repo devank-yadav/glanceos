@@ -98,6 +98,32 @@ Headers: ID, Access-Token
 Battery %, signal, last-seen, and firmware show up on the owner's **Screens**
 dashboard, with a per-device refresh control.
 
+## 5. Report proof-of-play (optional, signage)
+
+A screen can log what it actually showed, for the owner's per-group report.
+Send one record or a batch (max 500 per request; rate-limited like telemetry):
+
+```
+POST /api/devices/me/play-log
+Headers: ID, Access-Token
+{ "entries": [
+  { "layoutId": 12, "shownAt": 1780000000000, "durationMs": 30000 },
+  { "layoutId": 12, "zoneId": "z1", "shownAt": 1780000030000, "durationMs": 30000 }
+] }
+```
+
+`shownAt` is epoch-ms (defaults to receive time if omitted); `durationMs` and
+`zoneId` are optional. The owner exports a window as CSV from the **Groups** page
+(`GET /api/groups/:id/play-log?days=30&format=csv`); rows are pruned after
+`GLANCEOS_PLAYLOG_RETENTION_DAYS` (default 90).
+
+## Fleet commands (web screens)
+
+A screen connected over SSE (`/api/devices/me/stream`) also receives a `command`
+event when the owner acts on its group — `reload`, `clear-cache`, `identify`
+(flash a marker), or `screenshot-now`. The web runtime handles these in
+`fleet.ts`; a native shell can extend the same switch.
+
 ## A minimal wake cycle
 
 ```
