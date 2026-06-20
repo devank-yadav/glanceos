@@ -10,6 +10,25 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(new Set(templates.map((t) => t.name)).size).toBe(4);
   });
 
+  it("supports optional signage zones (no migration; absent = single doc)", () => {
+    const noZones = Layout.parse({ schemaVersion: 3, name: "Plain", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }] });
+    expect(noZones.zones).toBeUndefined(); // existing docs parse unchanged
+
+    const zoned = Layout.parse({
+      schemaVersion: 3,
+      name: "Split",
+      rows: [],
+      zones: [
+        { id: "z1", rect: { x: 0, y: 0, w: 50, h: 100 }, rows: [{ id: "r1", blocks: [{ id: "a", type: "clock", props: {} }] }] },
+        { id: "z2", rect: { x: 50, y: 0, w: 50 }, rows: [] }, // y/h default
+      ],
+    });
+    expect(zoned.zones).toHaveLength(2);
+    expect(zoned.zones![1]!.rect.h).toBe(100); // default fills height
+    expect(zoned.zones![1]!.rect.y).toBe(0);
+    expect(zoned.zones![0]!.rows[0]!.h).toBe(4); // row defaults apply inside a zone
+  });
+
   it("fills defaults, including row height", () => {
     const doc = Layout.parse({
       schemaVersion: 3,

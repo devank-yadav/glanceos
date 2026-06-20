@@ -562,6 +562,20 @@ export const Row = z.object({
   blocks: z.array(Widget).min(1).max(4),
 });
 
+// A signage zone: a rectangle of the screen (percentages of width/height) with
+// its own stack of rows. Zones may tile or overlap. Optional on Layout — a board
+// with no `zones` renders as one full-screen document exactly as before.
+export const Zone = z.object({
+  id: z.string().min(1),
+  rect: z.object({
+    x: z.number().min(0).max(100).default(0),
+    y: z.number().min(0).max(100).default(0),
+    w: z.number().min(1).max(100).default(100),
+    h: z.number().min(1).max(100).default(100),
+  }),
+  rows: z.array(Row).max(40).default([]),
+});
+
 export const Layout = z.object({
   schemaVersion: z.literal(3),
   name: z.string().min(1),
@@ -574,11 +588,14 @@ export const Layout = z.object({
   // where the (often shorter-than-screen) content sits vertically — v0.6, optional
   align: z.enum(["top", "center", "bottom"]).default("top"),
   rows: z.array(Row).max(40),
+  // multi-zone signage: optional, no migration. Absent = single full-screen doc.
+  zones: z.array(Zone).max(12).optional(),
 });
 
 export type WidgetT = z.infer<typeof Widget>;
 export type WidgetType = WidgetT["type"];
 export type RowT = z.infer<typeof Row>;
+export type ZoneT = z.infer<typeof Zone>;
 export type LayoutT = z.infer<typeof Layout>;
 
 export const PAGE_UNITS = 24;

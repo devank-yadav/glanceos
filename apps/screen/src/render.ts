@@ -1,4 +1,4 @@
-import type { StreamPayloadT } from "@glanceos/schema";
+import type { LayoutT, RowT, StreamPayloadT } from "@glanceos/schema";
 import { startPixelShift, stopPixelShift } from "./burnin";
 import { qrSvg } from "./qr";
 import { applySafeArea, enableTvMode } from "./tv";
@@ -49,18 +49,39 @@ export function renderPayload(payload: StreamPayloadT): void {
   const FONT_SCALE: Record<string, number> = { s: 0.85, m: 1, l: 1.18 };
   document.body.style.setProperty("--font-scale", String(FONT_SCALE[state.layout.theme.fontScale ?? "m"] ?? 1));
 
-  // Document flow: rows stack at their own height (units out of PAGE_UNITS); a
-  // blank remainder track absorbs the slack and is positioned per the board's
-  // vertical alignment (top / center / bottom). Mirrors the studio's geometry.
-  const gap = `${state.layout.gap * 8}px`;
+  const layout = state.layout;
+  // Multi-zone signage: each zone is a positioned rectangle (%) with its own
+  // document. Absent zones → one full-screen page, byte-identical to before.
+  if (layout.zones && layout.zones.length > 0) {
+    const zones = el("page-zones");
+    for (const zone of layout.zones) {
+      const z = el("zone");
+      z.style.left = `${zone.rect.x}%`;
+      z.style.top = `${zone.rect.y}%`;
+      z.style.width = `${zone.rect.w}%`;
+      z.style.height = `${zone.rect.h}%`;
+      z.appendChild(buildPage(zone.rows, layout, state.data));
+      zones.appendChild(z);
+    }
+    root.appendChild(zones);
+  } else {
+    root.appendChild(buildPage(layout.rows, layout, state.data));
+  }
+}
+
+// Build one document page (a height-unit grid of rows) for the given rows. Used
+// for the whole board and for each signage zone. Mirrors the studio's geometry:
+// rows stack at their own height (units out of PAGE_UNITS); a blank remainder
+// track absorbs the slack, positioned per the board's vertical alignment.
+function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>): HTMLElement {
+  const gap = `${layout.gap * 8}px`;
   const page = el("page");
   page.style.gap = gap;
-  const layout = state.layout;
-  const used = layout.rows.reduce((n, r) => n + r.h, 0);
+  const used = rows.reduce((n, r) => n + r.h, 0);
   const remainder = Math.max(0, PAGE_UNITS - used);
   const align = layout.align ?? "top";
 
-  const tracks = layout.rows.map((r) => `${r.h}fr`);
+  const tracks = rows.map((r) => `${r.h}fr`);
   let offset = 0; // leading filler tracks before the content
   if (remainder > 0) {
     if (align === "bottom") {
@@ -76,13 +97,13 @@ export function renderPayload(payload: StreamPayloadT): void {
   }
   page.style.gridTemplateRows = tracks.join(" ");
 
-  layout.rows.forEach((row, i) => {
+  rows.forEach((row, i) => {
     const rowEl = el("board-row");
     rowEl.style.gap = gap;
     rowEl.style.gridRow = String(offset + i + 1);
     for (const block of row.blocks) {
       // Conditional visibility: a "whenData" block hides when its bound source resolved to nothing.
-      if (block.visibility === "whenData" && state.data[block.id] == null) continue;
+      if (block.visibility === "whenData" && data[block.id] == null) continue;
       // A cached bundle older than the document may not know this type — skip, don't blank.
       const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
       if (!render) continue;
@@ -90,13 +111,13 @@ export function renderPayload(payload: StreamPayloadT): void {
       const cell = el(`widget widget-${block.type} halign-${st.align} valign-${st.valign}`);
       if (st.invert) cell.classList.add("is-invert");
       cell.style.flexGrow = String(block.width);
-      const cleanup = render(cell, block, state.data[block.id]);
+      const cleanup = render(cell, block, data[block.id]);
       if (cleanup) cleanups.push(cleanup);
       rowEl.appendChild(cell);
     }
     page.appendChild(rowEl);
   });
-  root.appendChild(page);
+  return page;
 }
 
 function renderClaim(code: string): void {

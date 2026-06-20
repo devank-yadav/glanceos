@@ -53,6 +53,12 @@ body {
   min-height: 0;
 }
 
+/* Multi-zone signage: each zone is an absolutely-positioned mini-page placed by
+   percentage of the screen. A board with no zones never emits these. */
+.page-zones { position: relative; width: 100%; height: 100%; }
+.zone { position: absolute; box-sizing: border-box; overflow: hidden; }
+.zone .page { padding: 2vmin; } /* tighter inset than the full-screen board */
+
 .widget {
   display: flex;
   flex-direction: column;
