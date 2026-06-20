@@ -1,6 +1,7 @@
 import "./style.css";
 import type { StreamPayloadT } from "@glanceos/schema";
 import { ensureIdentity, openStream } from "./api";
+import { bootCast } from "./cast";
 import { markFresh, markStale, renderMessage, renderPayload } from "./render";
 import { enableTvMode } from "./tv";
 
@@ -125,6 +126,10 @@ function promptPassword(message: string, onSubmit: (pw: string) => void): void {
 const params = new URLSearchParams(location.search);
 if (params.has("preview")) {
   bootPreview();
+} else if (params.has("cast")) {
+  // Chromecast receiver: wait for a board to be cast, then run it in share mode.
+  renderMessage("Ready to cast", "Cast a board to this screen from the GlanceOS app.");
+  bootCast((token) => bootShare(token));
 } else {
   if (params.has("tv")) enableTvMode(); // kiosk chrome up front, so even the claim screen is fullscreen
   if (params.get("share")) bootShare(params.get("share")!);

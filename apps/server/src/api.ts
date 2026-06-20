@@ -63,6 +63,9 @@ const publicBase = (c: Context): string =>
 
 const SESSION_COOKIE = "glanceos_session";
 const CSRF_COOKIE = "glanceos_csrf";
+// Self-hoster's Google Cast receiver Application ID (public id, not a secret).
+// Empty → casting UI is hidden and the CSP stays strict.
+const CAST_APP_ID = (process.env.GLANCEOS_CAST_APP_ID ?? "").trim();
 
 // The device plane authenticates with deviceId+secret and must work unclaimed;
 // everything else is the config plane and needs a user session.
@@ -144,12 +147,15 @@ export function buildApp(): Hono<Env> {
     c.header("Referrer-Policy", "strict-origin-when-cross-origin");
     const path = c.req.path;
     if (!path.startsWith("/api") && !path.startsWith("/uploads")) {
+      // Casting (opt-in) needs the Google Cast SDKs from gstatic; only widen the
+      // policy when an App ID is configured — strict 'self' by default.
+      const cast = CAST_APP_ID ? " https://www.gstatic.com" : "";
       c.header(
         "Content-Security-Policy",
         // 'self' scripts/styles; the studio embeds /screen in an iframe (frame-src);
         // SSE + fetch are same-origin (connect-src); boards may show remote images.
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data: blob: https: http:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'",
+        `default-src 'self'; script-src 'self'${cast}; style-src 'self' 'unsafe-inline'; ` +
+        `img-src 'self' data: blob: https: http:; connect-src 'self'${cast}; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'`,
       );
     }
   });
@@ -223,7 +229,7 @@ export function buildApp(): Hono<Env> {
   app.get("/api/auth/status", (c) => {
     const userId = sessionUserId(getCookie(c, SESSION_COOKIE));
     const user = userId ? getUser(userId) : null;
-    return c.json({ authed: !!user, user, registrationOpen: registrationOpen() });
+    return c.json({ authed: !!user, user, registrationOpen: registrationOpen(), castAppId: CAST_APP_ID || null });
   });
 
   app.post("/api/auth/register", async (c) => {
