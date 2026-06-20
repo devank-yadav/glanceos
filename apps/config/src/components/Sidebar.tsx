@@ -1,5 +1,6 @@
 import { Icon } from "../editor/icons";
 import type { Theme } from "../hooks/useTheme";
+import { t } from "../i18n";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
 import { NotificationsBell } from "./NotificationsBell";
@@ -48,17 +49,20 @@ export function Sidebar({
 
       <button class="sidebar-search" onClick={onOpenPalette} title="Search & commands (⌘K)">
         <Icon.search />
-        <span class="sidebar-label">Search…</span>
+        <span class="sidebar-label">{t("nav.search")}</span>
         <kbd class="sidebar-kbd">⌘K</kbd>
       </button>
 
       <nav class="sidebar-nav">
-        {NAV.map((n) => (
-          <a key={n.name} class="sidebar-link" href={n.href} aria-current={page === n.name ? "page" : undefined} onClick={onNavigate} title={n.label}>
-            {n.icon}
-            <span class="sidebar-label">{n.label}</span>
-          </a>
-        ))}
+        {NAV.map((n) => {
+          const label = t(`nav.${n.name}`);
+          return (
+            <a key={n.name} class="sidebar-link" href={n.href} aria-current={page === n.name ? "page" : undefined} onClick={onNavigate} title={label}>
+              {n.icon}
+              <span class="sidebar-label">{label}</span>
+            </a>
+          );
+        })}
       </nav>
 
       <div class="sidebar-foot">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api";
+import { AVAILABLE, getLocale, setLocale, t } from "../i18n";
 import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
@@ -89,6 +90,12 @@ export function AccountPage() {
             <a class="ghost" href="/api/account/export">Download backup (.json)</a>
             <button class="ghost" onClick={logoutEverywhere}>Log out everywhere</button>
           </div>
+          <label class="field" style={{ maxWidth: "220px", marginTop: "12px" }}>
+            <span>{t("settings.language")}</span>
+            <select value={getLocale()} onChange={(e) => { setLocale((e.currentTarget as HTMLSelectElement).value); location.reload(); }}>
+              {AVAILABLE.map((l) => <option key={l} value={l}>{t(`lang.${l}`)}</option>)}
+            </select>
+          </label>
           <div class="restore-block">
             <h3>Restore from a backup</h3>
             <p class="muted">Rebuilds your boards, playlists and connection settings from a backup file. App tokens aren't included — reconnect each app afterwards.</p>
