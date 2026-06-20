@@ -72,6 +72,30 @@ describe("token exchange + refresh (mocked endpoint, no network)", () => {
     const r = await refreshAccessToken(SPEC, { clientId: "cid", clientSecret: "csecret" }, "RT", f);
     expect(r.access_token).toBe("AT2");
   });
+
+  it("tokenAuth:'basic' sends client creds in the Authorization header, not the body", async () => {
+    const f = vi.fn(async (_url: string, init: RequestInit) => {
+      const headers = init.headers as Record<string, string>;
+      expect(headers.authorization).toBe(`Basic ${Buffer.from("cid:csecret").toString("base64")}`);
+      const body = new URLSearchParams(init.body as string);
+      expect(body.get("client_id")).toBeNull();
+      expect(body.get("client_secret")).toBeNull();
+      expect(body.get("code")).toBe("CODE");
+      return new Response(JSON.stringify({ access_token: "AT" }), { headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    await exchangeCode({ ...SPEC, tokenAuth: "basic" }, { clientId: "cid", clientSecret: "csecret" }, "CODE", "VER", "https://app/cb", f);
+  });
+});
+
+describe("non-expiring tokens", () => {
+  it("a response with no expires_in + nonExpiring → far-future expiry (never refreshes)", () => {
+    expect(tokensFromResp({ access_token: "AT" }, null, true)?.expiresAt).toBe(Number.MAX_SAFE_INTEGER);
+  });
+  it("without the hint, a missing expires_in defaults to ~1h", () => {
+    const t = tokensFromResp({ access_token: "AT" });
+    expect(t!.expiresAt).toBeGreaterThan(Date.now());
+    expect(t!.expiresAt).toBeLessThan(Date.now() + 2 * 3600_000);
+  });
 });
 
 describe("tokensFromResp", () => {

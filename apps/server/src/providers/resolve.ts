@@ -1,5 +1,6 @@
 import type { BlockSourceT, SourceMapT } from "@glanceos/schema";
-import { cached, FAIL } from "../fetchers/cache";
+import { markConnStatus } from "../connections";
+import { AuthError, cached, FAIL, RateLimitError } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
 import { PROVIDERS, providerIdFor } from "./registry";
 
@@ -77,7 +78,26 @@ export async function resolveSource(src: BlockSourceT, lookup?: ConnLookup): Pro
   }
   const ttl = Math.max(provider.minRefreshMs, (src.refreshSeconds ?? provider.defaultTtlMs / 1000) * 1000);
   const key = `src:${src.connectionId ?? "url"}:${src.kind}:${stableHash(src.query)}`;
-  const raw = await cached(key, ttl, FAIL, () => provider.resolve({ resource: src.kind, query: src.query, secret, config }));
+  const run = () => provider.resolve({ resource: src.kind, query: src.query, secret, config });
+  // For connection-backed sources, reflect the fetch outcome on the connection
+  // (ok / needs_auth / rate-limited / error) so the Integrations page can badge
+  // it. Re-throw so cached() still sees the type (429 → backoff) and stores null.
+  const cid = src.connectionId;
+  const fn = cid
+    ? async () => {
+        try {
+          const r = await run();
+          if (r != null) markConnStatus(cid, "ok"); // don't clear a needs_auth that produced null
+          return r;
+        } catch (e) {
+          if (e instanceof AuthError) markConnStatus(cid, "needs_auth", "Authorization failed — reconnect this app");
+          else if (e instanceof RateLimitError) markConnStatus(cid, "error", `Rate-limited — retrying in ${Math.ceil(e.retryAfterMs / 1000)}s`);
+          else markConnStatus(cid, "error", e instanceof Error ? e.message : "fetch failed");
+          throw e;
+        }
+      }
+    : run;
+  const raw = await cached(key, ttl, FAIL, fn);
   if (raw == null) return null;
   return applyMap(raw, src.map);
 }

@@ -107,6 +107,13 @@ export function deleteConnection(id: string, userId: string): boolean {
   return r.changes > 0; // connection_secrets cascade via FK
 }
 
+/** Reflect a resolve outcome on the connection: ok clears the error, auth/error
+ *  records it. Called from the resolver path so the Integrations page can badge
+ *  needs_auth / rate-limited / error. Best-effort (no-op if the row is gone). */
+export function markConnStatus(id: string, status: "ok" | "needs_auth" | "error", lastError = ""): void {
+  db.prepare("UPDATE connections SET status = ?, last_error = ?, updated_at = ? WHERE id = ?").run(status, lastError, Date.now(), id);
+}
+
 function putSecret(connectionId: string, kind: string, plain: string): void {
   db.prepare(
     "INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, ?, 1, ?, ?) " +

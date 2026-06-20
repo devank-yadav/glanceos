@@ -9,6 +9,34 @@ import net from "node:net";
 interface Entry {
   at: number;
   data: unknown;
+  retryUntil?: number; // for 429s: don't refetch before this (rate-limit backoff)
+}
+
+// Typed fetch failures so the resolver can badge a connection (needs_auth vs
+// rate-limited vs generic error) and so cached() can back off on 429s.
+export class AuthError extends Error {}
+export class RateLimitError extends Error {
+  retryAfterMs: number;
+  constructor(retryAfterMs: number) { super("HTTP 429"); this.retryAfterMs = retryAfterMs; }
+}
+
+function retryAfterMs(res: Response): number {
+  const ra = res.headers.get("retry-after");
+  if (ra) {
+    const secs = Number(ra);
+    if (Number.isFinite(secs)) return Math.max(0, secs * 1000); // delta-seconds
+    const when = Date.parse(ra);
+    if (!Number.isNaN(when)) return Math.max(0, when - Date.now()); // HTTP-date
+  }
+  const reset = Number(res.headers.get("x-ratelimit-reset")); // GitHub: epoch seconds
+  if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - Date.now());
+  return 60_000; // sensible default backoff
+}
+
+export function httpError(res: Response): Error {
+  if (res.status === 401 || res.status === 403) return new AuthError(`HTTP ${res.status}`);
+  if (res.status === 429) return new RateLimitError(retryAfterMs(res));
+  return new Error(`HTTP ${res.status}`);
 }
 
 const store = new Map<string, Entry>();
@@ -59,7 +87,7 @@ export async function getJSON<T>(url: string, headers: Record<string, string> = 
     signal: AbortSignal.timeout(8000),
     headers: { "user-agent": UA, accept: "application/json", ...headers },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw httpError(res);
   return (await res.json()) as T;
 }
 
@@ -69,7 +97,7 @@ export async function getText(url: string, headers: Record<string, string> = {})
     signal: AbortSignal.timeout(8000),
     headers: { "user-agent": UA, ...headers },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw httpError(res);
   return await res.text();
 }
 
@@ -81,7 +109,7 @@ export async function postJSON<T>(url: string, body: unknown, headers: Record<st
     headers: { "user-agent": UA, "content-type": "application/json", accept: "application/json", ...headers },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw httpError(res);
   return (await res.json()) as T;
 }
 
@@ -96,19 +124,25 @@ export async function cached<T>(
   fn: () => Promise<T | null>,
 ): Promise<T | null> {
   const hit = store.get(key);
-  if (hit && Date.now() - hit.at < (hit.data === null ? failTtlMs : ttlMs)) return hit.data as T | null;
+  if (hit) {
+    // success → ttlMs; failure → failTtlMs, but a 429 extends that to its retry-after
+    const window = hit.data === null ? Math.max(failTtlMs, (hit.retryUntil ?? 0) - hit.at) : ttlMs;
+    if (Date.now() - hit.at < window) return hit.data as T | null;
+  }
 
   const existing = inflight.get(key);
   if (existing) return existing as Promise<T | null>;
 
   const p = (async () => {
     let data: T | null = null;
+    let retryUntil: number | undefined;
     try {
       data = await fn();
-    } catch {
+    } catch (e) {
       data = null;
+      if (e instanceof RateLimitError) retryUntil = Date.now() + e.retryAfterMs;
     }
-    store.set(key, { at: Date.now(), data });
+    store.set(key, { at: Date.now(), data, retryUntil });
     inflight.delete(key);
     return data;
   })();

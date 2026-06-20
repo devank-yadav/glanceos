@@ -79,31 +79,34 @@ export function buildAuthorizeUrl(userId: string, providerId: string, redirectUr
 
 interface TokenResp { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string }
 
-async function postForm(spec: OAuthSpec, params: Record<string, string>, f: FetchImpl): Promise<TokenResp> {
-  const res = await f(spec.tokenUrl, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-    body: new URLSearchParams(params),
-  });
+async function postForm(spec: OAuthSpec, creds: { clientId: string; clientSecret: string }, params: Record<string, string>, f: FetchImpl): Promise<TokenResp> {
+  const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded", accept: "application/json" };
+  const body: Record<string, string> = { ...params };
+  if (spec.tokenAuth === "basic") {
+    // client credentials go in the Authorization header, not the body (Spotify / Notion style)
+    headers.authorization = `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`;
+  } else {
+    body.client_id = creds.clientId;
+    body.client_secret = creds.clientSecret;
+  }
+  const res = await f(spec.tokenUrl, { method: "POST", headers, body: new URLSearchParams(body) });
   return (await res.json()) as TokenResp;
 }
 
 export function exchangeCode(spec: OAuthSpec, creds: { clientId: string; clientSecret: string }, code: string, verifier: string, redirectUri: string, f: FetchImpl = fetch): Promise<TokenResp> {
-  return postForm(spec, { grant_type: "authorization_code", code, redirect_uri: redirectUri, code_verifier: verifier, client_id: creds.clientId, client_secret: creds.clientSecret }, f);
+  return postForm(spec, creds, { grant_type: "authorization_code", code, redirect_uri: redirectUri, code_verifier: verifier }, f);
 }
 export function refreshAccessToken(spec: OAuthSpec, creds: { clientId: string; clientSecret: string }, refreshToken: string, f: FetchImpl = fetch): Promise<TokenResp> {
-  return postForm(spec, { grant_type: "refresh_token", refresh_token: refreshToken, client_id: creds.clientId, client_secret: creds.clientSecret }, f);
+  return postForm(spec, creds, { grant_type: "refresh_token", refresh_token: refreshToken }, f);
 }
 
 export interface OAuthTokens { access: string; refresh: string | null; expiresAt: number; scope?: string }
-export function tokensFromResp(r: TokenResp, prevRefresh?: string | null): OAuthTokens | null {
+// nonExpiring providers (e.g. GitHub OAuth) omit expires_in and have no refresh
+// token; mark them far-future (JSON-safe sentinel) so we never try to refresh.
+export function tokensFromResp(r: TokenResp, prevRefresh?: string | null, nonExpiring?: boolean): OAuthTokens | null {
   if (!r.access_token) return null;
-  return {
-    access: r.access_token,
-    refresh: r.refresh_token ?? prevRefresh ?? null,
-    expiresAt: Date.now() + (r.expires_in ? r.expires_in * 1000 : 3600_000),
-    scope: r.scope,
-  };
+  const expiresAt = r.expires_in ? Date.now() + r.expires_in * 1000 : nonExpiring ? Number.MAX_SAFE_INTEGER : Date.now() + 3600_000;
+  return { access: r.access_token, refresh: r.refresh_token ?? prevRefresh ?? null, expiresAt, scope: r.scope };
 }
 
 /** Persist (create or update) the per-user connection for an oauth provider and
@@ -135,7 +138,7 @@ export async function completeOAuth(userId: string, providerId: string, code: st
   const creds = getOAuthAppCreds(userId, providerId);
   if (!creds) return { ok: false, error: "no_app" };
   const resp = await exchangeCode(provider.oauth, creds, code, verifier, redirectUri, f);
-  const tokens = tokensFromResp(resp);
+  const tokens = tokensFromResp(resp, undefined, provider.oauth.nonExpiring);
   if (!tokens) return { ok: false, error: resp.error || "exchange_failed" };
   saveOAuthConnection(userId, providerId, tokens);
   return { ok: true };
@@ -166,7 +169,7 @@ export async function ensureFreshOAuthToken(connectionId: string, userId: string
     const creds = getOAuthAppCreds(userId, providerId);
     if (!provider?.oauth || !creds) { markNeedsAuth(connectionId); return null; }
     const resp = await refreshAccessToken(provider.oauth, creds, tokens.refresh!, f);
-    const next = tokensFromResp(resp, tokens.refresh);
+    const next = tokensFromResp(resp, tokens.refresh, provider.oauth.nonExpiring);
     if (!next) { markNeedsAuth(connectionId); return null; }
     db.prepare("UPDATE connection_secrets SET cipher = ?, updated_at = ? WHERE connection_id = ? AND kind = 'oauth'").run(seal(JSON.stringify(next)), Date.now(), connectionId);
     db.prepare("UPDATE connections SET status = 'ok', last_error = '' WHERE id = ?").run(connectionId);

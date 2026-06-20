@@ -29,6 +29,8 @@ export interface OAuthSpec {
   tokenUrl: string;
   scopes: string[];
   authParams?: Record<string, string>; // extra authorize params (e.g. access_type=offline)
+  tokenAuth?: "basic"; // send client creds as HTTP Basic at the token endpoint (Spotify/Notion)
+  nonExpiring?: boolean; // token has no expires_in / refresh (e.g. GitHub OAuth) → never refresh
 }
 
 export interface Provider {
