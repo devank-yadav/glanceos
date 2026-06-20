@@ -311,3 +311,28 @@ ADR-lite log. Every pinned choice gets an entry **when it's made** — context, 
 - **Status:** accepted · 2026-06-20 (v1.4)
 - **Decision:** `009_share` adds `share_expires_at` + `share_pw_hash` (extends 006). Shares gain optional **expiry** (404 when past) and **password** (scrypt via auth.ts; the public endpoint 401s `password_required` until the right `?pw`; the share viewer shows a DOM-built gate and remembers it for the poll). An **account page** (`/account`): rename, change password, log out everywhere (destroy all sessions), download a JSON **backup** (boards/screens/playlists/connection config — NO secrets), and delete the account (password-confirmed; every user-scoped table cascades on `user_id`, so all data is removed — correcting the design brief's "no cascade" assumption). `hashPassword`/`verifyHash` exported from auth.ts for share-password reuse. Cut to v1.5: share QR + OG image, onboarding wizard, app-wide breadcrumbs (the Studio breadcrumb ships).
 - **Verified:** share-password gate + account rename/password/export/delete + logout-everywhere tests; live account page + share-password gate (no pw → 401, correct → 200).
+
+### 042 — Secret-key rotation + ops hygiene (v1.5, no migration)
+- **Status:** accepted · 2026-06-20 (v1.5)
+- **Decision:** `secrets.ts` gains pure `sealWith`/`openWith`; `open()` tries the current key then `GLANCEOS_SECRET_KEY_PREVIOUS`, so changing `GLANCEOS_SECRET_KEY` no longer bricks stored connections. `pnpm --filter @glanceos/server rotate-secrets` (`rotate.ts`) re-encrypts every `connection_secrets` + `oauth_apps` cipher with the current key in one transaction; `index.ts` warns at boot when secrets are undecryptable. The three writers that hardcoded `key_version=1` now record `currentKeyVersion()` (`GLANCEOS_KEY_VERSION`). New `logging.ts`: opt-in JSON request log (`GLANCEOS_LOG=json`) that skips the SSE stream and logs path only (no query/cookies/secrets). The previously-dead `gcRateLimits()` is now on a tick. **Runbook:** set `GLANCEOS_SECRET_KEY`=new + `GLANCEOS_SECRET_KEY_PREVIOUS`=old → run `rotate-secrets` → drop `_PREVIOUS`.
+- **Verified:** seal/open cross-key + previous-key fallback tests; full suite green.
+
+### 043 — Integration breadth: Asana, Jira, Trello, Slack + Notion filter builder (v1.5)
+- **Status:** accepted · 2026-06-20 (v1.5)
+- **Decision:** registry 13 → 17. Asana (PAT), Jira (email+token Basic, JQL), Trello (key+token) are token providers; Slack is OAuth v2 on the existing scaffold and treats `{ok:false}` bodies as errors, mapping `invalid_auth`/`token_revoked`/… to `AuthError` so the connection flips to `needs_auth`. The hardcoded Home-Assistant `baseUrl` became a declarative `EXTRA_CONFIG` map (per-provider non-secret fields → Jira site+email, Trello key render automatically). A Notion **filter builder** (`editor/notionFilter.ts`) compiles field/operator/value rows into a Notion query body, with a raw-JSON escape hatch. Deferred: Jira 3LO/cloudId.
+- **Verified:** registry-size + slackError + compileNotionFilter tests; live (17 providers, Jira extra-config fields).
+
+### 044 — Share QR + backup restore (v1.5, no migration)
+- **Status:** accepted · 2026-06-20 (v1.5)
+- **Decision:** `qr.ts` is a from-scratch, dependency-free QR encoder (byte mode, ECC-M, versions 1–10, best-mask selection, BCH format/version info), config-bundle only. The share popover shows a scannable QR + PNG export; generic OG/Twitter meta added to `apps/screen/index.html` (per-board OG deferred — `/screen` is static). `dumpUser` now exports `playlist_items` (was missing → empty restored playlists). `importUser({mode})` rebuilds a dump server-side: connections get fresh UUIDs (rewritten into board source bindings), layouts/playlists get new ids threaded through items, column-whitelisted, **no secrets** (connections land `needs_auth`); `append` (default) or `replace`.
+- **Verified:** RS-generator-poly vs spec + independent-decoder round-trip; import append/replace/forged/malformed/no-secret-leak tests; live QR render + export→import round-trip.
+
+### 045 — Per-board font scale + upload quota/GC (v1.5, no migration)
+- **Status:** accepted · 2026-06-20 (v1.5)
+- **Decision:** optional `Layout.theme.fontScale` (s/m/l, default m) — existing v3 docs parse unchanged. The screen reads it as a `--font-scale` multiplier; the ~220 `vmin` font-sizes became `calc(Nvmin * var(--font-scale, 1))` (byte-identical at the default). Board settings exposes the control. A per-user upload quota (`GLANCEOS_UPLOAD_QUOTA_MB`, default 50; 0 blocks all) 413s over budget; `gcUploads()` reclaims disk — orphan files always, unreferenced rows when `GLANCEOS_GC_UNREFERENCED_UPLOADS=1` — on a 6h tick.
+- **Verified:** usage/GC/quota-413 tests; live (text scales exactly 1.18× at large).
+
+### 046 — i18n scaffold, config-only (v1.5)
+- **Status:** accepted · 2026-06-20 (v1.5)
+- **Decision:** a tiny dependency-free `i18n.ts` for `apps/config`: `t(key, vars?)` with `{var}` interpolation, missing-key fallback to the key, and locale detection (localStorage / `navigator.language`). English ships (`locales/en.ts`); more locales are a sibling file + registry entry away. Sidebar nav renders through `t()`; the Account page has a language picker. **`apps/screen` stays English** (byte budget; zod-out discipline). A scaffold, not a full sweep.
+- **Verified:** t() lookup/interpolation/fallback tests; live (nav via t(), language picker).
