@@ -181,7 +181,7 @@ export function claimDevice(code: string, name: string | undefined, userId: stri
 
 export function listDevices(userId: string): DeviceRow[] {
   return db
-    .prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at")
+    .prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at LIMIT 1000") // safety cap
     .all(userId) as DeviceRow[];
 }
 

@@ -134,7 +134,7 @@ export function listSetups(userId: string): SetupSummary[] {
               COALESCE(GROUP_CONCAT(d.name, char(31)), '') AS device_names
        FROM layouts l LEFT JOIN devices d ON d.layout_id = l.id
        WHERE l.user_id = ? AND l.is_template = 0
-       GROUP BY l.id ORDER BY l.id`,
+       GROUP BY l.id ORDER BY l.id LIMIT 1000`, // safety cap against a pathological/abusive count
     )
     .all(userId) as Array<LayoutRow & { used_by: number; device_names: string }>;
   return rows.map((row) => ({

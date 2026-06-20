@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { buildApp } from "./api";
 import { validateConfig } from "./config";
-import { migrate } from "./db";
+import { checkpoint, migrate } from "./db";
 import { runAlertChecks } from "./notifications";
 import { gcRateLimits } from "./ratelimit";
 import { undecryptableSecretCount } from "./rotate";
@@ -27,17 +27,18 @@ serve({ fetch: buildApp().fetch, port }, (info) => {
 
 // Weather and calendars drift on their own — refresh connected screens periodically.
 setInterval(() => {
-  pushAllConnected().catch(() => {});
+  pushAllConnected(2 * 60 * 1000).catch(() => {}); // spread over 2 min
 }, 5 * 60 * 1000);
 
 // Advance rotating (playlist) screens to their current item.
 setInterval(() => {
-  pushRotatingDevices().catch(() => {});
+  pushRotatingDevices(8 * 1000).catch(() => {}); // spread over 8s of the 10s window
 }, 10 * 1000);
 
-// Flip scheduled screens at their window boundaries (minute granularity is enough).
+// Flip scheduled screens at their window boundaries (minute granularity is
+// enough). Staggered across ~30s so a big fleet doesn't all recompose at once.
 setInterval(() => {
-  pushScheduledDevices().catch(() => {});
+  pushScheduledDevices(30 * 1000).catch(() => {});
 }, 60 * 1000);
 
 // Flag offline / low-battery screens as in-app notifications.
@@ -52,3 +53,6 @@ setInterval(() => gcRateLimits(), 5 * 60 * 1000);
 setInterval(() => {
   try { gcUploads({ reclaimUnreferenced: process.env.GLANCEOS_GC_UNREFERENCED_UPLOADS === "1" }); } catch { /* never crash the loop */ }
 }, 6 * 60 * 60 * 1000);
+
+// Fold the WAL back into the DB so it can't grow unbounded on a busy fleet.
+setInterval(() => checkpoint(), 10 * 60 * 1000);

@@ -56,16 +56,27 @@ export async function pushDevicesUsingLayout(layoutId: number): Promise<void> {
   await Promise.all([...ids].map((id) => pushDevice(id)));
 }
 
+// Spread N pushes evenly across `windowMs` so a periodic tick doesn't compose +
+// emit to the whole fleet on one timer edge (which spikes DB + SSE at scale).
+// windowMs=0 → immediate (on-demand pushes after an edit want no delay).
+async function pushSpread(ids: string[], windowMs: number): Promise<void> {
+  if (windowMs <= 0 || ids.length <= 1) { await Promise.all(ids.map((id) => pushDevice(id))); return; }
+  const step = windowMs / ids.length;
+  await Promise.all(ids.map((id, i) => new Promise<void>((resolve) => {
+    setTimeout(() => { pushDevice(id).catch(() => {}).finally(resolve); }, Math.floor(i * step));
+  })));
+}
+
 /** Re-push connected rotating screens so they advance to the playlist's current item. */
-export async function pushRotatingDevices(): Promise<void> {
+export async function pushRotatingDevices(staggerMs = 0): Promise<void> {
   const ids = connectedDeviceIds().filter((id) => getDevice(id)?.playlist_id);
-  await Promise.all(ids.map((id) => pushDevice(id)));
+  await pushSpread(ids, staggerMs);
 }
 
 /** Re-push connected scheduled screens so they flip at window boundaries. */
-export async function pushScheduledDevices(): Promise<void> {
+export async function pushScheduledDevices(staggerMs = 0): Promise<void> {
   const ids = connectedDeviceIds().filter((id) => hasSchedules(id));
-  await Promise.all(ids.map((id) => pushDevice(id)));
+  await pushSpread(ids, staggerMs);
 }
 
 export async function pushDeviceIds(ids: string[]): Promise<void> {
@@ -77,6 +88,6 @@ export async function pushUserDevices(userId: string): Promise<void> {
   await Promise.all(devicesOwnedBy(userId).map((d) => pushDevice(d.id)));
 }
 
-export async function pushAllConnected(): Promise<void> {
-  await Promise.all(connectedDeviceIds().map((id) => pushDevice(id)));
+export async function pushAllConnected(staggerMs = 0): Promise<void> {
+  await pushSpread(connectedDeviceIds(), staggerMs);
 }

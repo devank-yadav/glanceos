@@ -11,6 +11,12 @@ export const db = new Database(join(dataDir, "glanceos.db"));
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
+/** Fold the WAL back into the main DB and let SQLite re-plan — call on a timer so
+ *  the -wal file can't grow unbounded on a busy fleet. Best-effort (never throws). */
+export function checkpoint(): void {
+  try { db.pragma("wal_checkpoint(TRUNCATE)"); db.pragma("optimize"); } catch { /* ignore */ }
+}
+
 export function migrate(): void {
   db.exec(
     "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)",
