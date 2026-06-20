@@ -120,6 +120,8 @@ export function AccountPage() {
           </div>
         </section>
 
+        <ApiKeysSection />
+
         <section class="card account-section danger-zone">
           <h2>Danger zone</h2>
           <p class="muted">Deleting your account removes all of your data and cannot be undone.</p>
@@ -128,5 +130,100 @@ export function AccountPage() {
         </section>
       </div>
     </>
+  );
+}
+
+interface ApiKey { id: string; name: string; prefix: string; scopes: string[]; createdAt: number; lastUsed: number | null }
+
+const SCOPE_OPTS: { id: string; label: string }[] = [
+  { id: "tasks:read", label: "Read tasks" },
+  { id: "tasks:write", label: "Create & update tasks" },
+  { id: "queues:write", label: "Advance queues" },
+  { id: "devices:read", label: "List screens" },
+  { id: "layouts:read", label: "Read boards" },
+  { id: "data:write", label: "Write custom data" },
+];
+
+// Scoped API keys for programmatic access (see docs/api.md). The plaintext token
+// is shown exactly once, right after minting — we only ever store its hash.
+function ApiKeysSection() {
+  const [keys, setKeys] = useState<ApiKey[] | null>(null);
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [fresh, setFresh] = useState<string | null>(null); // the just-minted token
+  const toast = useToast();
+  const confirm = useConfirm();
+
+  const load = () => api.get<ApiKey[]>("/api/account/api-keys").then(setKeys).catch(() => setKeys([]));
+  useEffect(() => { load(); }, []);
+
+  const toggle = (id: string) => setScopes((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const mint = async () => {
+    if (!name.trim() || scopes.size === 0) return;
+    setBusy(true);
+    try {
+      const res = await api.post<{ token: string; key: ApiKey }>("/api/account/api-keys", { name: name.trim(), scopes: [...scopes] });
+      setFresh(res.token);
+      setName(""); setScopes(new Set());
+      await load();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+    finally { setBusy(false); }
+  };
+  const revoke = async (k: ApiKey) => {
+    if (!(await confirm({ title: `Revoke "${k.name}"?`, body: "Any integration using this key stops working immediately.", confirmLabel: "Revoke", danger: true }))) return;
+    await api.del(`/api/account/api-keys/${k.id}`).catch(() => {});
+    await load();
+  };
+  const copy = (s: string) => navigator.clipboard?.writeText(s).then(() => toast.success("Copied"), () => {});
+
+  return (
+    <section class="card account-section">
+      <h2>API keys</h2>
+      <p class="muted">Grant programmatic access with a scoped <code>Bearer</code> token. See <a href="https://github.com/devank-yadav/glanceos/blob/main/docs/api.md" target="_blank" rel="noreferrer">the API docs</a>.</p>
+
+      {fresh && (
+        <div class="callout token-reveal">
+          <strong>Copy your new key now — it won't be shown again.</strong>
+          <div class="row token-row">
+            <code class="token-value">{fresh}</code>
+            <button class="ghost" onClick={() => copy(fresh)}>Copy</button>
+            <button class="ghost" onClick={() => setFresh(null)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      <div class="key-mint">
+        <label class="field grow"><span>Key name</span>
+          <input value={name} placeholder="e.g. Home Assistant" onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
+        </label>
+        <fieldset class="scope-grid">
+          <legend>Scopes</legend>
+          {SCOPE_OPTS.map((s) => (
+            <label key={s.id} class="scope-opt">
+              <input type="checkbox" checked={scopes.has(s.id)} onChange={() => toggle(s.id)} />
+              <span>{s.label} <code>{s.id}</code></span>
+            </label>
+          ))}
+        </fieldset>
+        <button class="primary" disabled={busy || !name.trim() || scopes.size === 0} onClick={mint}>Create key</button>
+      </div>
+
+      {keys && keys.length > 0 && (
+        <ul class="picker-list key-list">
+          {keys.map((k) => (
+            <li key={k.id} class="row spread">
+              <span class="key-meta">
+                <strong>{k.name}</strong> <code>{k.prefix}…</code>
+                <span class="muted key-scopes">{k.scopes.join(", ")}</span>
+                <span class="muted">{k.lastUsed ? `last used ${new Date(k.lastUsed).toLocaleDateString()}` : "never used"}</span>
+              </span>
+              <button class="ghost danger" onClick={() => revoke(k)}>Revoke</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

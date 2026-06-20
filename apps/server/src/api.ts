@@ -41,6 +41,7 @@ import {
 import {
   createShare, getReadableLayout, getWritableLayout, listSharesByOwner, revokeShare, sharedLayouts, updateShareAccess,
 } from "./shares";
+import { isScope, listKeys, mintKey, resolveKey, revokeKey, SCOPES, type Scope } from "./apikeys";
 import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
 } from "./playlists";
@@ -88,7 +89,7 @@ const DEVICE_PLANE = new Set([
   "/api/devices/me/play-log",
 ]);
 
-type Env = { Variables: { userId: string } };
+type Env = { Variables: { userId: string; principal: "session" | "apikey"; scopes: string[] } };
 
 // Secrets stay server-side; this is what the config app sees.
 function deviceSummary(d: DeviceRow) {
@@ -205,9 +206,40 @@ export function buildApp(): Hono<Env> {
   const csrfFor = (sessionToken: string) => hmacSign(`csrf:${sessionToken}`);
   const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+  // The ONLY endpoints reachable with an API key (deny-by-default — every other
+  // /api/* route stays session-only). A session implicitly has every scope.
+  const API_ALLOW: Array<{ m: string; re: RegExp; scope: Scope }> = [
+    { m: "GET", re: /^\/api\/tasks$/, scope: "tasks:read" },
+    { m: "POST", re: /^\/api\/tasks$/, scope: "tasks:write" },
+    { m: "PATCH", re: /^\/api\/tasks\/[^/]+$/, scope: "tasks:write" },
+    { m: "DELETE", re: /^\/api\/tasks\/[^/]+$/, scope: "tasks:write" },
+    { m: "GET", re: /^\/api\/queues\/[^/]+$/, scope: "queues:write" },
+    { m: "POST", re: /^\/api\/queues\/[^/]+\/(advance|waiting|reset)$/, scope: "queues:write" },
+    { m: "GET", re: /^\/api\/devices$/, scope: "devices:read" },
+    { m: "GET", re: /^\/api\/layouts$/, scope: "layouts:read" },
+    { m: "GET", re: /^\/api\/layouts\/\d+$/, scope: "layouts:read" },
+    { m: "POST", re: /^\/api\/data\/[^/]+$/, scope: "data:write" }, // custom-data inlet (Phase 2)
+  ];
+
+  // Principal resolver: Bearer API key (CSRF-immune), then session cookie (CSRF on
+  // mutations), else 401. Webhooks + public + device + auth do their own thing.
   app.use("/api/*", async (c, next) => {
     const path = c.req.path;
-    if (path.startsWith("/api/auth/") || path.startsWith("/api/public/") || DEVICE_PLANE.has(path)) return next();
+    if (path.startsWith("/api/auth/") || path.startsWith("/api/public/") || path.startsWith("/api/hooks/") || DEVICE_PLANE.has(path)) return next();
+
+    const auth = c.req.header("authorization");
+    if (auth?.startsWith("Bearer ")) {
+      const resolved = resolveKey(auth.slice(7).trim());
+      if (!resolved) return c.json({ error: "invalid API key" }, 401);
+      const rule = API_ALLOW.find((r) => r.m === c.req.method && r.re.test(path));
+      if (!rule) return c.json({ error: "this endpoint isn't available to API keys" }, 403);
+      if (!resolved.scopes.includes(rule.scope)) return c.json({ error: `API key is missing the "${rule.scope}" scope` }, 403);
+      c.set("userId", resolved.userId);
+      c.set("scopes", resolved.scopes);
+      c.set("principal", "apikey");
+      return next();
+    }
+
     const sessionToken = getCookie(c, SESSION_COOKIE);
     const userId = sessionUserId(sessionToken);
     if (!userId || !sessionToken) return c.json({ error: "unauthorized" }, 401);
@@ -215,6 +247,7 @@ export function buildApp(): Hono<Env> {
       return c.json({ error: "bad or missing CSRF token" }, 403);
     }
     c.set("userId", userId);
+    c.set("principal", "session");
     return next();
   });
 
@@ -234,6 +267,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
+  app.use("/api/account/api-keys", limiter("apikeys", 20, 60_000, userKey));
   app.use("/api/account", async (c, next) => (c.req.method === "DELETE" ? limiter("acct-del", 5, 60 * 60_000, userKey)(c, next) : next()));
 
   const issueSession = (c: Context, userId: string) => {
@@ -949,6 +983,21 @@ export function buildApp(): Hono<Env> {
     deleteCookie(c, SESSION_COOKIE, { path: "/" });
     return c.json({ ok: true });
   });
+
+  // ---- API keys (session-only: you can't manage keys with a key — these routes
+  // are absent from API_ALLOW, so a Bearer principal gets 403 before reaching here) ----
+  app.get("/api/account/api-keys", (c) => c.json(listKeys(c.get("userId"))));
+  app.post("/api/account/api-keys", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; scopes?: unknown };
+    const name = (body.name ?? "").toString();
+    const scopes = Array.isArray(body.scopes) ? body.scopes.filter((s): s is string => typeof s === "string").filter(isScope) : [];
+    if (!name.trim()) return c.json({ error: "name is required" }, 400);
+    if (scopes.length === 0) return c.json({ error: "pick at least one scope", validScopes: SCOPES }, 400);
+    const { token, key } = mintKey(c.get("userId"), name, scopes as Scope[]);
+    return c.json({ token, key }, 201); // token is shown ONCE — never recoverable
+  });
+  app.delete("/api/account/api-keys/:id", (c) =>
+    revokeKey(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
   app.delete("/api/account", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { password?: string };
     if (!deleteUser(c.get("userId"), body.password ?? "")) return c.json({ error: "password is incorrect" }, 401);
