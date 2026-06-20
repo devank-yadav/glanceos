@@ -28,7 +28,9 @@ const KEY_DIR: Record<string, "up" | "down" | "left" | "right" | undefined> = {
 };
 const BACK_KEYS = new Set(["Escape", "XF86Back", "BrowserBack", "GoBack", "Backspace"]);
 
-const focusables = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>("a[href], [data-focusable]")];
+const focusables = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>("a[href], button, [data-focusable]")];
+const isTyping = (el: Element | null): boolean =>
+  !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || (el as HTMLElement).isContentEditable);
 const rectOf = (el: HTMLElement): Rect => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
 
 function onKey(e: KeyboardEvent): void {
@@ -44,6 +46,9 @@ function onKey(e: KeyboardEvent): void {
   } else if (e.key === "Enter") {
     (document.activeElement as HTMLElement | null)?.click?.();
   } else if (BACK_KEYS.has(e.key)) {
+    // Don't steal Backspace from a field the user is editing (e.g. the claim/
+    // share-password inputs) — only treat it as "back" when not typing.
+    if (e.key === "Backspace" && isTyping(document.activeElement)) return;
     (document.activeElement as HTMLElement | null)?.blur?.();
   }
 }

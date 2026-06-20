@@ -57,7 +57,7 @@ body {
    percentage of the screen. A board with no zones never emits these. */
 .page-zones { position: relative; width: 100%; height: 100%; }
 .zone { position: absolute; box-sizing: border-box; overflow: hidden; }
-.zone .page { padding: 2vmin; } /* tighter inset than the full-screen board */
+.zone .page { padding: min(2vmin, 5%); } /* inset scales down for small zones so content never clips */
 
 .widget {
   display: flex;
@@ -1024,7 +1024,8 @@ body {
 .claim-code {
   font-size: calc(15vmin * var(--font-scale, 1));
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
 .claim-qr {
@@ -1099,7 +1100,7 @@ body.tv [data-focusable]:focus {
   background: #000;
 }
 .tv-asleep-clock {
-  color: #1c1c1c; /* barely visible — alive, but minimal burn-in */
+  color: #2f2f2f; /* faint but readable from across the room — confirms the panel is alive */
   font-size: calc(6vmin * var(--font-scale, 1));
   padding: 4vmin;
   font-variant-numeric: tabular-nums;

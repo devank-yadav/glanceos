@@ -1602,7 +1602,7 @@ ul.tasks li:last-child {
 }
 
 .gutter:hover {
-  background: rgba(35, 131, 226, 0.28);
+  background: color-mix(in srgb, var(--indigo) 42%, transparent);
 }
 
 /* ---------- slash menu ---------- */
@@ -1659,7 +1659,7 @@ ul.tasks li:last-child {
 }
 
 .slash-menu li.active {
-  background: rgba(17, 17, 17, 0.06);
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
 }
 
 .slash-menu li.none {
@@ -2654,7 +2654,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   border-radius: 5px;
   background: var(--bg);
 }
-.te-cell.te-head { font-weight: 600; background: var(--soft); }
+.te-cell.te-head { font-weight: 600; background: var(--soft); border-bottom: 2px solid var(--rule); }
 .te-del { width: 20px; height: 20px; opacity: 0; }
 .te-grid tr:hover .te-del, .te-colctl:hover .te-del { opacity: 0.6; }
 .te-del:hover { opacity: 1 !important; color: var(--bad); }
