@@ -26,6 +26,8 @@ export interface DeviceSummary {
   firmware: string | null;
   lastSeen: number | null;
   resolution: string;
+  timezone: string | null;
+  renderOpts: { algo?: string; threshold?: number; gamma?: number };
   createdAt: number;
 }
 

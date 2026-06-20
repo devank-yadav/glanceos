@@ -142,6 +142,11 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   };
 
   const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
+  const ro = device.renderOpts ?? {};
+  const setRenderOpt = async (patch: Record<string, unknown>) => {
+    await api.patch(`/api/devices/${device.id}`, { renderOpts: { algo: ro.algo ?? "floyd", threshold: ro.threshold ?? 128, gamma: ro.gamma ?? 1, ...patch } });
+    await onChanged();
+  };
 
   return (
     <div class="card device-card">
@@ -183,6 +188,21 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
         <div class="eink-preview">
           <img src={`/api/devices/${device.id}/preview.png?t=${Date.now()}`} alt="e-ink preview" onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
           <span class="muted">1-bit e-ink render</span>
+          <div class="dither-controls">
+            <label class="field"><span>Dither</span>
+              <select value={ro.algo ?? "floyd"} onChange={(e) => setRenderOpt({ algo: (e.currentTarget as HTMLSelectElement).value })}>
+                <option value="floyd">Floyd–Steinberg</option>
+                <option value="ordered">Ordered</option>
+                <option value="threshold">Threshold</option>
+              </select>
+            </label>
+            <label class="field"><span>Threshold · {ro.threshold ?? 128}</span>
+              <input type="range" min="1" max="254" value={ro.threshold ?? 128} onChange={(e) => setRenderOpt({ threshold: Number((e.currentTarget as HTMLInputElement).value) })} />
+            </label>
+            <label class="field"><span>Gamma · {(ro.gamma ?? 1).toFixed(1)}</span>
+              <input type="range" min="0.3" max="3" step="0.1" value={ro.gamma ?? 1} onChange={(e) => setRenderOpt({ gamma: Number((e.currentTarget as HTMLInputElement).value) })} />
+            </label>
+          </div>
         </div>
       )}
 

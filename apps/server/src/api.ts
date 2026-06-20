@@ -14,7 +14,7 @@ import {
 } from "./auth";
 import {
   authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
-  registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, updateDevice, type DeviceRow,
+  registerDevice, setDevicePlaylist, setDeviceTimezone, setRefresh, setRenderOpts, updateDevice, type DeviceRow,
 } from "./devices";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { listNotifications, markAllRead, markRead, unreadCount } from "./notifications";
@@ -28,7 +28,7 @@ import {
   createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
 } from "./playlists";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
-import { renderAvailable, renderImage, type RenderFormat } from "./render";
+import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
   composeState, currentLayoutId, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
   pushRotatingDevices, pushUserDevices,
@@ -262,7 +262,7 @@ export function buildApp(): Hono<Env> {
     const version = layoutId ? getLayout(layoutId)?.version ?? 0 : 0;
     try {
       const { buf, contentType } = await renderImage(
-        baseUrl(), payload, profile.width, profile.height, format, `dev:${device.id}:${layoutId}:${version}`,
+        baseUrl(), payload, profile.width, profile.height, format, `dev:${device.id}:${layoutId}:${version}`, toDitherOpts(safeJsonObj(device.render_opts)),
       );
       return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": "no-store" } });
     } catch (e) {
@@ -295,8 +295,12 @@ export function buildApp(): Hono<Env> {
     const id = c.req.param("id");
     const userId = c.get("userId");
     const body = (await c.req.json().catch(() => ({}))) as {
-      name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null;
+      name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
     };
+    if (body.renderOpts !== undefined) {
+      // validate/clamp via toDitherOpts so junk can't reach the render pipeline
+      if (!setRenderOpts(id, { ...toDitherOpts(body.renderOpts) }, userId)) return c.json({ error: "device not found" }, 404);
+    }
     // Assigning a playlist clears the single layout, and vice-versa.
     if (body.playlistId !== undefined) {
       if (body.playlistId !== null && !getOwnedPlaylist(body.playlistId, userId)) {
@@ -371,7 +375,7 @@ export function buildApp(): Hono<Env> {
     const layoutId = currentLayoutId(device);
     const version = layoutId ? getLayout(layoutId)?.version ?? 0 : 0;
     try {
-      const { buf } = await renderImage(baseUrl(), payload, profile.width, profile.height, "png", `prev:${device.id}:${layoutId}:${version}`);
+      const { buf } = await renderImage(baseUrl(), payload, profile.width, profile.height, "png", `prev:${device.id}:${layoutId}:${version}`, toDitherOpts(safeJsonObj(device.render_opts)));
       return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": "image/png", "cache-control": "no-store" } });
     } catch (e) {
       return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);

@@ -7,6 +7,7 @@ import { ShellCtx } from "./components/PageHeader";
 import { Sidebar } from "./components/Sidebar";
 import { Icon } from "./editor/icons";
 import { useTheme } from "./hooks/useTheme";
+import { FleetPage } from "./pages/fleet";
 import { HubPage } from "./pages/hub";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
@@ -79,6 +80,7 @@ export function App() {
 
   const commands = useMemo<Command[]>(() => [
     { id: "nav-screens", label: "Go to Screens", hint: "Page", icon: <Icon.grid />, run: () => navigate("/") },
+    { id: "nav-fleet", label: "Go to Fleet", hint: "Page", icon: <Icon.monitor />, run: () => navigate("/fleet") },
     { id: "nav-setups", label: "Go to Setups", hint: "Page", icon: <Icon.pencil />, run: () => navigate("/setups") },
     { id: "nav-playlists", label: "Go to Playlists", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
     { id: "nav-hub", label: "Go to Hub", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
@@ -122,6 +124,7 @@ export function App() {
         {drawer && <div class="sidebar-scrim" onClick={() => setDrawer(false)} />}
         <main id="main" class="shell-main page-enter">
           {page.name === "screens" && <ScreensPage />}
+          {page.name === "fleet" && <FleetPage />}
           {page.name === "setups" && <SetupsPage />}
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}

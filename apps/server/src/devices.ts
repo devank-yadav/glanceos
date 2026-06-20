@@ -84,6 +84,14 @@ export function setDeviceTimezone(id: string, tz: string | null, userId: string)
   return getDevice(id) ?? null;
 }
 
+/** Persist a device's e-ink render options (already-validated JSON object). */
+export function setRenderOpts(id: string, opts: Record<string, unknown>, userId: string): DeviceRow | null {
+  const device = getDevice(id);
+  if (!device || device.user_id !== userId) return null;
+  db.prepare("UPDATE devices SET render_opts = ? WHERE id = ?").run(JSON.stringify(opts), id);
+  return getDevice(id) ?? null;
+}
+
 /** Assign a playlist (or null) to a device; null restores single-layout mode. */
 export function setDevicePlaylist(id: string, playlistId: number | null, userId: string): DeviceRow | null {
   const device = getDevice(id);

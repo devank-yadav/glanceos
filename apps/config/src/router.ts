@@ -6,6 +6,7 @@ export type Route =
   | { name: "login" }
   | { name: "register" }
   | { name: "screens" }
+  | { name: "fleet" }
   | { name: "setups" }
   | { name: "playlists" }
   | { name: "hub" }
@@ -16,6 +17,7 @@ export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, "") || "/";
   if (path === "/login") return { name: "login" };
   if (path === "/register") return { name: "register" };
+  if (path === "/fleet") return { name: "fleet" };
   if (path === "/setups") return { name: "setups" };
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };
@@ -28,6 +30,7 @@ export function parseRoute(hash: string): Route {
 // Path + label for each top-level section, used for breadcrumbs and origin.
 export const SECTION: Record<string, { path: string; label: string }> = {
   screens: { path: "#/", label: "Screens" },
+  fleet: { path: "#/fleet", label: "Fleet" },
   setups: { path: "#/setups", label: "Setups" },
   playlists: { path: "#/playlists", label: "Playlists" },
   hub: { path: "#/hub", label: "Hub" },

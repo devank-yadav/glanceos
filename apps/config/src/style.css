@@ -2743,3 +2743,19 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .notif-dot.low_battery { background: #d8a72a; }
 .notif-msg { flex: 1; font-size: 13px; }
 .notif-time { font-size: 11px; flex: none; }
+
+/* ---------- fleet dashboard ---------- */
+.fleet-card { padding: 4px; overflow-x: auto; }
+.fleet-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.fleet-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.fleet-table td { padding: 10px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.fleet-table tr:last-child td { border-bottom: none; }
+.fleet-name { font-weight: 600; }
+.fleet-res { font-weight: 400; font-size: 12px; margin-left: 6px; }
+.fleet-status { display: inline-flex; align-items: center; gap: 6px; }
+.fleet-stale { color: var(--bad); }
+
+/* ---------- per-device dither controls ---------- */
+.dither-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; width: 100%; }
+.dither-controls .field { gap: 3px; }
+.dither-controls input[type="range"] { width: 100%; accent-color: var(--fg); }

@@ -1,6 +1,6 @@
 import type { StreamPayloadT } from "@glanceos/schema";
 import { encodeBmp1 } from "./bmp";
-import { floydSteinberg, packRaw1 } from "./dither";
+import { DEFAULT_DITHER, dither, type DitherOpts, packRaw1 } from "./dither";
 import { bitsToPng, renderAvailable, renderGray } from "./screenshot";
 
 export type RenderFormat = "bmp" | "raw1" | "png";
@@ -34,8 +34,9 @@ export async function renderImage(
   h: number,
   format: RenderFormat,
   cacheKey: string,
+  opts: DitherOpts = DEFAULT_DITHER,
 ): Promise<RenderResult> {
-  const key = `${cacheKey}:${w}x${h}:${format}`;
+  const key = `${cacheKey}:${w}x${h}:${format}:${opts.algo}:${opts.threshold}:${opts.gamma}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.result;
   const existing = inflight.get(key);
@@ -43,7 +44,7 @@ export async function renderImage(
 
   const p = (async () => {
     const gray = await renderGray(baseUrl, payload, w, h);
-    const bits = floydSteinberg(gray, w, h);
+    const bits = dither(gray, w, h, opts);
     let result: RenderResult;
     if (format === "raw1") result = { buf: packRaw1(bits, w, h), contentType: CONTENT_TYPE.raw1 };
     else if (format === "png") result = { buf: await bitsToPng(bits, w, h), contentType: CONTENT_TYPE.png };
@@ -60,3 +61,4 @@ export async function renderImage(
 }
 
 export { renderAvailable };
+export { toDitherOpts, type DitherOpts } from "./dither";
