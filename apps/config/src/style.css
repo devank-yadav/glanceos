@@ -2796,3 +2796,9 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .nf-row .nf-del { padding: 2px 8px; line-height: 1; }
 .nf-add { align-self: flex-start; font-size: 12px; }
 .nf-comb { font-size: 12px; padding: 2px 6px; }
+
+/* ---------- share QR ---------- */
+.share-qr { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 6px 0 12px; }
+.share-qr-img { line-height: 0; padding: 8px; background: #fff; border-radius: var(--r-md); border: 1px solid var(--rule); }
+.share-qr-img svg { display: block; }
+.share-qr-save { font-size: 12px; }

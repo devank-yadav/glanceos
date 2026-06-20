@@ -11,6 +11,7 @@ import { ListEditor } from "./listEditor";
 import { Overlay } from "./overlay";
 import { Palette } from "./palette";
 import { Present } from "./present";
+import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
 import { BlockFields, BoardSettings } from "./properties";
 import { Shortcuts } from "./shortcuts";
@@ -644,6 +645,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             {shareUrl ? (
               <>
                 <p class="muted">Anyone with the link can view it live — no login needed.</p>
+                <ShareQR url={shareUrl} />
                 <input class="share-url" readOnly value={shareUrl} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
                 <div class="row spread share-actions">
                   <button class="ghost danger" onClick={revokeShare} disabled={shareBusy}>Turn off</button>
@@ -830,6 +832,41 @@ export function Studio({ layoutId }: { layoutId: number }) {
       <div class="drag-chip drag-card" ref={ghostRef} />
       {presenting && <Present doc={state.present} data={data} W={W} H={H} onClose={() => setPresenting(false)} />}
       {showHelp && <Shortcuts onClose={() => setShowHelp(false)} />}
+    </div>
+  );
+}
+
+// A scannable QR for the share URL, with a one-click PNG export (rasterized from
+// the module matrix — no SVG round-trip). Renders nothing if the URL is too long
+// for v10-M (encodeQR throws).
+function ShareQR({ url }: { url: string }) {
+  let svg: string;
+  try { svg = qrSvg(url, { size: 168 }); } catch { return null; }
+  const savePng = () => {
+    try {
+      const matrix = encodeQR(url);
+      const n = matrix.length, quiet = 4, scale = 8, dim = (n + quiet * 2) * scale;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = dim;
+      const ctx = cv.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, dim, dim);
+      ctx.fillStyle = "#000";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (matrix[r]![c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+      cv.toBlob((b) => {
+        if (!b) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        a.download = "glanceos-share-qr.png";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    } catch { /* too long → no-op */ }
+  };
+  return (
+    <div class="share-qr">
+      <div class="share-qr-img" dangerouslySetInnerHTML={{ __html: svg }} />
+      <button class="ghost share-qr-save" onClick={savePng}>Save PNG</button>
     </div>
   );
 }
