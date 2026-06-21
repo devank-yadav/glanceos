@@ -320,6 +320,10 @@ export const PhoneNumberProps = z.object({ label: line(40).default("Reception"),
 export const SocialHandleProps = z.object({ platform: line(40).default("Instagram"), handle: line(60).default("@glanceos") });
 export const WayfindingProps = z.object({ items: line(600).default("Reception | → Floor 1\nPharmacy | → Floor 2\nExit | ← Left") });
 
+// ===== v4.7: self-running time objects (client-tick, no server state) =====
+export const StopwatchProps = z.object({ label: line(40).default("Elapsed"), since: z.string().default("2026-01-01T09:00"), showSeconds: z.boolean().default(true) });
+export const LiveCounterProps = z.object({ label: line(40).default(""), start: z.number().default(0), perDay: z.number().default(1440), since: z.string().default("2026-01-01"), unit: line(12).default(""), decimals: z.number().int().min(0).max(4).default(0) });
+
 // ===== v1.0: data binding (optional, on every block) =====
 // A block can point a prop (or its whole data) at a live SOURCE instead of typed
 // props. Reuses jsonFeed's {{dotted.path}} extraction grammar so the mental model
@@ -563,6 +567,9 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("phoneNumber"), props: PhoneNumberProps }),
   z.object({ ...b, type: z.literal("socialHandle"), props: SocialHandleProps }),
   z.object({ ...b, type: z.literal("wayfinding"), props: WayfindingProps }),
+  // v4.7 self-running time objects
+  z.object({ ...b, type: z.literal("stopwatch"), props: StopwatchProps }),
+  z.object({ ...b, type: z.literal("liveCounter"), props: LiveCounterProps }),
 ]);
 
 export const Row = z.object({

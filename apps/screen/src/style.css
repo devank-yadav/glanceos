@@ -882,6 +882,9 @@ body {
 .pomodoro { display: flex; align-items: baseline; gap: 1.4vmin; }
 .pomo-num { font-size: calc(7vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; }
 .pomo-sep { font-size: calc(4vmin * var(--font-scale, 1)); color: var(--muted); }
+.pomo-phase { font-size: calc(2.4vmin * var(--font-scale, 1)); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+.pomo-phase.rest { opacity: 0.55; }
+.pomo-time { font-size: calc(9vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.05; }
 .monthhabit { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.5vmin; }
 .mh-dot { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--fg); }
 .mh-dot.on { background: var(--fg); }

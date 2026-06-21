@@ -95,3 +95,36 @@ describe("live alert banner", () => {
     document.getElementById("glance-alert")?.remove();
   });
 });
+
+describe("pomodoro is a live, self-running timer", () => {
+  const pomo = (props: object) =>
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "p", type: "pomodoro", width: 1, props },
+    ] }] }) as StreamPayloadT);
+
+  it("shows Focus + remaining anchored to midnight, and ticks down on its own", () => {
+    vi.useFakeTimers();
+    try {
+      // 25/5 → a 30-minute cycle. 10 min past local midnight → 15:00 left of Focus.
+      vi.setSystemTime(new Date(2026, 5, 21, 0, 10, 0));
+      pomo({ workMin: 25, breakMin: 5, label: "" });
+      expect(document.querySelector(".pomo-phase")!.textContent).toBe("Focus");
+      expect(document.querySelector(".pomo-time")!.textContent).toBe("15:00");
+      // self-updating: one minute later it reads 14:00 with no re-render
+      vi.advanceTimersByTime(60_000);
+      expect(document.querySelector(".pomo-time")!.textContent).toBe("14:00");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("flips to Break inside the break window", () => {
+    vi.useFakeTimers();
+    try {
+      // 26 min in → 1 min into the 5-min break → 4:00 left.
+      vi.setSystemTime(new Date(2026, 5, 21, 0, 26, 0));
+      pomo({ workMin: 25, breakMin: 5, label: "" });
+      expect(document.querySelector(".pomo-phase")!.textContent).toBe("Break");
+      expect(document.querySelector(".pomo-phase")!.className).toContain("rest");
+      expect(document.querySelector(".pomo-time")!.textContent).toBe("4:00");
+    } finally { vi.useRealTimers(); }
+  });
+});

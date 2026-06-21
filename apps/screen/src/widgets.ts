@@ -1544,10 +1544,57 @@ const shiftStatus: Render = (el, w) => {
 const pomodoro: Render = (el, w) => {
   if (w.type !== "pomodoro") return;
   if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
-  const row = div("pomodoro");
-  row.append(div("pomo-num", `${w.props.workMin}`), div("pomo-sep", "/"), div("pomo-num", `${w.props.breakMin}`));
-  el.appendChild(row);
-  el.appendChild(div("stat-label", "work / break min"));
+  const phase = div("pomo-phase");
+  const time = div("pomo-time");
+  el.append(phase, time);
+  // A continuous focus→break rhythm anchored to local midnight so every screen
+  // agrees and it needs no start button — derive the current phase from the clock.
+  const workMs = Math.max(1, w.props.workMin) * 60_000;
+  const breakMs = Math.max(1, w.props.breakMin) * 60_000;
+  const cycle = workMs + breakMs;
+  return every(1000, () => {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const pos = (now.getTime() - midnight) % cycle;
+    const inWork = pos < workMs;
+    const remain = (inWork ? workMs - pos : cycle - pos) / 1000;
+    phase.textContent = inWork ? "Focus" : "Break";
+    phase.className = `pomo-phase ${inWork ? "work" : "rest"}`;
+    const s = Math.ceil(remain);
+    time.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  });
+};
+
+const stopwatch: Render = (el, w) => {
+  if (w.type !== "stopwatch") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const big = div("stat-value");
+  el.appendChild(big);
+  const start = new Date(w.props.since).getTime();
+  return every(1000, () => {
+    if (isNaN(start)) { big.textContent = "—"; return; }
+    let s = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    const h = Math.floor(s / 3600); s -= h * 3600;
+    const m = Math.floor(s / 60); const sec = s - m * 60;
+    big.textContent = w.props.showSeconds
+      ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+      : `${h}h ${String(m).padStart(2, "0")}m`;
+  });
+};
+
+const liveCounter: Render = (el, w) => {
+  if (w.type !== "liveCounter") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const big = div("stat-value");
+  el.appendChild(big);
+  if (w.props.unit) el.appendChild(div("stat-label", w.props.unit));
+  const since = new Date(w.props.since).getTime();
+  const dec = Math.max(0, Math.min(4, w.props.decimals));
+  return every(1000, () => {
+    const base = isNaN(since) ? Date.now() : since;
+    const v = w.props.start + w.props.perDay * ((Date.now() - base) / 86_400_000);
+    big.textContent = v.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  });
 };
 
 // ---- trackers ----
@@ -2240,4 +2287,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   socialHandle, wayfinding,
   // v3.0
   customData,
+  // v4.7 self-running time objects
+  stopwatch, liveCounter,
 };

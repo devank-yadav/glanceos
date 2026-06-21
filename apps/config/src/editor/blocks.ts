@@ -177,7 +177,9 @@ export const BLOCKS: BlockDef[] = [
   { type: "anniversary", label: "Anniversary", glyph: "❤", category: "Time", defaultH: 4, description: "Days until the next occurrence", keywords: "anniversary recurring yearly", defaultProps: { date: "2020-06-13", label: "Anniversary" } },
   { type: "timeBlocks", label: "Time blocks", glyph: "▣", category: "Time", defaultH: 6, description: "Today's time blocks", keywords: "schedule blocks plan day", defaultProps: { items: "09–10 | Focus\n10–11 | Email\n11–13 | Build" } },
   { type: "shiftStatus", label: "Open hours", glyph: "◷", category: "Time", defaultH: 5, description: "Open now? from hours", keywords: "open closed hours shift", defaultProps: { open: 9, close: 17, label: "" } },
-  { type: "pomodoro", label: "Pomodoro", glyph: "◓", category: "Time", defaultH: 5, description: "Work / break minutes", keywords: "pomodoro focus timer", defaultProps: { workMin: 25, breakMin: 5, label: "" } },
+  { type: "pomodoro", label: "Pomodoro", glyph: "◓", category: "Time", defaultH: 5, description: "Live focus / break timer", keywords: "pomodoro focus timer countdown", defaultProps: { workMin: 25, breakMin: 5, label: "" } },
+  { type: "stopwatch", label: "Stopwatch", glyph: "⏱", category: "Time", defaultH: 5, description: "Counts up from a start time", keywords: "stopwatch elapsed count up timer running", defaultProps: { label: "Elapsed", since: "2026-01-01T09:00", showSeconds: true } },
+  { type: "liveCounter", label: "Live counter", glyph: "⧗", category: "Numbers", defaultH: 4, description: "A number that climbs on its own", keywords: "live counter ticking running total rate auto", defaultProps: { label: "Saved today", start: 0, perDay: 1440, since: "2026-01-01", unit: "", decimals: 0 } },
 
   // ===== v0.8 — trackers =====
   { type: "monthHabit", label: "Month habit", glyph: "⣿", category: "Trackers", defaultH: 5, description: "A month of habit dots", keywords: "habit month dots streak", defaultProps: { label: "This month", days: "x x . x x . . x x x . x" } },
