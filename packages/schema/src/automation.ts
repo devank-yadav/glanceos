@@ -45,13 +45,16 @@ export type TriggerT = z.infer<typeof Trigger>;
 export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "time"] as const;
 
 // ---- Action ----
+// Every action carries an optional `enabled` flag (default = on); runActions skips a
+// step when it's explicitly false, so you can disable one step without deleting it.
+const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional() });
 export const Action = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("setData"), key: z.string().min(1).max(100), value: z.unknown() }),
-  z.object({ kind: z.literal("addTask"), listId: z.string().max(60).default("default"), text: z.string().min(1).max(500) }),
-  z.object({ kind: z.literal("advanceQueue"), queueId: z.string().min(1).max(60), delta: z.number().int().min(-100).max(100).default(1) }),
-  z.object({ kind: z.literal("switchBoard"), deviceId: z.string().min(1), layoutId: z.number().int() }),
-  z.object({ kind: z.literal("notify"), message: z.string().min(1).max(200) }),
-  z.object({
+  act({ kind: z.literal("setData"), key: z.string().min(1).max(100), value: z.unknown() }),
+  act({ kind: z.literal("addTask"), listId: z.string().max(60).default("default"), text: z.string().min(1).max(500) }),
+  act({ kind: z.literal("advanceQueue"), queueId: z.string().min(1).max(60), delta: z.number().int().min(-100).max(100).default(1) }),
+  act({ kind: z.literal("switchBoard"), deviceId: z.string().min(1), layoutId: z.number().int() }),
+  act({ kind: z.literal("notify"), message: z.string().min(1).max(200) }),
+  act({
     kind: z.literal("alert"),
     severity: z.enum(["info", "warn", "critical"]).default("info"),
     title: z.string().min(1).max(120),
@@ -60,21 +63,21 @@ export const Action = z.discriminatedUnion("kind", [
     deviceId: z.string().optional(),
     ttlSeconds: z.number().int().min(3).max(3600).optional(),
   }),
-  z.object({ kind: z.literal("webhook"), url: z.url({ protocol: /^https?$/ }), body: z.unknown().optional() }), // outbound — SSRF-guarded at run time
+  act({ kind: z.literal("webhook"), url: z.url({ protocol: /^https?$/ }), body: z.unknown().optional() }), // outbound — SSRF-guarded at run time
   // Object-targeting actions (v4.0, Shortcuts-style). They reference a block by its
   // stable id (`objectId`), so a rename never breaks them; `objectName` is kept only
   // for display + dangling-reference lint. A custom-data-bound object writes its data
   // key; a static object patches `prop` on its block doc, then the board re-pushes.
-  z.object({ kind: z.literal("setObjectText"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().max(60).optional(), text: z.string().max(2000) }),
-  z.object({ kind: z.literal("setObjectProp"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().min(1).max(60), value: z.unknown() }),
+  act({ kind: z.literal("setObjectText"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().max(60).optional(), text: z.string().max(2000) }),
+  act({ kind: z.literal("setObjectProp"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().min(1).max(60), value: z.unknown() }),
   // Show / hide a board object (toggles its `hidden` flag; the screen skips hidden blocks).
-  z.object({ kind: z.literal("showObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
-  z.object({ kind: z.literal("hideObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
+  act({ kind: z.literal("showObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
+  act({ kind: z.literal("hideObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
   // Numeric / flag helpers over the custom-data store (Shortcuts-style).
-  z.object({ kind: z.literal("incrementData"), key: z.string().min(1).max(100), delta: z.number().min(-1_000_000).max(1_000_000).default(1) }),
-  z.object({ kind: z.literal("toggleData"), key: z.string().min(1).max(100) }),
+  act({ kind: z.literal("incrementData"), key: z.string().min(1).max(100), delta: z.number().min(-1_000_000).max(1_000_000).default(1) }),
+  act({ kind: z.literal("toggleData"), key: z.string().min(1).max(100) }),
   // Pause between actions (a Shortcuts "Wait").
-  z.object({ kind: z.literal("delay"), ms: z.number().int().min(50).max(5_000) }), // bounded: a delay blocks the shared automation tick
+  act({ kind: z.literal("delay"), ms: z.number().int().min(50).max(5_000) }), // bounded: a delay blocks the shared automation tick
 ]);
 export type ActionT = z.infer<typeof Action>;
 export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp", "showObject", "hideObject", "incrementData", "toggleData", "delay"] as const;

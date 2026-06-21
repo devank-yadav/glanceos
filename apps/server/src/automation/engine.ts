@@ -171,6 +171,7 @@ async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>)
 export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, board?: { id: number; document: LayoutT }): Promise<{ run: number; errors: string[] }> {
   let run = 0; let touched = false; const errors: string[] = [];
   for (const a of actions) {
+    if (a.enabled === false) continue; // a step toggled off in the builder
     try {
       switch (a.kind) {
         case "setData": setCustomData(userId, a.key, a.value); touched = true; break;

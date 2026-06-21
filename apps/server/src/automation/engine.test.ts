@@ -97,6 +97,16 @@ describe("runActions — seams + SSRF safety", () => {
     expect(listTasks(user.id, "default").some((t) => t.text === "automated task")).toBe(true);
   });
 
+  it("skips an action toggled off (enabled:false)", async () => {
+    const r = await runActions([
+      { kind: "setData", key: "skipMe", value: "no", enabled: false },
+      { kind: "setData", key: "runMe", value: "yes" },
+    ], user.id, buildContext(user.id));
+    expect(r.run).toBe(1);
+    expect(getCustomData(user.id, "skipMe")).toBeUndefined();
+    expect(getCustomData(user.id, "runMe")).toBe("yes");
+  });
+
   it("an outbound webhook to a private address is blocked by the SSRF guard (logged, not thrown)", async () => {
     const r = await runActions([{ kind: "webhook", url: "http://127.0.0.1:9/x" }], user.id, buildContext(user.id));
     expect(r.run).toBe(0);

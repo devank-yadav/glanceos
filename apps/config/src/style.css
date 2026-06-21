@@ -3028,6 +3028,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .object-eye { flex: none; width: 26px; height: 26px; color: var(--muted); }
 .object-eye:hover { color: var(--fg); }
 
+/* automation action: per-step enable toggle */
+.action-enable { flex: none; align-self: center; }
+.action-row.action-off > *:not(.action-enable) { opacity: 0.45; }
+
 /* ---------- automations: webhook-trigger inlet URLs ---------- */
 .webhook-inlets { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
 .webhook-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

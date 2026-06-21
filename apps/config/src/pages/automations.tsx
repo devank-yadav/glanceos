@@ -313,7 +313,8 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
 
       <div class="field"><span>Then do</span>
         {a.actions.map((act, i) => (
-          <div key={i} class="action-row">
+          <div key={i} class={`action-row${act.enabled === false ? " action-off" : ""}`}>
+            <input type="checkbox" class="action-enable" title={act.enabled === false ? "Step is off — won't run" : "Step is on"} checked={act.enabled !== false} onChange={(e) => setAction(i, { ...act, enabled: (e.currentTarget as HTMLInputElement).checked })} />
             <select value={act.kind} onChange={(e) => setAction(i, defaultAction((e.currentTarget as HTMLSelectElement).value, objects))}>
               {actionKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
