@@ -28,7 +28,7 @@ import {
 } from "./devices";
 import { geocodeSearch } from "./fetchers/geocode";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
-import { listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
+import { clearAll, listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
 import { limiter } from "./ratelimit";
@@ -542,6 +542,10 @@ export function buildApp(): Hono<Env> {
   });
   app.post("/api/notifications/read-all", (c) => {
     markAllRead(c.get("userId"));
+    return c.json({ ok: true, unread: 0 });
+  });
+  app.post("/api/notifications/clear-all", (c) => {
+    clearAll(c.get("userId"));
     return c.json({ ok: true, unread: 0 });
   });
 

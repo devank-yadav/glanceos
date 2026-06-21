@@ -12,6 +12,9 @@ interface Feed { notifications: Notification[]; unread: number }
 export function NotificationsBell() {
   const [feed, setFeed] = useState<Feed>({ notifications: [], unread: 0 });
   const [open, setOpen] = useState(false);
+  // The panel is pinned with fixed coords measured from the bell, so the sidebar's
+  // own scroll/overflow can't clip or mis-place it.
+  const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
   const ref = useRef<HTMLDivElement>(null);
 
   const load = () => api.get<Feed>("/api/notifications").then(setFeed).catch(() => {});
@@ -23,12 +26,21 @@ export function NotificationsBell() {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("pointerdown", onDown);
-    return () => window.removeEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("pointerdown", onDown); window.removeEventListener("keydown", onKey); };
   }, [open]);
 
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setPos({ left: Math.max(8, r.left), bottom: Math.round(window.innerHeight - r.top + 8) });
+    setOpen(true);
+  };
   const markRead = async (id: number) => { await api.post(`/api/notifications/${id}/read`).catch(() => {}); load(); };
   const markAll = async () => { await api.post("/api/notifications/read-all").catch(() => {}); load(); };
+  const clearAll = async () => { await api.post("/api/notifications/clear-all").catch(() => {}); load(); };
 
   return (
     <div class="notif-wrap" ref={ref}>
@@ -36,14 +48,17 @@ export function NotificationsBell() {
         class={`notif-bell${feed.unread > 0 ? " has-unread" : ""}`}
         icon={<Icon.bell />}
         label={feed.unread > 0 ? `Notifications (${feed.unread} unread)` : "Notifications"}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
       />
       {feed.unread > 0 && <span class="notif-badge" aria-hidden="true">{feed.unread > 9 ? "9+" : feed.unread}</span>}
       {open && (
-        <div class="notif-panel card" role="dialog" aria-label="Notifications">
+        <div class="notif-panel card" role="dialog" aria-label="Notifications" style={{ position: "fixed", left: `${pos.left}px`, bottom: `${pos.bottom}px`, top: "auto" }}>
           <div class="row spread notif-head">
             <strong>Notifications</strong>
-            {feed.unread > 0 && <button class="ghost" onClick={markAll}>Mark all read</button>}
+            <span class="row notif-head-actions">
+              {feed.unread > 0 && <button class="ghost" onClick={markAll}>Mark all read</button>}
+              {feed.notifications.length > 0 && <button class="ghost" onClick={clearAll}>Clear all</button>}
+            </span>
           </div>
           {feed.notifications.length === 0 ? (
             <p class="muted notif-empty">You're all caught up.</p>

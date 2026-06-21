@@ -12,6 +12,7 @@ interface Props {
   canEdit: boolean;
   canBind: boolean;
   bound: boolean;
+  editItems?: "tasks" | "queue" | null; // interactive blocks edit their items/counter in Options
   onEdit: () => void;
   onConvert: () => void;
   onData: () => void;
@@ -21,12 +22,15 @@ interface Props {
 
 const MENU_W = 188;
 
-export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, onEdit, onConvert, onData, onOptions, onDelete }: Props) {
+export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, editItems, onEdit, onConvert, onData, onOptions, onDelete }: Props) {
   const left = Math.min(Math.max(2, box.x * scale), Math.max(2, stageW - MENU_W));
   const top = Math.max(4, box.y * scale + 6);
   const stop = (e: Event) => e.stopPropagation();
   return (
     <ul class="block-menu" style={{ left: `${left}px`, top: `${top}px` }} onPointerDown={stop} onMouseDown={stop}>
+      {editItems && (
+        <li><button class="bm-item" onClick={onOptions}><Icon.list /> {editItems === "queue" ? "Edit queue" : "Edit items"}</button></li>
+      )}
       {canEdit && (
         <li><button class="bm-item" onClick={onEdit}><Icon.pencil /> Edit text</button></li>
       )}

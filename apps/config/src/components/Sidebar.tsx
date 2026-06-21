@@ -13,7 +13,6 @@ import { NotificationsBell } from "./NotificationsBell";
 const NAV = [
   { name: "boards", href: "#/boards", label: "Boards", icon: <Icon.grid /> },
   { name: "screens", href: "#/screens", label: "Screens", icon: <Icon.monitor /> },
-  { name: "account", href: "#/account", label: "Settings", icon: <Icon.settings /> },
 ];
 
 const themeLabel = (t: Theme): string => (t === "dark" ? "Theme · Dark" : t === "light" ? "Theme · Light" : "Theme · System");
@@ -71,7 +70,7 @@ export function Sidebar({
           triggerLabel="Account menu"
           trigger={<><span class="avatar" aria-hidden="true">{(userName || "?").slice(0, 1).toUpperCase()}</span><span class="sidebar-label">{userName}</span></>}
           items={[
-            { label: "Account", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
+            { label: "Settings", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
             { label: themeLabel(theme), icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, onClick: onCycleTheme },
             { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
           ]}

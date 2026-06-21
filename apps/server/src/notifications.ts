@@ -36,6 +36,11 @@ export function markAllRead(userId: string): void {
   db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").run(Date.now(), userId);
 }
 
+/** Remove every notification for a user (the "Clear all" action). */
+export function clearAll(userId: string): void {
+  db.prepare("DELETE FROM notifications WHERE user_id = ?").run(userId);
+}
+
 /** Create unless one already exists for this (user, dedupe_key) (read or unread).
  *  deviceId may be null for account-level alerts (e.g. a connection error). */
 export function createIfAbsent(userId: string, deviceId: string | null, kind: string, message: string, dedupeKey: string): void {

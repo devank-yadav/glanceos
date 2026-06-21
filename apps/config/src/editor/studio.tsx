@@ -14,6 +14,7 @@ import { Present } from "./present";
 import { castBoard, castConfigured } from "../cast";
 import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
+import { createPortal } from "preact/compat";
 import { Modal } from "../components/Modal";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings } from "./properties";
@@ -696,7 +697,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
           />
         </Modal>
       )}
-      {shareOpen && (
+      {shareOpen && createPortal(
         <>
           <div class="popover-backdrop" onPointerDown={() => setShareOpen(false)} />
           <div class="share-popover card" role="dialog" aria-label="Share board">
@@ -737,9 +738,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
               </>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
-      {displayOpen && (
+      {displayOpen && createPortal(
         <>
           <div class="popover-backdrop" onPointerDown={() => setDisplayOpen(false)} />
           <div class="display-popover card" role="dialog" aria-label="Display on screens">
@@ -762,7 +764,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
             )}
             <p class="muted display-hint">Checking a screen sets it to show this board directly. Screens driven by a playlist or schedule aren't changed unless you check them.</p>
           </div>
-        </>
+        </>,
+        document.body,
       )}
       {saveState === "error" && saveError && <p class="issues studio-issues">{saveError}</p>}
       <div class="studio-body">
@@ -851,6 +854,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
                   canBind={BINDABLE.has(primaryBlock.type)}
                   bound={!!primaryBlock.source}
+                  editItems={primaryBlock.type === "tasks" ? "tasks" : primaryBlock.type === "queue" ? "queue" : null}
                   onEdit={() => { if (primary) startEditing(primary); setMenuId(null); }}
                   onConvert={() => { setOptionsOpen(false); setDataOpen(false); setMenuId(null); setConvertId(primary); }}
                   onData={() => { setConvertId(null); setOptionsOpen(false); setMenuId(null); setDataOpen(true); }}
@@ -913,7 +917,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
           {boardSettingsOpen && <BoardSettings doc={state.present} commitDoc={commitDoc} />}
         </aside>
       </div>
-      {!sideShown && <button class="sidebar-reveal" title="Show blocks panel" onClick={() => setSidebarOpen(true)}><Icon.panelToggle /></button>}
       <div class="drag-chip drag-card" ref={ghostRef} />
       {presenting && <Present doc={state.present} data={data} W={W} H={H} onClose={() => setPresenting(false)} />}
       {showHelp && <Shortcuts onClose={() => setShowHelp(false)} />}
