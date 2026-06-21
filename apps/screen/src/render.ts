@@ -112,7 +112,11 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
       const st = block.style ?? { invert: false, align: "start", valign: "top" };
       const cell = el(`widget widget-${block.type} halign-${st.align} valign-${st.valign}`);
       if (st.invert) cell.classList.add("is-invert");
-      cell.style.flexGrow = String(block.width);
+      // Default the flex weight — a doc posted into preview may omit `width` (the
+      // screen runtime is zod-free, so nothing fills schema defaults here). Without
+      // this, String(undefined) → flex-grow:"undefined" and the block collapsed to
+      // its min-content width (the "squished into a thin strip" bug).
+      cell.style.flexGrow = String(block.width ?? 1);
       const cleanup = render(cell, block, data[block.id]);
       if (cleanup) cleanups.push(cleanup);
       rowEl.appendChild(cell);

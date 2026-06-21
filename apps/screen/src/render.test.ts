@@ -34,6 +34,15 @@ describe("renderPayload zones", () => {
     expect(document.querySelectorAll("#app > .page").length).toBe(1);
     expect(document.querySelectorAll("#app > .page > .board-row").length).toBe(1);
   });
+
+  it("defaults a width-less block to flex-grow 1 (compact docs posted into preview must still fill)", () => {
+    // a doc with no `width` on the block — the runtime is zod-free, so nothing
+    // fills the default; the renderer must, or the block collapses to min-content.
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r1", h: 6, blocks: [{ id: "b1", type: "divider", props: {} }] }] }));
+    const cell = document.querySelector("#app > .page > .board-row > .widget") as HTMLElement;
+    expect(cell).not.toBeNull();
+    expect(cell.style.flexGrow).toBe("1");
+  });
 });
 
 describe("customData renderer", () => {
