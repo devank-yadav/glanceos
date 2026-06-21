@@ -63,7 +63,54 @@ export const OBJECT_CONTROLS: Record<string, ObjControl[]> = {
   eventBanner: [{ key: "title", label: "Title", control: "text" }, { key: "when", label: "When", control: "text" }],
   welcomeSign: [{ key: "message", label: "Message", control: "text" }, { key: "name", label: "Name", control: "text" }],
   priceTag: [{ key: "price", label: "Price", control: "text" }, { key: "item", label: "Item", control: "text" }],
-  myDay: [{ key: "subtitle", label: "Subtitle", control: "text" }, { key: "name", label: "Name", control: "text" }],
+  myDay: [{ key: "subtitle", label: "Subtitle", control: "text" }, { key: "name", label: "Name", control: "text" }, { key: "showDate", label: "Show date", control: "toggle", onLabel: "Yes", offLabel: "No" }],
+
+  // ---- more signage / status copy ----
+  ticker: [{ key: "content", label: "Text", control: "text" }],
+  highlight: [{ key: "content", label: "Text", control: "text" }],
+  logoText: [{ key: "text", label: "Text", control: "text" }],
+  mantra: [{ key: "content", label: "Text", control: "text" }],
+  kicker: [{ key: "kicker", label: "Eyebrow", control: "text" }, { key: "title", label: "Title", control: "text" }],
+  emojiStat: [{ key: "emoji", label: "Emoji", control: "text" }, { key: "label", label: "Label", control: "text" }],
+  moodToday: [{ key: "emoji", label: "Emoji", control: "text" }, { key: "label", label: "Label", control: "text" }],
+  fieldRow: [{ key: "value", label: "Value", control: "text" }, { key: "label", label: "Label", control: "text" }],
+  unitStat: [{ key: "value", label: "Value", control: "text" }, { key: "unit", label: "Unit", control: "text" }],
+  readingNow: [{ key: "title", label: "Title", control: "text" }, { key: "author", label: "Author", control: "text" }, { key: "percent", label: "Percent", control: "number" }],
+
+  // ---- scores / pairs / comparisons ----
+  scoreboard: [{ key: "leftScore", label: "Left score", control: "text" }, { key: "rightScore", label: "Right score", control: "text" }],
+  comparison: [{ key: "leftValue", label: "Left value", control: "number" }, { key: "rightValue", label: "Right value", control: "number" }],
+  counterPair: [{ key: "leftValue", label: "Left value", control: "text" }, { key: "rightValue", label: "Right value", control: "text" }],
+  streakPair: [{ key: "current", label: "Current", control: "number" }, { key: "best", label: "Best", control: "number" }],
+  fraction: [{ key: "numerator", label: "Numerator", control: "text" }, { key: "denominator", label: "Denominator", control: "text" }],
+
+  // ---- goals / meters / progress (set value + target live) ----
+  waterTracker: [{ key: "value", label: "Done", control: "number" }, { key: "total", label: "Goal", control: "number" }],
+  savingsGoal: [{ key: "saved", label: "Saved", control: "number" }, { key: "target", label: "Target", control: "number" }],
+  goalProgress: [{ key: "value", label: "Value", control: "number" }, { key: "target", label: "Target", control: "number" }],
+  stepsToday: [{ key: "value", label: "Steps", control: "number" }, { key: "goal", label: "Goal", control: "number" }],
+  budgetLine: [{ key: "spent", label: "Spent", control: "number" }, { key: "budget", label: "Budget", control: "number" }],
+  targetMeter: [{ key: "value", label: "Value", control: "number" }, { key: "target", label: "Target", control: "number" }],
+  bulletGraph: [{ key: "value", label: "Value", control: "number" }, { key: "target", label: "Target", control: "number" }],
+  dotProgress: [{ key: "value", label: "Filled", control: "number" }, { key: "total", label: "Total", control: "number" }],
+  dotMatrix: [{ key: "value", label: "Filled", control: "number" }, { key: "total", label: "Total", control: "number" }],
+  waffle: [{ key: "value", label: "Percent", control: "number" }],
+  gaugeMini: [{ key: "value", label: "Percent", control: "number" }],
+  signalBars: [{ key: "value", label: "Bars (0–5)", control: "number" }],
+  starBar: [{ key: "value", label: "Filled", control: "number" }, { key: "max", label: "Out of", control: "number" }],
+  thermometer: [{ key: "value", label: "Value", control: "number" }],
+  kpiSpark: [{ key: "value", label: "Value", control: "text" }, { key: "unit", label: "Unit", control: "text" }],
+  dayProgress: [{ key: "label", label: "Label", control: "text" }],
+
+  // ---- time targets you can re-point live ----
+  countdown: [{ key: "target", label: "Target (ISO)", control: "text" }, { key: "label", label: "Label", control: "text" }],
+  daysUntil: [{ key: "target", label: "Target date", control: "text" }, { key: "label", label: "Label", control: "text" }],
+  shiftStatus: [{ key: "open", label: "Opens at (hour)", control: "number" }, { key: "close", label: "Closes at (hour)", control: "number" }],
+
+  // ---- simple toggles ----
+  clock: [{ key: "showDate", label: "Show date", control: "toggle", onLabel: "Yes", offLabel: "No" }],
+  table: [{ key: "header", label: "Header row", control: "toggle", onLabel: "Yes", offLabel: "No" }],
+  stopwatch: [{ key: "showSeconds", label: "Show seconds", control: "toggle", onLabel: "Yes", offLabel: "No" }, { key: "since", label: "Start", control: "text" }],
 };
 
 /** Controls for an object type, or null to fall back to the generic prop+value fields. */
