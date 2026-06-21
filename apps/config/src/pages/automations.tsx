@@ -183,42 +183,85 @@ interface RunLog { id: number; trigger: string; matched: boolean; actionsRun: nu
 interface TCtx { scoped: boolean; layoutId?: number; objects?: ObjOption[] }
 const tmpl = (c: TCtx, name: string, trigger: Trigger, conditions: Cond | undefined, actions: Action[]): Automation =>
   ({ name, enabled: true, trigger, conditions: conditions ?? { type: "all", conditions: [] }, actions, layoutId: c.layoutId ?? null });
-const TEMPLATES: { id: string; label: string; show: (c: TCtx) => boolean; build: (c: TCtx) => Automation }[] = [
-  {
-    id: "threshold", label: "Alert when a value crosses a number", show: () => true,
-    build: (c) => {
-      const o = c.objects?.find((x) => x.settable);
-      const field = c.scoped && c.objects?.[0] ? `objects.${c.objects[0].id}.value` : "data.count";
-      const action: Action = o ? { kind: "setObjectText", objectId: o.id, objectName: o.name, prop: o.prop, text: "Busy" } : { kind: "alert", severity: "warn", title: "Threshold crossed", target: "all" };
-      return tmpl(c, "When a value crosses 10", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field, op: "gt", value: 10 }] }, [action]);
-    },
-  },
-  {
-    id: "webhook-text", label: "Update an object on a webhook", show: (c) => !!c.objects?.some((o) => o.settable),
-    build: (c) => { const o = c.objects!.find((x) => x.settable)!; return tmpl(c, "Update on webhook", { kind: "webhook" }, undefined, [{ kind: "setObjectText", objectId: o.id, objectName: o.name, prop: o.prop, text: "" }]); },
-  },
-  {
-    id: "night-hide", label: "Hide an object at night", show: (c) => !!c.objects?.length,
-    build: (c) => { const o = c.objects![0]; return tmpl(c, "Hide at 10pm", { kind: "time", atMinute: 1320, daysMask: 127 }, undefined, [{ kind: "hideObject", objectId: o.id, objectName: o.name }]); },
-  },
-  {
-    id: "changed-notify", label: "Notify when data changes", show: () => true,
-    build: (c) => tmpl(c, "Notify on data change", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field: "data.status", op: "changed" }] }, [{ kind: "notify", message: "Data changed" }]),
-  },
-  // v5.0 smart recipes — the new sun / presence / weather senses. Swap the alert for
-  // a "Switch a screen to board" action to flip boards by daylight / presence / rain.
-  {
-    id: "sun-evening", label: "At sunset — an evening cue", show: () => true,
-    build: (c) => tmpl(c, "Evening at sunset", { kind: "sun", event: "sunset", offsetMin: 0, daysMask: 127 }, undefined, [{ kind: "alert", severity: "info", title: "Good evening", body: "The sun has set — easing into night.", target: "all" }]),
-  },
-  {
-    id: "arrive-home", label: "Welcome when you arrive home", show: () => true,
-    build: (c) => tmpl(c, "Welcome home", { kind: "presence", event: "enter" }, undefined, [{ kind: "alert", severity: "info", title: "Welcome home", target: "all" }]),
-  },
-  {
-    id: "rain-umbrella", label: "Umbrella reminder when it's raining", show: () => true,
-    build: (c) => tmpl(c, "Umbrella reminder", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field: "weather.isRaining", op: "eq", value: true }] }, [{ kind: "alert", severity: "warn", title: "Take an umbrella", body: "Rain is expected today.", target: "all" }]),
-  },
+
+// Compact builders for the recipe gallery — keep each recipe one readable line.
+const cAll = (...fs: { field: string; op: string; value?: unknown }[]): Cond => ({ type: "all", conditions: fs.map((f) => ({ type: "field", field: f.field, op: f.op, value: f.value })) });
+const aAlert = (title: string, body?: string, severity: "info" | "warn" | "critical" = "info"): Action => ({ kind: "alert", severity, title, body, target: "all" });
+const aNotify = (message: string): Action => ({ kind: "notify", message });
+const aSwitch = (): Action => ({ kind: "switchBoard", deviceId: "", layoutId: 0 }); // user picks screen + board
+const objOf = (c: TCtx, type?: string): ObjOption | undefined => (type ? c.objects?.find((o) => o.settable && o.type === type) : c.objects?.find((o) => o.settable));
+const aProp = (o: ObjOption, prop: string, value: unknown): Action => ({ kind: "setObjectProp", objectId: o.id, objectName: o.name, prop, value });
+const aText = (o: ObjOption, text: string): Action => ({ kind: "setObjectText", objectId: o.id, objectName: o.name, prop: o.prop, text });
+
+const RECIPE_CATEGORIES = ["Daily routine", "On a cadence", "Weather", "Sun & daylight", "Presence", "Screen health", "Data & counters", "Signage & objects"] as const;
+interface Recipe { id: string; category: string; label: string; desc: string; show: (c: TCtx) => boolean; build: (c: TCtx) => Automation }
+const has = (type: string) => (c: TCtx) => !!objOf(c, type);
+const TEMPLATES: Recipe[] = [
+  // ---- Daily routine ----
+  { id: "morning-board", category: "Daily routine", label: "Morning board at 7am", desc: "Switch a screen to your morning board.", show: () => true, build: (c) => tmpl(c, "Morning board", { kind: "time", atMinute: 420, daysMask: 127 }, undefined, [aSwitch()]) },
+  { id: "evening-board", category: "Daily routine", label: "Evening board at 6pm", desc: "Switch a screen to a calmer evening board.", show: () => true, build: (c) => tmpl(c, "Evening board", { kind: "time", atMinute: 1080, daysMask: 127 }, undefined, [aSwitch()]) },
+  { id: "workday-start", category: "Daily routine", label: "Workday start (9am, Mon–Fri)", desc: "A gentle nudge to begin the day.", show: () => true, build: (c) => tmpl(c, "Workday start", { kind: "time", atMinute: 540, daysMask: WEEKDAYS_MASK }, undefined, [aAlert("Good morning", "Here's your day at a glance.")]) },
+  { id: "workday-end", category: "Daily routine", label: "Workday wind-down (5pm, Mon–Fri)", desc: "Signal the end of the workday.", show: () => true, build: (c) => tmpl(c, "Wind down", { kind: "time", atMinute: 1020, daysMask: WEEKDAYS_MASK }, undefined, [aAlert("Wind down", "Time to wrap up for the day.")]) },
+  { id: "lunch", category: "Daily routine", label: "Lunch reminder (12pm, Mon–Fri)", desc: "Notify you to take a break.", show: () => true, build: (c) => tmpl(c, "Lunch", { kind: "time", atMinute: 720, daysMask: WEEKDAYS_MASK }, undefined, [aNotify("Lunchtime — step away for a bit")]) },
+  { id: "standup", category: "Daily routine", label: "Standup reminder (9:15, Mon–Fri)", desc: "Nudge before the daily standup.", show: () => true, build: (c) => tmpl(c, "Standup", { kind: "time", atMinute: 555, daysMask: WEEKDAYS_MASK }, undefined, [aNotify("Standup in 15 minutes")]) },
+  { id: "weekend-mode", category: "Daily routine", label: "Weekend board (Sat 8am)", desc: "Switch to a relaxed weekend board.", show: () => true, build: (c) => tmpl(c, "Weekend mode", { kind: "time", atMinute: 480, daysMask: WEEKENDS_MASK }, undefined, [aSwitch()]) },
+  { id: "midnight-reset", category: "Daily routine", label: "Reset a counter at midnight", desc: "Zero a daily counter at 00:00.", show: () => true, build: (c) => tmpl(c, "Daily reset", { kind: "time", atMinute: 0, daysMask: 127 }, undefined, [{ kind: "setData", key: "count", value: 0 }]) },
+  { id: "morning-count", category: "Daily routine", label: "Tick a streak every morning", desc: "Add 1 to a streak counter at 6am.", show: () => true, build: (c) => tmpl(c, "Streak +1", { kind: "time", atMinute: 360, daysMask: 127 }, undefined, [{ kind: "incrementData", key: "streak", delta: 1 }]) },
+  { id: "focus-board", category: "Daily routine", label: "Focus board (weekday 9am)", desc: "Switch a screen to a focus board.", show: () => true, build: (c) => tmpl(c, "Focus board", { kind: "time", atMinute: 540, daysMask: WEEKDAYS_MASK }, undefined, [aSwitch()]) },
+
+  // ---- On a cadence ----
+  { id: "hourly-chime", category: "On a cadence", label: "Hourly chime", desc: "An on-screen note every hour.", show: () => true, build: (c) => tmpl(c, "Hourly chime", { kind: "interval", everyMinutes: 60 }, undefined, [aAlert("Top of the hour", undefined)]) },
+  { id: "heartbeat", category: "On a cadence", label: "Heartbeat every 15 minutes", desc: "Stamp a 'last checked' value regularly.", show: () => true, build: (c) => tmpl(c, "Heartbeat", { kind: "interval", everyMinutes: 15 }, undefined, [{ kind: "setData", key: "lastChecked", value: "ok" }]) },
+  { id: "rotate-signage", category: "On a cadence", label: "Rotate signage every 30 minutes", desc: "Flip a screen's board on a loop.", show: () => true, build: (c) => tmpl(c, "Rotate signage", { kind: "interval", everyMinutes: 30 }, undefined, [aSwitch()]) },
+  { id: "poll-5", category: "On a cadence", label: "Quick poll every 5 minutes", desc: "Re-check a value frequently.", show: () => true, build: (c) => tmpl(c, "5-minute poll", { kind: "interval", everyMinutes: 5 }, undefined, [{ kind: "setData", key: "pulse", value: "ok" }]) },
+
+  // ---- Weather ----
+  { id: "rain-umbrella", category: "Weather", label: "Umbrella reminder when it's raining", desc: "Warn when rain is falling.", show: () => true, build: (c) => tmpl(c, "Umbrella reminder", { kind: "tick" }, cAll({ field: "weather.isRaining", op: "eq", value: true }), [aAlert("Take an umbrella", "Rain is expected today.", "warn")]) },
+  { id: "rain-indoor", category: "Weather", label: "Switch to an indoor board when it rains", desc: "Flip a screen when rain starts.", show: () => true, build: (c) => tmpl(c, "Rainy-day board", { kind: "tick" }, cAll({ field: "weather.isRaining", op: "eq", value: true }), [aSwitch()]) },
+  { id: "heat", category: "Weather", label: "Heat warning above 30°C", desc: "Alert when it gets hot.", show: () => true, build: (c) => tmpl(c, "Heat warning", { kind: "tick" }, cAll({ field: "weather.tempC", op: "gt", value: 30 }), [aAlert("Stay cool", "It's above 30°C — hydrate.", "warn")]) },
+  { id: "cold", category: "Weather", label: "Cold warning below 5°C", desc: "Alert when it gets cold.", show: () => true, build: (c) => tmpl(c, "Cold warning", { kind: "tick" }, cAll({ field: "weather.tempC", op: "lt", value: 5 }), [aAlert("Bundle up", "It's below 5°C outside.", "warn")]) },
+  { id: "rain-likely", category: "Weather", label: "Rain likely today (≥60%)", desc: "Heads-up when rain is probable.", show: () => true, build: (c) => tmpl(c, "Rain likely", { kind: "tick" }, cAll({ field: "weather.precipProbPct", op: "gte", value: 60 }), [aAlert("Rain likely", "Pack a layer — rain is on the way.")]) },
+  { id: "rainy-commute", category: "Weather", label: "Rainy-commute alert (8am, Mon–Fri)", desc: "Only warns if it's actually raining.", show: () => true, build: (c) => tmpl(c, "Rainy commute", { kind: "time", atMinute: 480, daysMask: WEEKDAYS_MASK }, cAll({ field: "weather.isRaining", op: "eq", value: true }), [aAlert("Wet commute", "Leave a little early — it's raining.", "warn")]) },
+
+  // ---- Sun & daylight ----
+  { id: "sun-evening", category: "Sun & daylight", label: "Evening cue at sunset", desc: "A calm note when the sun sets.", show: () => true, build: (c) => tmpl(c, "Evening at sunset", { kind: "sun", event: "sunset", offsetMin: 0, daysMask: 127 }, undefined, [aAlert("Good evening", "The sun has set — easing into night.")]) },
+  { id: "sun-morning", category: "Sun & daylight", label: "Good morning at sunrise", desc: "Greet the day at first light.", show: () => true, build: (c) => tmpl(c, "Sunrise hello", { kind: "sun", event: "sunrise", offsetMin: 0, daysMask: 127 }, undefined, [aAlert("Good morning", "The sun is up.")]) },
+  { id: "sun-board", category: "Sun & daylight", label: "Switch to a night board 30 min before sunset", desc: "Ease the screen toward evening.", show: () => true, build: (c) => tmpl(c, "Pre-sunset board", { kind: "sun", event: "sunset", offsetMin: -30, daysMask: 127 }, undefined, [aSwitch()]) },
+  { id: "daytime-only", category: "Sun & daylight", label: "Do something only during daylight", desc: "A tick gated on it being daytime.", show: () => true, build: (c) => tmpl(c, "Daytime only", { kind: "tick" }, cAll({ field: "sun.isDaytime", op: "eq", value: true }), [aNotify("It's daytime")]) },
+
+  // ---- Presence ----
+  { id: "arrive-home", category: "Presence", label: "Welcome when you arrive home", desc: "An on-screen welcome on arrival.", show: () => true, build: (c) => tmpl(c, "Welcome home", { kind: "presence", event: "enter" }, undefined, [aAlert("Welcome home")]) },
+  { id: "arrive-board", category: "Presence", label: "Resume your home board on arrival", desc: "Switch a screen when you get home.", show: () => true, build: (c) => tmpl(c, "Home board", { kind: "presence", event: "enter" }, undefined, [aSwitch()]) },
+  { id: "leave-flag", category: "Presence", label: "Mark 'away' when everyone leaves", desc: "Set an away flag on departure.", show: () => true, build: (c) => tmpl(c, "Set away", { kind: "presence", event: "leave" }, undefined, [{ kind: "setData", key: "mode", value: "away" }]) },
+  { id: "leave-board", category: "Presence", label: "Switch to an away board when you leave", desc: "Flip a screen when the house empties.", show: () => true, build: (c) => tmpl(c, "Away board", { kind: "presence", event: "leave" }, undefined, [aSwitch()]) },
+
+  // ---- Screen health ----
+  { id: "offline-alert", category: "Screen health", label: "Alert when a screen goes offline", desc: "Know the moment a screen drops.", show: () => true, build: (c) => tmpl(c, "Screen offline", { kind: "deviceOffline" }, undefined, [aAlert("A screen went offline", undefined, "critical")]) },
+  { id: "online-notify", category: "Screen health", label: "Notify when a screen comes back", desc: "Confirmation when a screen reconnects.", show: () => true, build: (c) => tmpl(c, "Screen back online", { kind: "deviceOnline" }, undefined, [aNotify("A screen is back online")]) },
+  { id: "offline-failover", category: "Screen health", label: "Fail over to a backup board when a screen drops", desc: "Switch another screen on an outage.", show: () => true, build: (c) => tmpl(c, "Failover board", { kind: "deviceOffline" }, undefined, [aSwitch()]) },
+
+  // ---- Data & counters ----
+  { id: "threshold", category: "Data & counters", label: "Alert when a value crosses 10", desc: "Watch a number and warn past a limit.", show: () => true, build: (c) => tmpl(c, "Over threshold", { kind: "tick" }, cAll({ field: "data.count", op: "gt", value: 10 }), [aAlert("Threshold crossed", undefined, "warn")]) },
+  { id: "changed-notify", category: "Data & counters", label: "Notify when data changes", desc: "Fire whenever a value changes.", show: () => true, build: (c) => tmpl(c, "Data changed", { kind: "tick" }, cAll({ field: "data.status", op: "changed", value: "" }), [aNotify("Data changed")]) },
+  { id: "flag-on", category: "Data & counters", label: "Do something when a flag turns on", desc: "React when a boolean becomes true.", show: () => true, build: (c) => tmpl(c, "Flag on", { kind: "tick" }, cAll({ field: "data.flag", op: "eq", value: true }), [aNotify("Flag is on")]) },
+  { id: "webhook-set", category: "Data & counters", label: "Set a value from a webhook", desc: "Store a webhook field as data.", show: () => true, build: (c) => tmpl(c, "Set from webhook", { kind: "webhook" }, undefined, [{ kind: "setData", key: "status", value: "" }]) },
+  { id: "webhook-toggle", category: "Data & counters", label: "Toggle a flag on a webhook", desc: "Flip a boolean each time it fires.", show: () => true, build: (c) => tmpl(c, "Toggle on webhook", { kind: "webhook" }, undefined, [{ kind: "toggleData", key: "flag" }]) },
+  { id: "webhook-count", category: "Data & counters", label: "Count webhooks", desc: "Increment a counter on each call.", show: () => true, build: (c) => tmpl(c, "Count webhooks", { kind: "webhook" }, undefined, [{ kind: "incrementData", key: "hooks", delta: 1 }]) },
+  { id: "add-task-hook", category: "Data & counters", label: "Add a task from a webhook", desc: "Append to a task list on a call.", show: () => true, build: (c) => tmpl(c, "Task from webhook", { kind: "webhook" }, undefined, [{ kind: "addTask", listId: "default", text: "New task" }]) },
+
+  // ---- Signage & objects (need a settable object on the board) ----
+  { id: "webhook-text", category: "Signage & objects", label: "Update an object's text on a webhook", desc: "Push live text to an object.", show: (c) => !!objOf(c), build: (c) => tmpl(c, "Update on webhook", { kind: "webhook" }, undefined, [aText(objOf(c)!, "")]) },
+  { id: "night-hide", category: "Signage & objects", label: "Hide an object at 10pm", desc: "Tuck an object away at night.", show: (c) => !!c.objects?.length, build: (c) => tmpl(c, "Hide at night", { kind: "time", atMinute: 1320, daysMask: 127 }, undefined, [{ kind: "hideObject", objectId: c.objects![0].id, objectName: c.objects![0].name }]) },
+  { id: "morning-show", category: "Signage & objects", label: "Show an object at 8am", desc: "Reveal an object in the morning.", show: (c) => !!c.objects?.length, build: (c) => tmpl(c, "Show in morning", { kind: "time", atMinute: 480, daysMask: 127 }, undefined, [{ kind: "showObject", objectId: c.objects![0].id, objectName: c.objects![0].name }]) },
+  { id: "ds-on-sunrise", category: "Signage & objects", label: "Turn a Device status On at sunrise", desc: "Flip a device-status object to On.", show: has("deviceStatus"), build: (c) => tmpl(c, "Lights on at sunrise", { kind: "sun", event: "sunrise", offsetMin: 0, daysMask: 127 }, undefined, [aProp(objOf(c, "deviceStatus")!, "state", "on")]) },
+  { id: "ds-off-night", category: "Signage & objects", label: "Turn a Device status Off at 11pm", desc: "Flip a device-status object to Off.", show: has("deviceStatus"), build: (c) => tmpl(c, "Lights off at night", { kind: "time", atMinute: 1380, daysMask: 127 }, undefined, [aProp(objOf(c, "deviceStatus")!, "state", "off")]) },
+  { id: "open-am", category: "Signage & objects", label: "Open the sign at 9am", desc: "Set an Open sign to Open.", show: has("openSign"), build: (c) => tmpl(c, "Open at 9am", { kind: "time", atMinute: 540, daysMask: WEEKDAYS_MASK }, undefined, [aProp(objOf(c, "openSign")!, "open", true)]) },
+  { id: "close-pm", category: "Signage & objects", label: "Close the sign at 6pm", desc: "Set an Open sign to Closed.", show: has("openSign"), build: (c) => tmpl(c, "Close at 6pm", { kind: "time", atMinute: 1080, daysMask: WEEKDAYS_MASK }, undefined, [aProp(objOf(c, "openSign")!, "open", false)]) },
+  { id: "room-busy-hook", category: "Signage & objects", label: "Mark a room Busy on a webhook", desc: "Set a Room status to Busy.", show: has("roomStatus"), build: (c) => tmpl(c, "Room busy", { kind: "webhook" }, undefined, [aProp(objOf(c, "roomStatus")!, "status", "busy")]) },
+  { id: "room-free-hook", category: "Signage & objects", label: "Mark a room Free on a webhook", desc: "Set a Room status to Free.", show: has("roomStatus"), build: (c) => tmpl(c, "Room free", { kind: "webhook" }, undefined, [aProp(objOf(c, "roomStatus")!, "status", "free")]) },
+  { id: "away-status", category: "Signage & objects", label: "Show 'Away' on an object when you leave", desc: "Set an object's text on departure.", show: (c) => !!objOf(c), build: (c) => tmpl(c, "Away status", { kind: "presence", event: "leave" }, undefined, [aText(objOf(c)!, "Away")]) },
+  { id: "home-status", category: "Signage & objects", label: "Show 'Home' on an object when you arrive", desc: "Set an object's text on arrival.", show: (c) => !!objOf(c), build: (c) => tmpl(c, "Home status", { kind: "presence", event: "enter" }, undefined, [aText(objOf(c)!, "Home")]) },
+  { id: "rain-object", category: "Signage & objects", label: "Show a rain notice on an object when it rains", desc: "Update an object when rain starts.", show: (c) => !!objOf(c), build: (c) => tmpl(c, "Rain notice", { kind: "tick" }, cAll({ field: "weather.isRaining", op: "eq", value: true }), [aText(objOf(c)!, "Rain expected")]) },
 ];
 
 export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: number; objects?: ObjOption[]; embedded?: boolean } = {}) {
@@ -279,10 +322,24 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
             const tctx: TCtx = { scoped, layoutId, objects };
             const shown = TEMPLATES.filter((t) => t.show(tctx));
             return shown.length ? (
-              <div class="template-row">
-                <span class="muted">Start from a template:</span>
-                {shown.map((t) => <button key={t.id} class="ghost template-chip" onClick={() => setEditing(t.build(tctx))}>{t.label}</button>)}
-              </div>
+              <details class="recipe-gallery">
+                <summary>Start from a recipe — {shown.length} ready automations</summary>
+                <div class="recipe-cats">
+                  {RECIPE_CATEGORIES.filter((cat) => shown.some((t) => t.category === cat)).map((cat) => (
+                    <div key={cat} class="recipe-cat">
+                      <span class="recipe-cat-label">{cat}</span>
+                      <div class="recipe-cards">
+                        {shown.filter((t) => t.category === cat).map((t) => (
+                          <button key={t.id} class="recipe-card" onClick={() => setEditing(t.build(tctx))}>
+                            <strong>{t.label}</strong>
+                            <span class="muted">{t.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
             ) : null;
           })()}
         </div>
@@ -374,6 +431,9 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     if (act.kind === "setData" || act.kind === "incrementData" || act.kind === "toggleData") return !!String(act.key ?? "").trim();
     if (act.kind === "setObjectProp") return !!act.objectId && !!String(act.prop ?? "").trim();
     if (act.kind === "setObjectText" || act.kind === "showObject" || act.kind === "hideObject") return !!act.objectId;
+    if (act.kind === "switchBoard") return !!String(act.deviceId ?? "").trim() && Number(act.layoutId) > 0; // recipe seeds blanks → must pick a screen + board
+    if (act.kind === "advanceQueue") return !!String(act.queueId ?? "").trim();
+    if (act.kind === "addTask") return !!String(act.text ?? "").trim();
     return true;
   });
 

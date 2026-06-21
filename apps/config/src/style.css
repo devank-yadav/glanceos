@@ -3104,6 +3104,20 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .scenario-group-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
 .scenario-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .scenario-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+/* Automation recipe gallery (50+ categorized cards) */
+.recipe-gallery { margin-top: 10px; }
+.recipe-gallery > summary { font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; width: fit-content; list-style: none; }
+.recipe-gallery > summary::-webkit-details-marker { display: none; }
+.recipe-gallery > summary::before { content: "＋ "; }
+.recipe-gallery[open] > summary::before { content: "− "; }
+.recipe-cats { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.recipe-cat { display: flex; flex-direction: column; gap: 6px; }
+.recipe-cat-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.recipe-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.recipe-card { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card-bg); cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+.recipe-card:hover { border-color: var(--accent); background: var(--surface-2); }
+.recipe-card strong { font-size: 13px; font-weight: 600; }
+.recipe-card .muted { font-size: 12px; line-height: 1.35; }
 .callout.subtle { opacity: 0.85; }
 .callout ul { margin: 6px 0 0; padding-left: 18px; }
 
