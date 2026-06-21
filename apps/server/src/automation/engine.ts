@@ -39,6 +39,9 @@ export interface Ctx {
   // location / offline). Lets boards react: `weather.isRaining`, `weather.tempC`,
   // `weather.precipProbPct`. Resolved only when an automation references `weather.*`.
   weather?: { tempC: number; summary: string; high?: number; low?: number; precipProbPct: number; isRaining: boolean };
+  // v5.0 substrate — are you home? Derived from the `presence` custom-data key
+  // (a phone geofence webhook or a bound Home Assistant person entity).
+  presence?: { home: boolean; state: string };
   objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
 }
 export interface LiveCtx { weather?: Ctx["weather"] }
@@ -190,8 +193,17 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
     time,
     sun: sunContext(userId, now, tz, time.minuteOfDay),
     weather: opts.live?.weather,
+    presence: presenceFromData(data),
     objects: opts.layout ? buildLayoutObjects(opts.layout, data) : {},
   });
+}
+
+// "home" if the `presence` custom-data key reads as present. Set it from a phone
+// geofence webhook ({key:"presence", value:"home"|"away"}) or a bound HA person entity.
+const isHomeState = (s: string): boolean => /^\s*(home|present|in|true|1|yes|on)\s*$/i.test(s);
+function presenceFromData(data: Record<string, unknown>): Ctx["presence"] {
+  const state = String(data.presence ?? "");
+  return { home: isHomeState(state), state };
 }
 
 // Resolve the user's current weather (cached, keyless) for automation context —
@@ -348,6 +360,7 @@ function sunMatches(trigger: Extract<TriggerT, { kind: "sun" }>, ctx: Ctx, autoI
 // is the user (global rules) or `user:layoutId` (a board's objects).
 const prevCtx = new Map<string, Ctx>();
 const lastOnline = new Map<string, boolean>();
+const lastPresence = new Map<string, boolean>();
 const ctxKey = (userId: string, layoutId: number | null): string => (layoutId == null ? userId : `${userId}:${layoutId}`);
 const loadBoard = (userId: string, layoutId: number): { id: number; document: LayoutT } | undefined => {
   const rec = getOwnedLayout(layoutId, userId);
@@ -360,7 +373,7 @@ const loadBoard = (userId: string, layoutId: number): { id: number; document: La
 export async function fireAutomations(
   userId: string,
   kind: TriggerT["kind"],
-  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx } = {},
+  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx; presenceEvent?: "enter" | "leave" } = {},
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
@@ -385,6 +398,7 @@ export async function fireAutomations(
     const { board, ctx } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
+    if (a.trigger.kind === "presence" && a.trigger.event !== opts.presenceEvent) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
     const matched = a.conditions ? evaluate(a.conditions, ctx, prev) : true;
     let run = 0; let error: string | null = null;
@@ -415,6 +429,13 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
       }
       lastOnline.set(d.id, online);
     }
+    // Presence edge (arrive home / leave) — derived from the `presence` data key.
+    const homeNow = ctx.presence?.home ?? false;
+    const wasHome = lastPresence.get(userId);
+    if (wasHome !== undefined && wasHome !== homeNow) {
+      await fireAutomations(userId, "presence", { ctx, now, presenceEvent: homeNow ? "enter" : "leave" });
+    }
+    lastPresence.set(userId, homeNow);
   }
 }
 

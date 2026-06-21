@@ -75,6 +75,12 @@ describe("v5.0 substrate — sun + weather in context", () => {
     expect(c.sun!.sunsetMin).toBeGreaterThan(c.sun!.sunriseMin); // London midsummer: sunrise ~04:43, sunset ~21:21 UTC
     expect(c.sun!.isDaytime).toBe(true); // noon UTC is daytime in London
   });
+  it("derives presence.home from the `presence` data key", () => {
+    setCustomData(user.id, "presence", "home");
+    expect(buildContext(user.id).presence!.home).toBe(true);
+    setCustomData(user.id, "presence", "away");
+    expect(buildContext(user.id).presence!.home).toBe(false);
+  });
 });
 
 describe("evaluate — v4.1 comparators", () => {

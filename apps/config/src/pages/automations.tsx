@@ -40,6 +40,7 @@ const TRIGGERS: { id: string; label: string }[] = [
   { id: "tick", label: "Every minute (check data)" },
   { id: "time", label: "At a time of day" },
   { id: "sun", label: "At sunrise / sunset" },
+  { id: "presence", label: "When you arrive / leave home" },
 ];
 const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "setData", label: "Set custom data" },
@@ -326,7 +327,8 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
           const kind = (e.currentTarget as HTMLSelectElement).value;
           const seeded: Trigger = kind === "time" ? { kind, atMinute: 540, daysMask: 127 }
             : kind === "sun" ? { kind, event: "sunset", offsetMin: 0, daysMask: 127 }
-              : { kind };
+              : kind === "presence" ? { kind, event: "enter" }
+                : { kind };
           set({ trigger: seeded });
         }}>
           {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -361,6 +363,17 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             <input type="number" min={-180} max={180} value={a.trigger.offsetMin ?? 0} onInput={(e) => set({ trigger: { ...a.trigger, offsetMin: Number((e.currentTarget as HTMLInputElement).value) || 0 } })} />
           </label>
           <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Uses the location set on your screen. e.g. Sunset with −30 fires 30 min before sunset.</p>
+        </div>
+      )}
+      {a.trigger.kind === "presence" && (
+        <div class="row wrap">
+          <label class="field"><span>When you</span>
+            <select value={a.trigger.event ?? "enter"} onChange={(e) => set({ trigger: { ...a.trigger, event: (e.currentTarget as HTMLSelectElement).value } })}>
+              <option value="enter">Arrive home</option>
+              <option value="leave">Leave home</option>
+            </select>
+          </label>
+          <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Set presence from a phone geofence webhook (POST <code>{"{key:\"presence\", value:\"home\"|\"away\"}"}</code>) or bind a Home Assistant person entity to the <code>presence</code> data key.</p>
         </div>
       )}
 
