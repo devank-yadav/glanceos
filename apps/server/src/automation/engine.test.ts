@@ -13,7 +13,7 @@ const { setCustomData, getCustomData } = await import("../customdata");
 const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
-const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation } = await import("./engine");
+const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
@@ -47,6 +47,20 @@ describe("evaluate — comparators (pure & total)", () => {
   it("changed compares against the previous context", () => {
     expect(evaluate(field("data.temp", "changed"), ctx({ data: { temp: 30 } }), ctx({ data: { temp: 25 } }))).toBe(true);
     expect(evaluate(field("data.temp", "changed"), ctx({ data: { temp: 30 } }), ctx({ data: { temp: 30 } }))).toBe(false);
+  });
+});
+
+describe("evaluate — v4.1 comparators", () => {
+  it("between is inclusive + order-independent", () => {
+    expect(evaluate({ type: "field", field: "data.temp", op: "between", value: 20, value2: 40 }, ctx())).toBe(true); // temp 30
+    expect(evaluate({ type: "field", field: "data.temp", op: "between", value: 40, value2: 20 }, ctx())).toBe(true); // swapped bounds
+    expect(evaluate({ type: "field", field: "data.temp", op: "between", value: 40, value2: 50 }, ctx())).toBe(false);
+  });
+  it("startsWith / endsWith / matches (bad regex → false, never throws)", () => {
+    expect(evaluate(field("data.status", "startsWith", "op"), ctx())).toBe(true); // "open"
+    expect(evaluate(field("data.status", "endsWith", "en"), ctx())).toBe(true);
+    expect(evaluate(field("data.status", "matches", "^o.+n$"), ctx())).toBe(true);
+    expect(evaluate(field("data.status", "matches", "["), ctx())).toBe(false); // invalid regex
   });
 });
 
@@ -193,6 +207,34 @@ describe("objects — board-scoped reads & writes (v4.0)", () => {
     const c = buildContext(user.id, { layout: getLayout(b.id)!.document });
     expect((c.objects.dup as { value: unknown }).value).toBe("A"); // the block whose id is "dup", not the one named "dup"
     expect((c.objects.other as { value: unknown }).value).toBe("B");
+  });
+
+  it("showObject / hideObject toggle the block's hidden flag on the doc", async () => {
+    const r1 = await runActions([{ kind: "hideObject", objectId: "h1", objectName: "Sign" }], user.id, buildContext(user.id), ref());
+    expect(r1.run).toBe(1);
+    expect(getLayout(board.id)!.document.rows[0]!.blocks.find((b) => b.id === "h1")!.hidden).toBe(true);
+    await runActions([{ kind: "showObject", objectId: "h1" }], user.id, buildContext(user.id), ref());
+    expect(getLayout(board.id)!.document.rows[0]!.blocks.find((b) => b.id === "h1")!.hidden).toBe(false);
+  });
+
+  it("incrementData adds (from 0 if unset) and toggleData flips a flag", async () => {
+    setCustomData(user.id, "count", 5);
+    await runActions([{ kind: "incrementData", key: "count", delta: 3 }], user.id, buildContext(user.id));
+    expect(getCustomData(user.id, "count")).toBe(8);
+    await runActions([{ kind: "incrementData", key: "fresh", delta: 2 }], user.id, buildContext(user.id)); // unset → starts at 0
+    expect(getCustomData(user.id, "fresh")).toBe(2);
+    setCustomData(user.id, "flag", false);
+    await runActions([{ kind: "toggleData", key: "flag" }], user.id, buildContext(user.id));
+    expect(getCustomData(user.id, "flag")).toBe(true);
+  });
+
+  it("runAutomationById fires a saved automation live (the Run-now button)", async () => {
+    setCustomData(user.id, "live", 0);
+    const auto = createAutomation(user.id, { name: "Live run", enabled: true, trigger: { kind: "tick" }, actions: [{ kind: "incrementData", key: "live", delta: 1 }] });
+    const r = await runAutomationById(auto.id, user.id);
+    expect(r.matched).toBe(true);
+    expect(r.run).toBe(1);
+    expect(getCustomData(user.id, "live")).toBe(1);
   });
 
   it("object actions are inert without a board, and a dangling id is a reported error", async () => {

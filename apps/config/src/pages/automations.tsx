@@ -2,6 +2,8 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
+import { Menu } from "../components/Menu";
+import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
@@ -19,7 +21,7 @@ type Cond =
   | { type: "all"; conditions: Cond[] }
   | { type: "any"; conditions: Cond[] }
   | { type: "not"; condition: Cond }
-  | { type: "field"; field: string; op: string; value?: unknown };
+  | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number }
@@ -28,7 +30,9 @@ interface Automation { id?: string; name: string; enabled: boolean; trigger: Tri
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
 export interface ObjOption { id: string; name: string; label: string; settable: boolean; prop?: string }
 
-const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed"];
+const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
+const NO_VALUE_OPS = new Set(["exists", "changed"]); // these ops take no comparison value
+const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed" };
 const TRIGGERS: { id: string; label: string }[] = [
   { id: "webhook", label: "A webhook arrives" },
   { id: "deviceOnline", label: "A screen comes online" },
@@ -38,31 +42,41 @@ const TRIGGERS: { id: string; label: string }[] = [
 ];
 const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "setData", label: "Set custom data" },
+  { id: "incrementData", label: "Add to a number" },
+  { id: "toggleData", label: "Toggle a flag" },
   { id: "addTask", label: "Add a task" },
   { id: "advanceQueue", label: "Advance a queue" },
   { id: "switchBoard", label: "Switch a screen's board" },
   { id: "notify", label: "Send a notification" },
   { id: "alert", label: "Show an on-screen alert" },
   { id: "webhook", label: "Call a webhook (outbound)" },
+  { id: "delay", label: "Wait…" },
 ];
 // Object-targeting actions — only offered when a board's objects are in scope.
 const OBJECT_ACTIONS: { id: string; label: string }[] = [
   { id: "setObjectText", label: "Set an object's text" },
   { id: "setObjectProp", label: "Set an object's property" },
+  { id: "showObject", label: "Show an object" },
+  { id: "hideObject", label: "Hide an object" },
 ];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const blankField = (): Cond => ({ type: "field", field: "data.", op: "eq", value: "" });
 const defaultAction = (kind: string, objects?: ObjOption[]): Action => {
-  const o = objects?.find((x) => x.settable);
+  const o = objects?.find((x) => x.settable); // settable object for set-actions
+  const anyObj = objects?.[0]; // any named object for show/hide
   switch (kind) {
     case "setData": return { kind, key: "", value: "" };
+    case "incrementData": return { kind, key: "", delta: 1 };
+    case "toggleData": return { kind, key: "" };
     case "addTask": return { kind, listId: "default", text: "" };
     case "advanceQueue": return { kind, queueId: "", delta: 1 };
     case "switchBoard": return { kind, deviceId: "", layoutId: 0 };
     case "notify": return { kind, message: "" };
     case "alert": return { kind, severity: "info", title: "", target: "all" };
+    case "delay": return { kind, ms: 1000 };
     case "setObjectText": return { kind, objectId: o?.id ?? "", objectName: o?.name, prop: o?.prop, text: "" };
     case "setObjectProp": return { kind, objectId: o?.id ?? "", objectName: o?.name, prop: o?.prop ?? "content", value: "" };
+    case "showObject": case "hideObject": return { kind, objectId: anyObj?.id ?? "", objectName: anyObj?.name };
     default: return { kind: "webhook", url: "" };
   }
 };
@@ -78,10 +92,14 @@ const coerce = (v: unknown): unknown => {
   return v;
 };
 
+interface RunLog { id: number; trigger: string; matched: boolean; actionsRun: number; error: string | null; createdAt: number }
+
 export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: number; objects?: ObjOption[]; embedded?: boolean } = {}) {
   const [items, setItems] = useState<Automation[] | null>(null);
   const [editing, setEditing] = useState<Automation | null>(null);
+  const [history, setHistory] = useState<{ name: string; runs: RunLog[] } | null>(null);
   const confirm = useConfirm();
+  const toast = useToast();
   const scoped = layoutId != null;
 
   // The board tab shows this board's rules; the global page shows cross-board rules.
@@ -98,6 +116,24 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
   });
 
   const toggle = async (a: Automation) => { await api.patch(`/api/automations/${a.id}`, { enabled: !a.enabled }).catch(() => {}); await load(); };
+  const runNow = async (a: Automation) => {
+    try {
+      const r = await api.post<{ matched: boolean; run: number; errors: string[] }>(`/api/automations/${a.id}/run-now`);
+      toast.success(r.matched ? `Ran — ${r.run} action${r.run === 1 ? "" : "s"}${r.errors.length ? `, ${r.errors.length} error(s)` : ""}` : "Conditions didn't match — nothing ran");
+      await load();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const duplicate = async (a: Automation) => {
+    const clone: Automation = structuredClone(a);
+    delete clone.id; clone.name = `${a.name} (copy)`; clone.lastRun = null; clone.runCount = 0;
+    if (clone.conditions == null) delete clone.conditions; // omit null (schema is optional, not nullable)
+    try { await api.post("/api/automations", clone); toast.success("Duplicated"); await load(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const showHistory = async (a: Automation) => {
+    try { setHistory({ name: a.name, runs: await api.get<RunLog[]>(`/api/automations/${a.id}/runs`) }); }
+    catch { setHistory({ name: a.name, runs: [] }); }
+  };
   const remove = async (a: Automation) => {
     if (!(await confirm({ title: `Delete "${a.name}"?`, body: "This automation will stop running.", confirmLabel: "Delete", danger: true }))) return;
     await api.del(`/api/automations/${a.id}`).catch(() => {});
@@ -131,14 +167,41 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
                 <span class="muted">{a.lastRun ? `last ran ${new Date(a.lastRun).toLocaleString()} · ${a.runCount}×` : "never run"}</span>
               </span>
               <span class="row" style={{ gap: "6px" }}>
+                <button class="ghost" onClick={() => runNow(a)} title="Run this automation now (live)">Run now</button>
                 <button class="ghost" onClick={() => setEditing(structuredClone(a))}>Edit</button>
                 <button class="ghost" onClick={() => toggle(a)}>{a.enabled ? "Disable" : "Enable"}</button>
-                <button class="ghost danger" onClick={() => remove(a)}>Delete</button>
+                <Menu
+                  trigger={<Icon.list />}
+                  items={[
+                    { label: "Run history", icon: <Icon.list />, onClick: () => showHistory(a) },
+                    { label: "Duplicate", icon: <Icon.copy />, onClick: () => duplicate(a) },
+                    { label: "Delete", icon: <Icon.trash />, danger: true, onClick: () => remove(a) },
+                  ]}
+                />
               </span>
             </li>
           ))}
         </ul>
       ))}
+      {history && (
+        <Modal open onClose={() => setHistory(null)} title={`Run history — ${history.name}`} width={520}>
+          {history.runs.length === 0 ? (
+            <p class="muted">No runs recorded yet.</p>
+          ) : (
+            <ul class="picker-list key-list run-log">
+              {history.runs.map((r) => (
+                <li key={r.id} class="row spread">
+                  <span class="key-meta">
+                    <strong>{r.matched ? `ran ${r.actionsRun} action${r.actionsRun === 1 ? "" : "s"}` : "didn't match"}</strong>
+                    <span class="muted">{r.trigger} · {new Date(r.createdAt).toLocaleString()}</span>
+                    {r.error && <span class="muted" style={{ color: "var(--bad)" }}>{r.error}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
     </>
   );
 
@@ -158,14 +221,16 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   const toast = useToast();
   const set = (patch: Partial<Automation>) => setA((x) => ({ ...x, ...patch }));
   const settable = (objects ?? []).filter((o) => o.settable);
-  const actionKinds = settable.length ? [...ACTION_KINDS, ...OBJECT_ACTIONS] : ACTION_KINDS;
+  // Object actions appear when the board has any named object (show/hide work on any;
+  // set-text/prop list only settable ones in their picker).
+  const actionKinds = objects && objects.length ? [...ACTION_KINDS, ...OBJECT_ACTIONS] : ACTION_KINDS;
 
   // Normalise the draft for the API: empty condition group → undefined (always),
   // and coerce field/value strings to typed JSON. layoutId rides along so the
   // server scopes the rule to this board.
   const normalize = (): Automation => {
     const norm = (c: Cond): Cond => {
-      if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value) };
+      if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value), value2: coerce(c.value2) };
       if (c.type === "not") return { type: "not", condition: norm(c.condition) };
       return c.type === "all" ? { type: "all", conditions: c.conditions.map(norm) } : { type: "any", conditions: c.conditions.map(norm) };
     };
@@ -176,8 +241,10 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     const actions = a.actions.map((act) =>
       act.kind === "switchBoard" ? { ...act, layoutId: Number(act.layoutId) || 0 }
         : act.kind === "advanceQueue" ? { ...act, delta: Number(act.delta) || 1 }
-          : act.kind === "setData" || act.kind === "setObjectProp" ? { ...act, value: coerce(act.value) }
-            : act);
+          : act.kind === "incrementData" ? { ...act, delta: Number(act.delta) || 1 }
+            : act.kind === "delay" ? { ...act, ms: Number(act.ms) || 1000 }
+              : act.kind === "setData" || act.kind === "setObjectProp" ? { ...act, value: coerce(act.value) }
+                : act);
     // Existing rules keep their own board; only a new draft adopts this modal's board.
     return { ...a, layoutId: a.id ? a.layoutId ?? null : layoutId ?? a.layoutId ?? null, conditions, actions };
   };
@@ -341,7 +408,7 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
     );
   }
   const leaf = node;
-  const patch = (p: Partial<Extract<Cond, { type: "field" }>>): Cond => ({ type: "field", field: leaf.field, op: leaf.op, value: leaf.value, ...p });
+  const patch = (p: Partial<Extract<Cond, { type: "field" }>>): Cond => ({ type: "field", field: leaf.field, op: leaf.op, value: leaf.value, value2: leaf.value2, ...p });
   // When a board's objects are in scope, the left side is a picker: choose an
   // object (writes objects.<id>.value) or "Custom field…" for a raw dotted path.
   const objMatch = objects?.find((o) => leaf.field === `objects.${o.id}.value`);
@@ -362,10 +429,13 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
         <input class="cond-field" value={leaf.field} placeholder="data.key" onInput={(e) => onChange(patch({ field: (e.currentTarget as HTMLInputElement).value }))} />
       )}
       <select value={leaf.op} onChange={(e) => onChange(patch({ op: (e.currentTarget as HTMLSelectElement).value }))}>
-        {OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+        {OPS.map((o) => <option key={o} value={o}>{OP_LABEL[o] ?? o}</option>)}
       </select>
-      {leaf.op !== "exists" && leaf.op !== "changed" && (
-        <input class="cond-val" value={String(leaf.value ?? "")} placeholder="value" onInput={(e) => onChange(patch({ value: (e.currentTarget as HTMLInputElement).value }))} />
+      {!NO_VALUE_OPS.has(leaf.op) && (
+        <input class="cond-val" value={String(leaf.value ?? "")} placeholder={leaf.op === "between" ? "min" : leaf.op === "matches" ? "regex" : "value"} onInput={(e) => onChange(patch({ value: (e.currentTarget as HTMLInputElement).value }))} />
+      )}
+      {leaf.op === "between" && (
+        <input class="cond-val" value={String(leaf.value2 ?? "")} placeholder="max" onInput={(e) => onChange(patch({ value2: (e.currentTarget as HTMLInputElement).value }))} />
       )}
       {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
     </div>
@@ -378,22 +448,25 @@ function ActionFields({ action, objects, onChange }: { action: Action; objects?:
   // Object picker for the object-targeting actions — settable objects only, and we
   // stash the current name + primary prop alongside the stable id.
   const settable = (objects ?? []).filter((o) => o.settable);
-  const objSelect = () => {
+  // set-text/prop pick from settable objects; show/hide can target any named object.
+  const objSelect = (list: ObjOption[]) => {
     const cur = String(action.objectId ?? "");
-    const missing = cur !== "" && !settable.some((o) => o.id === cur); // target was renamed away or deleted
+    const missing = cur !== "" && !list.some((o) => o.id === cur); // target was renamed away or deleted
     return (
       <select value={cur} onChange={(e) => {
-        const o = settable.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
+        const o = list.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
         onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, ...(action.kind === "setObjectText" ? { prop: o?.prop } : {}) });
       }}>
         <option value="" disabled>Pick an object…</option>
         {missing && <option value={cur}>{`⚠ ${action.objectName ?? cur} (missing)`}</option>}
-        {settable.map((o) => <option key={o.id} value={o.id}>{`${o.name} (${o.label})`}</option>)}
+        {list.map((o) => <option key={o.id} value={o.id}>{`${o.name} (${o.label})`}</option>)}
       </select>
     );
   };
   switch (action.kind) {
     case "setData": return <>{txt("key", "data key")}{txt("value", "value", "grow")}</>;
+    case "incrementData": return <>{txt("key", "data key")}{txt("delta", "+1")}</>;
+    case "toggleData": return txt("key", "flag key", "grow");
     case "addTask": return <>{txt("listId", "list")}{txt("text", "task text", "grow")}</>;
     case "advanceQueue": return <>{txt("queueId", "queue id")}{txt("delta", "+1")}</>;
     case "switchBoard": return <>{txt("deviceId", "screen id")}{txt("layoutId", "board id")}</>;
@@ -407,8 +480,10 @@ function ActionFields({ action, objects, onChange }: { action: Action; objects?:
       </>
     );
     case "webhook": return txt("url", "https://…", "grow");
-    case "setObjectText": return <>{objSelect()}{txt("text", "new text", "grow")}</>;
-    case "setObjectProp": return <>{objSelect()}{txt("prop", "property")}{txt("value", "value", "grow")}</>;
+    case "delay": return <><span class="muted">wait</span>{txt("ms", "1000")}<span class="muted">ms</span></>;
+    case "setObjectText": return <>{objSelect(settable)}{txt("text", "new text", "grow")}</>;
+    case "setObjectProp": return <>{objSelect(settable)}{txt("prop", "property")}{txt("value", "value", "grow")}</>;
+    case "showObject": case "hideObject": return objSelect(objects ?? []);
     default: return null;
   }
 }

@@ -5,22 +5,23 @@ import { z } from "zod";
 // context; comparators are total (never throw). Triggers and actions both map to
 // existing server seams — nothing here executes anything by itself.
 
-export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed"] as const;
+export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches"] as const;
 export const Comparator = z.enum(COMPARATORS);
 export type ComparatorT = (typeof COMPARATORS)[number];
 
 // ---- Condition (recursive boolean tree) ----
 export type ConditionT =
-  | { type: "field"; field: string; op: ComparatorT; value?: unknown }
+  | { type: "field"; field: string; op: ComparatorT; value?: unknown; value2?: unknown }
   | { type: "all"; conditions: ConditionT[] }
   | { type: "any"; conditions: ConditionT[] }
   | { type: "not"; condition: ConditionT };
 
 const FieldCondition = z.object({
   type: z.literal("field"),
-  field: z.string().min(1).max(200), // dotted path into the context (data.*, webhook.*, device.*, time.*)
+  field: z.string().min(1).max(200), // dotted path into the context (data.*, webhook.*, device.*, time.*, objects.<id>.value)
   op: Comparator,
   value: z.unknown().optional(),
+  value2: z.unknown().optional(), // upper bound for "between"
 });
 
 export const Condition: z.ZodType<ConditionT> = z.lazy(() =>
@@ -66,9 +67,17 @@ export const Action = z.discriminatedUnion("kind", [
   // key; a static object patches `prop` on its block doc, then the board re-pushes.
   z.object({ kind: z.literal("setObjectText"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().max(60).optional(), text: z.string().max(2000) }),
   z.object({ kind: z.literal("setObjectProp"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().min(1).max(60), value: z.unknown() }),
+  // Show / hide a board object (toggles its `hidden` flag; the screen skips hidden blocks).
+  z.object({ kind: z.literal("showObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
+  z.object({ kind: z.literal("hideObject"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional() }),
+  // Numeric / flag helpers over the custom-data store (Shortcuts-style).
+  z.object({ kind: z.literal("incrementData"), key: z.string().min(1).max(100), delta: z.number().min(-1_000_000).max(1_000_000).default(1) }),
+  z.object({ kind: z.literal("toggleData"), key: z.string().min(1).max(100) }),
+  // Pause between actions (a Shortcuts "Wait").
+  z.object({ kind: z.literal("delay"), ms: z.number().int().min(50).max(30_000) }),
 ]);
 export type ActionT = z.infer<typeof Action>;
-export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp"] as const;
+export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp", "showObject", "hideObject", "incrementData", "toggleData", "delay"] as const;
 
 // ---- Automation ----
 export const MAX_CONDITION_DEPTH = 12; // the UI builder never needs more; bounds recursion

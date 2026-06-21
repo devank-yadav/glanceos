@@ -52,7 +52,7 @@ import {
 import {
   countAutomations, createAutomation, deleteAutomation, getAutomation, listAutomations, listRuns, MAX_AUTOMATIONS_PER_USER, setAutomationEnabled, updateAutomation,
 } from "./automations";
-import { dryRunAutomation } from "./automation/engine";
+import { dryRunAutomation, runAutomationById } from "./automation/engine";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
@@ -1073,6 +1073,10 @@ export function buildApp(): Hono<Env> {
   });
   app.get("/api/automations/:id/runs", (c) =>
     getAutomation(c.req.param("id"), c.get("userId")) ? c.json(listRuns(c.req.param("id"), c.get("userId"))) : c.json({ error: "not found" }, 404));
+  app.post("/api/automations/:id/run-now", async (c) => {
+    try { return c.json(await runAutomationById(c.req.param("id"), c.get("userId"))); }
+    catch (e) { return c.json({ error: e instanceof Error ? e.message : "failed" }, 404); }
+  });
   app.patch("/api/automations/:id", async (c) => {
     const body = await c.req.json().catch(() => null);
     // a bare {enabled} toggle from the list (exactly that one key), else a full update

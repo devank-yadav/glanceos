@@ -1,6 +1,6 @@
 import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT, WidgetT } from "@glanceos/schema";
 import { getUser } from "../auth";
-import { listCustomData, setCustomData } from "../customdata";
+import { getCustomData, listCustomData, setCustomData } from "../customdata";
 import { getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
 import { advanceQueue } from "../queues";
@@ -11,7 +11,7 @@ import { pushDevice, pushUserDevices } from "../state";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
-import { allUserIds, enabledByTrigger, recordRun } from "../automations";
+import { allUserIds, enabledByTrigger, getAutomation, recordRun } from "../automations";
 
 // The automation engine. evaluate() and the comparators are PURE and TOTAL (never
 // throw) so they're trivially unit-tested offline. buildContext() assembles a
@@ -89,7 +89,10 @@ function compare(op: ComparatorT, actual: unknown, expected: unknown): boolean {
     case "contains":
       if (Array.isArray(actual)) return actual.some((x) => looseEq(x, expected));
       return String(actual ?? "").includes(String(expected ?? ""));
-    default: return false; // exists/changed handled in evaluate
+    case "startsWith": return String(actual ?? "").startsWith(String(expected ?? ""));
+    case "endsWith": return String(actual ?? "").endsWith(String(expected ?? ""));
+    case "matches": { try { return new RegExp(String(expected ?? "")).test(String(actual ?? "")); } catch { return false; } }
+    default: return false; // exists/changed/between handled in evaluate
   }
 }
 
@@ -105,6 +108,7 @@ export function evaluate(cond: ConditionT, ctx: Ctx, prev?: Ctx, depth = 0): boo
       const actual = resolvePath(ctx, cond.field);
       if (cond.op === "exists") return actual !== undefined && actual !== null;
       if (cond.op === "changed") return safeStringify(actual) !== safeStringify(prev ? resolvePath(prev, cond.field) : undefined);
+      if (cond.op === "between") { const a = num(actual), lo = num(cond.value), hi = num(cond.value2); return a !== null && lo !== null && hi !== null && a >= Math.min(lo, hi) && a <= Math.max(lo, hi); }
       return compare(cond.op, actual, cond.value);
     }
   }
@@ -205,6 +209,32 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, b
           touched = true;
           break;
         }
+        case "showObject":
+        case "hideObject": {
+          if (!board) throw new Error("object actions only run on board-scoped automations");
+          const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
+          if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
+          const wasHidden = block.hidden;
+          block.hidden = a.kind === "hideObject";
+          try { updateLayout(board.id, board.document); }
+          catch (e) { block.hidden = wasHidden; throw e; }
+          touched = true;
+          break;
+        }
+        case "incrementData": {
+          const cur = num(getCustomData(userId, a.key)) ?? 0; // start from 0 if unset/non-numeric
+          setCustomData(userId, a.key, cur + (a.delta ?? 1));
+          touched = true;
+          break;
+        }
+        case "toggleData": {
+          const cur = getCustomData(userId, a.key);
+          const on = cur === true || cur === "true" || cur === 1 || cur === "1";
+          setCustomData(userId, a.key, !on);
+          touched = true;
+          break;
+        }
+        case "delay": { await new Promise((r) => setTimeout(r, Math.min(30_000, Math.max(0, a.ms)))); break; }
       }
       run++;
     } catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }
@@ -306,6 +336,11 @@ const describeAction = (a: ActionT): string => {
     case "webhook": return `POST to ${a.url}`;
     case "setObjectText": return `set “${a.objectName ?? a.objectId}” text`;
     case "setObjectProp": return `set “${a.objectName ?? a.objectId}” ${a.prop}`;
+    case "showObject": return `show “${a.objectName ?? a.objectId}”`;
+    case "hideObject": return `hide “${a.objectName ?? a.objectId}”`;
+    case "incrementData": return `${(a.delta ?? 1) < 0 ? "decrease" : "increase"} data "${a.key}" by ${Math.abs(a.delta ?? 1)}`;
+    case "toggleData": return `toggle data "${a.key}"`;
+    case "delay": return `wait ${a.ms} ms`;
   }
 };
 
@@ -316,4 +351,18 @@ export function dryRunAutomation(a: AutomationT, userId: string, layoutId?: numb
   const ctx = buildContext(userId, board ? { layout: board.document } : {});
   const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, layoutId ?? null))) : true; // "changed" reflects the last tick
   return { matched, wouldRun: matched ? a.actions.map(describeAction) : [], context: ctx };
+}
+
+/** Fire a saved automation right now (real side effects) — the "Run now" button.
+ *  Evaluates its conditions against the live context and runs its actions. */
+export async function runAutomationById(id: string, userId: string): Promise<{ matched: boolean; run: number; errors: string[] }> {
+  const a = getAutomation(id, userId);
+  if (!a) throw new Error("automation not found");
+  const board = a.layoutId != null ? loadBoard(userId, a.layoutId) : undefined;
+  const ctx = buildContext(userId, board ? { layout: board.document } : {});
+  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, a.layoutId))) : true;
+  let run = 0; const errors: string[] = [];
+  if (matched) { const r = await runActions(a.actions, userId, ctx, board); run = r.run; errors.push(...r.errors); }
+  recordRun(a.id, userId, "manual", matched, run, errors.length ? errors.join("; ") : null);
+  return { matched, run, errors };
 }

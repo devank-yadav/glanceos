@@ -102,6 +102,8 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
     rowEl.style.gap = gap;
     rowEl.style.gridRow = String(offset + i + 1);
     for (const block of row.blocks) {
+      // Hidden by an automation (showObject/hideObject) — skip rendering entirely.
+      if (block.hidden) continue;
       // Conditional visibility: a "whenData" block hides when its bound source resolved to nothing.
       if (block.visibility === "whenData" && data[block.id] == null) continue;
       // A cached bundle older than the document may not know this type — skip, don't blank.
