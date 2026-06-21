@@ -138,7 +138,7 @@ const calendar: Render = (el, _w, data) => {
       ? start.toLocaleDateString([], { weekday: "short" })
       : `${start.toLocaleDateString([], { weekday: "short" })} ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     row.appendChild(div("cal-time", when));
-    row.appendChild(div("cal-title", event.title));
+    row.appendChild(div("cal-title", event.location ? `${event.title} · ${event.location}` : event.title));
     el.appendChild(row);
   }
 };
