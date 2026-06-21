@@ -16,12 +16,15 @@ export function Modal({
   title,
   children,
   width,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ComponentChildren;
   width?: number;
+  /** "full" = a near-full-screen sheet (used for large previews). */
+  size?: "md" | "full";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const openerRef = useRef<Element | null>(null);
@@ -55,7 +58,7 @@ export function Modal({
     <div class="sheet-backdrop" onPointerDown={onClose}>
       <div
         ref={ref}
-        class="sheet"
+        class={`sheet${size === "full" ? " sheet-full" : ""}`}
         style={width ? { width: `${width}px` } : undefined}
         role="dialog"
         aria-modal="true"

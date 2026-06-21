@@ -78,7 +78,7 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
         ))}
       </div>
 
-      <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing?.name ?? "Template"}>
+      <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing?.name ?? "Template"} size="full">
         {viewing && (
           <div class="starter-detail">
             <div class="starter-detail-preview">
