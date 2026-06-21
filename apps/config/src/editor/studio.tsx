@@ -694,7 +694,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <AutomationsPage
             embedded
             layoutId={layoutId}
-            objects={state.present.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, settable: !b.source, prop: TEXT_PROP[b.type] }))}
+            objects={state.present.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, type: b.type, settable: !b.source, prop: TEXT_PROP[b.type] }))}
           />
         </Modal>
       )}

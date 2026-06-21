@@ -3072,19 +3072,24 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .auto-editor > .field > span { font-size: 13px; color: var(--text-muted); margin-bottom: 2px; }
 .cond-group { border: 1px solid var(--rule); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); }
 .cond-group .cond-group { background: var(--card-bg); }
-.cond-comb { max-width: 130px; font-size: 13px; }
-.cond-row { display: flex; gap: 6px; align-items: center; }
-.cond-row .cond-field { flex: 2; min-width: 0; }
-.cond-row .cond-val { flex: 2; min-width: 0; }
-.cond-row select { flex: 1; min-width: 88px; }
+.cond-comb { max-width: 150px; flex: 0 1 auto; min-width: 0; font-size: 13px; }
+/* Rows wrap at every width so deep/dense conditions never overflow the card. */
+.cond-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cond-row .cond-field { flex: 2 1 160px; min-width: 0; }
+.cond-row .cond-val { flex: 1 1 120px; min-width: 0; }
+.cond-row select { flex: 1 1 120px; min-width: 0; }
+.cond-row .icon-btn { flex: 0 0 auto; }
 .cond-not { display: flex; align-items: flex-start; gap: 8px; }
-.cond-not-label { font-size: 11px; font-weight: 700; color: var(--text-muted); padding-top: 8px; }
-.cond-add { gap: 6px; }
+.cond-not > .grow { min-width: 0; }
+.cond-not-label { font-size: 11px; font-weight: 700; color: var(--text-muted); padding-top: 8px; flex: 0 0 auto; }
+.cond-add { gap: 6px; flex-wrap: wrap; }
 .cond-add .ghost { font-size: 12px; padding: 4px 8px; }
-.action-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-.action-row > select { flex: none; min-width: 150px; }
+.action-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.action-row > select { flex: 0 1 auto; min-width: 130px; }
 .action-row input { min-width: 0; }
-.action-row input.grow { flex: 1; }
+.action-row .grow { flex: 1 1 120px; min-width: 0; }
+.action-row .toggle-pair { flex: 0 0 auto; }
+.action-row > span.muted { flex: 0 0 auto; }
 .icon-btn { padding: 4px 9px; flex: none; }
 .day-toggle { border: 1px solid var(--rule); background: var(--card-bg); color: var(--text-muted); border-radius: 6px; padding: 5px 7px; font-size: 12px; cursor: pointer; }
 .day-toggle.on { background: var(--accent); color: var(--accent-contrast, #fff); border-color: var(--accent); }

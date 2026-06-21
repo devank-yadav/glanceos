@@ -7,6 +7,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
+import { controlsFor, type ObjControl } from "../editor/objectControls";
 
 // Automations: when a trigger fires (webhook / screen online↔offline / minute
 // tick / time-of-day) and an optional condition matches, run a list of actions.
@@ -28,11 +29,47 @@ interface Automation { id?: string; name: string; enabled: boolean; trigger: Tri
 
 // One of the current board's named objects, offered in the pickers. `settable` is
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
-export interface ObjOption { id: string; name: string; label: string; settable: boolean; prop?: string }
+export interface ObjOption { id: string; name: string; label: string; type?: string; settable: boolean; prop?: string }
 
 const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
 const NO_VALUE_OPS = new Set(["exists", "changed"]); // these ops take no comparison value
 const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed" };
+const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed"];
+const TEXT_OPS = ["eq", "ne", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
+const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// Plain-English catalog of the fields the engine's substrate exposes (buildContext:
+// weather/sun/time/presence/device + webhook). Drives the friendly "Only if…" field
+// picker + a value control that matches each field, so conditions read like sentences
+// instead of hand-typed dotted paths. Field names mirror engine.ts exactly.
+interface FieldDef { field: string; label: string; group: string; control: "bool" | "number" | "select" | "text"; options?: { value: string; label: string }[] }
+const FIELD_CATALOG: FieldDef[] = [
+  // Weather
+  { field: "weather.isRaining", label: "It’s raining", group: "Weather", control: "bool" },
+  { field: "weather.tempC", label: "Temperature °C", group: "Weather", control: "number" },
+  { field: "weather.precipProbPct", label: "Chance of rain %", group: "Weather", control: "number" },
+  { field: "weather.high", label: "Forecast high °C", group: "Weather", control: "number" },
+  { field: "weather.low", label: "Forecast low °C", group: "Weather", control: "number" },
+  { field: "weather.summary", label: "Weather summary", group: "Weather", control: "text" },
+  // Sun
+  { field: "sun.isDaytime", label: "It’s daytime", group: "Sun", control: "bool" },
+  { field: "sun.minsToSunset", label: "Minutes to sunset", group: "Sun", control: "number" },
+  { field: "sun.minsToSunrise", label: "Minutes to sunrise", group: "Sun", control: "number" },
+  // Time
+  { field: "time.hour", label: "Hour (0–23)", group: "Time", control: "number" },
+  { field: "time.minute", label: "Minute (0–59)", group: "Time", control: "number" },
+  { field: "time.minuteOfDay", label: "Minute of day", group: "Time", control: "number" },
+  { field: "time.weekday", label: "Day of week", group: "Time", control: "select", options: WEEKDAY_FULL.map((d, i) => ({ value: String(i), label: d })) },
+  // Presence
+  { field: "presence.home", label: "Someone is home", group: "Presence", control: "bool" },
+  { field: "presence.state", label: "Presence", group: "Presence", control: "select", options: [{ value: "home", label: "Home" }, { value: "away", label: "Away" }] },
+  // Screen / device
+  { field: "device.online", label: "Screen is online", group: "Screen", control: "bool" },
+  // Webhook
+  { field: "webhook.value", label: "Webhook value", group: "Webhook", control: "text" },
+];
+const fieldDef = (field: string): FieldDef | undefined => FIELD_CATALOG.find((f) => f.field === field);
+const CATALOG_GROUPS = [...new Set(FIELD_CATALOG.map((f) => f.group))];
 const TRIGGERS: { id: string; label: string }[] = [
   { id: "webhook", label: "A webhook arrives" },
   { id: "deviceOnline", label: "A screen comes online" },
@@ -77,7 +114,7 @@ const defaultAction = (kind: string, objects?: ObjOption[]): Action => {
     case "alert": return { kind, severity: "info", title: "", target: "all" };
     case "delay": return { kind, ms: 1000 };
     case "setObjectText": return { kind, objectId: o?.id ?? "", objectName: o?.name, prop: o?.prop, text: "" };
-    case "setObjectProp": return { kind, objectId: o?.id ?? "", objectName: o?.name, prop: o?.prop ?? "content", value: "" };
+    case "setObjectProp": return { kind, objectId: o?.id ?? "", objectName: o?.name, prop: controlsFor(o?.type)?.[0]?.key ?? o?.prop ?? "content", value: "" };
     case "showObject": case "hideObject": return { kind, objectId: anyObj?.id ?? "", objectName: anyObj?.name };
     default: return { kind: "webhook", url: "" };
   }
@@ -277,6 +314,14 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   const toast = useToast();
   const set = (patch: Partial<Automation>) => setA((x) => ({ ...x, ...patch }));
   const settable = (objects ?? []).filter((o) => o.settable);
+  // Screens + boards for the "Switch a screen" picker — so the user never types an
+  // id. Fetched once when the editor opens; the picker degrades to a hint if empty.
+  const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
+  const [boards, setBoards] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    api.get<{ id: string; name: string | null }[]>("/api/devices").then((d) => setDevices(d.map((x) => ({ id: x.id, name: x.name || x.id })))).catch(() => {});
+    api.get<{ id: number; name: string }[]>("/api/layouts").then((l) => setBoards(l.map((x) => ({ id: x.id, name: x.name })))).catch(() => {});
+  }, []);
   // Object actions appear when the board has any named object (show/hide work on any;
   // set-text/prop list only settable ones in their picker).
   const actionKinds = objects && objects.length ? [...ACTION_KINDS, ...OBJECT_ACTIONS] : ACTION_KINDS;
@@ -406,7 +451,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             <select value={act.kind} onChange={(e) => setAction(i, defaultAction((e.currentTarget as HTMLSelectElement).value, objects))}>
               {actionKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
-            <ActionFields action={act} objects={objects} onChange={(p) => setAction(i, p)} />
+            <ActionFields action={act} objects={objects} devices={devices} boards={boards} onChange={(p) => setAction(i, p)} />
             {a.actions.length > 1 && <button class="ghost danger icon-btn" onClick={() => set({ actions: a.actions.filter((_, j) => j !== i) })}>×</button>}
           </div>
         ))}
@@ -505,53 +550,109 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
   }
   const leaf = node;
   const patch = (p: Partial<Extract<Cond, { type: "field" }>>): Cond => ({ type: "field", field: leaf.field, op: leaf.op, value: leaf.value, value2: leaf.value2, ...p });
-  // When a board's objects are in scope, the left side is a picker: choose an
-  // object (writes objects.<id>.value) or "Custom field…" for a raw dotted path.
+  // The left side is a single grouped picker: an object on this board, a built-in
+  // sense (weather/sun/time/presence/screen/webhook), or "Custom field…" for a raw
+  // dotted path. A known field then drives the op list + a matching value control.
   const objMatch = objects?.find((o) => leaf.field === `objects.${o.id}.value`);
+  const def = fieldDef(leaf.field);
+  const isCustom = !objMatch && !def;
+  const fieldValue = objMatch ? `obj:${objMatch.id}` : def ? `cat:${def.field}` : "__custom";
+  const onFieldChange = (v: string) => {
+    if (v === "__custom") return onChange(patch({ field: "data.", op: "eq", value: "", value2: undefined }));
+    if (v.startsWith("obj:")) return onChange(patch({ field: `objects.${v.slice(4)}.value`, op: "eq", value: "", value2: undefined }));
+    const d = fieldDef(v.slice(4))!; // catalog field — seed a sensible default op + value
+    const op = d.control === "number" ? "gt" : d.control === "text" ? "contains" : "eq";
+    const value: unknown = d.control === "bool" ? true : d.control === "select" ? (d.options?.[0]?.value ?? "") : "";
+    onChange(patch({ field: d.field, op, value, value2: undefined }));
+  };
+  const opChoices = def?.control === "number" ? NUM_OPS : def?.control === "select" ? ["eq", "ne", "changed"] : def?.control === "text" ? TEXT_OPS : OPS;
+  const valType = def?.control === "number" ? "number" : "text";
   return (
     <div class="cond-row">
-      {objects && objects.length > 0 && (
-        <select class="cond-field" value={objMatch ? objMatch.id : "__custom"} onChange={(e) => {
-          const v = (e.currentTarget as HTMLSelectElement).value;
-          onChange(patch({ field: v === "__custom" ? (objMatch ? "data." : leaf.field) : `objects.${v}.value` }));
-        }}>
+      <select class="cond-field" value={fieldValue} onChange={(e) => onFieldChange((e.currentTarget as HTMLSelectElement).value)}>
+        {objects && objects.length > 0 && (
           <optgroup label="Objects on this board">
-            {objects.map((o) => <option key={o.id} value={o.id}>{o.name}’s value</option>)}
+            {objects.map((o) => <option key={o.id} value={`obj:${o.id}`}>{o.name}’s value</option>)}
           </optgroup>
-          <option value="__custom">Custom field…</option>
-        </select>
-      )}
-      {(!objects || objects.length === 0 || !objMatch) && (
+        )}
+        {CATALOG_GROUPS.map((g) => (
+          <optgroup key={g} label={g}>
+            {FIELD_CATALOG.filter((f) => f.group === g).map((f) => <option key={f.field} value={`cat:${f.field}`}>{f.label}</option>)}
+          </optgroup>
+        ))}
+        <option value="__custom">Custom field…</option>
+      </select>
+      {isCustom && (
         <input class="cond-field" value={leaf.field} placeholder="data.key" onInput={(e) => onChange(patch({ field: (e.currentTarget as HTMLInputElement).value }))} />
       )}
-      <select value={leaf.op} onChange={(e) => onChange(patch({ op: (e.currentTarget as HTMLSelectElement).value }))}>
-        {OPS.map((o) => <option key={o} value={o}>{OP_LABEL[o] ?? o}</option>)}
-      </select>
-      {!NO_VALUE_OPS.has(leaf.op) && (
-        <input class="cond-val" value={String(leaf.value ?? "")} placeholder={leaf.op === "between" ? "min" : leaf.op === "matches" ? "regex" : "value"} onInput={(e) => onChange(patch({ value: (e.currentTarget as HTMLInputElement).value }))} />
-      )}
-      {leaf.op === "between" && (
-        <input class="cond-val" value={String(leaf.value2 ?? "")} placeholder="max" onInput={(e) => onChange(patch({ value2: (e.currentTarget as HTMLInputElement).value }))} />
+      {def?.control === "bool" ? (
+        <select class="cond-val" value={leaf.value === true || leaf.value === "true" ? "true" : "false"} onChange={(e) => onChange(patch({ op: "eq", value: (e.currentTarget as HTMLSelectElement).value === "true" }))}>
+          <option value="true">is yes</option>
+          <option value="false">is no</option>
+        </select>
+      ) : (
+        <>
+          <select value={leaf.op} onChange={(e) => onChange(patch({ op: (e.currentTarget as HTMLSelectElement).value }))}>
+            {opChoices.map((o) => <option key={o} value={o}>{OP_LABEL[o] ?? o}</option>)}
+          </select>
+          {!NO_VALUE_OPS.has(leaf.op) && (
+            def?.control === "select"
+              ? <select class="cond-val" value={String(leaf.value ?? def.options?.[0]?.value ?? "")} onChange={(e) => onChange(patch({ value: (e.currentTarget as HTMLSelectElement).value }))}>
+                  {def.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              : <input class="cond-val" type={valType} value={String(leaf.value ?? "")} placeholder={leaf.op === "between" ? "min" : leaf.op === "matches" ? "regex" : "value"} onInput={(e) => onChange(patch({ value: (e.currentTarget as HTMLInputElement).value }))} />
+          )}
+          {leaf.op === "between" && (
+            <input class="cond-val" type={valType} value={String(leaf.value2 ?? "")} placeholder="max" onInput={(e) => onChange(patch({ value2: (e.currentTarget as HTMLInputElement).value }))} />
+          )}
+        </>
       )}
       {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
     </div>
   );
 }
 
-function ActionFields({ action, objects, onChange }: { action: Action; objects?: ObjOption[]; onChange: (a: Action) => void }) {
+// The value editor for one settable property — a dropdown of the property's
+// choices, an on/off toggle, a number, or free text. Keeps the user from typing
+// raw values: "Device status → state → On / Off".
+function valueControl(c: ObjControl, value: unknown, onValue: (v: unknown) => void) {
+  if (c.control === "select") {
+    return (
+      <select class="grow" value={String(value ?? c.options?.[0]?.value ?? "")} onChange={(e) => onValue((e.currentTarget as HTMLSelectElement).value)}>
+        {(c.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    );
+  }
+  if (c.control === "toggle") {
+    const on = value === true || value === "true" || value === "on" || value === 1 || value === "1";
+    return (
+      <div class="row toggle-pair" style={{ gap: "4px" }}>
+        <button type="button" class={`day-toggle ${on ? "on" : ""}`} onClick={() => onValue(true)}>{c.onLabel ?? "On"}</button>
+        <button type="button" class={`day-toggle ${!on ? "on" : ""}`} onClick={() => onValue(false)}>{c.offLabel ?? "Off"}</button>
+      </div>
+    );
+  }
+  if (c.control === "number") {
+    return <input class="grow" type="number" value={value == null ? "" : String(value)} placeholder="0" onInput={(e) => onValue((e.currentTarget as HTMLInputElement).value)} />;
+  }
+  return <input class="grow" value={value == null ? "" : String(value)} placeholder="value" onInput={(e) => onValue((e.currentTarget as HTMLInputElement).value)} />;
+}
+
+function ActionFields({ action, objects, devices, boards, onChange }: { action: Action; objects?: ObjOption[]; devices?: { id: string; name: string }[]; boards?: { id: number; name: string }[]; onChange: (a: Action) => void }) {
   const f = (k: string, v: unknown) => onChange({ ...action, [k]: v });
   const txt = (k: string, ph: string, cls = "") => <input class={cls} value={String(action[k] ?? "")} placeholder={ph} onInput={(e) => f(k, (e.currentTarget as HTMLInputElement).value)} />;
   // Object picker for the object-targeting actions — settable objects only, and we
   // stash the current name + primary prop alongside the stable id.
   const settable = (objects ?? []).filter((o) => o.settable);
   // set-text/prop pick from settable objects; show/hide can target any named object.
-  const objSelect = (list: ObjOption[]) => {
+  const objSelect = (list: ObjOption[], onPick?: (o: ObjOption | undefined) => void) => {
     const cur = String(action.objectId ?? "");
     const missing = cur !== "" && !list.some((o) => o.id === cur); // target was renamed away or deleted
     return (
       <select value={cur} onChange={(e) => {
         const o = list.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
-        onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, ...(action.kind === "setObjectText" ? { prop: o?.prop } : {}) });
+        if (onPick) onPick(o);
+        else onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, ...(action.kind === "setObjectText" ? { prop: o?.prop } : {}) });
       }}>
         <option value="" disabled>Pick an object…</option>
         {missing && <option value={cur}>{`⚠ ${action.objectName ?? cur} (missing)`}</option>}
@@ -565,7 +666,32 @@ function ActionFields({ action, objects, onChange }: { action: Action; objects?:
     case "toggleData": return txt("key", "flag key", "grow");
     case "addTask": return <>{txt("listId", "list")}{txt("text", "task text", "grow")}</>;
     case "advanceQueue": return <>{txt("queueId", "queue id")}{txt("delta", "+1")}</>;
-    case "switchBoard": return <>{txt("deviceId", "screen id")}{txt("layoutId", "board id")}</>;
+    case "switchBoard": {
+      // No more typing ids: pick the screen and the board from dropdowns.
+      const dev = String(action.deviceId ?? "");
+      const lay = action.layoutId != null ? Number(action.layoutId) : 0;
+      const devMissing = dev !== "" && !(devices ?? []).some((d) => d.id === dev);
+      const layMissing = !!lay && !(boards ?? []).some((b) => b.id === lay);
+      return (
+        <>
+          {(devices && devices.length > 0) ? (
+            <select value={dev} onChange={(e) => f("deviceId", (e.currentTarget as HTMLSelectElement).value)}>
+              <option value="" disabled>Pick a screen…</option>
+              {devMissing && <option value={dev}>{`⚠ ${dev} (missing)`}</option>}
+              {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          ) : txt("deviceId", "screen id")}
+          <span class="muted">→</span>
+          {(boards && boards.length > 0) ? (
+            <select class="grow" value={lay ? String(lay) : ""} onChange={(e) => f("layoutId", Number((e.currentTarget as HTMLSelectElement).value) || 0)}>
+              <option value="" disabled>Pick a board…</option>
+              {layMissing && <option value={String(lay)}>{`⚠ board #${lay} (missing)`}</option>}
+              {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          ) : <input class="grow" type="number" value={lay || ""} placeholder="board id" onInput={(e) => f("layoutId", Number((e.currentTarget as HTMLInputElement).value) || 0)} />}
+        </>
+      );
+    }
     case "notify": return txt("message", "message", "grow");
     case "alert": return (
       <>
@@ -578,7 +704,29 @@ function ActionFields({ action, objects, onChange }: { action: Action; objects?:
     case "webhook": return txt("url", "https://…", "grow");
     case "delay": return <><span class="muted">wait</span>{txt("ms", "1000")}<span class="muted">ms</span></>;
     case "setObjectText": return <>{objSelect(settable)}{txt("text", "new text", "grow")}</>;
-    case "setObjectProp": return <>{objSelect(settable)}{txt("prop", "property")}{txt("value", "value", "grow")}</>;
+    case "setObjectProp": {
+      // Smart per-object property picker: pick the object, then the property and
+      // its value come from a dropdown/toggle (no remembering prop names or values).
+      const obj = settable.find((o) => o.id === action.objectId);
+      const controls = controlsFor(obj?.type);
+      const pick = objSelect(settable, (o) => {
+        const ctrls = controlsFor(o?.type);
+        onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, prop: ctrls?.[0]?.key ?? o?.prop ?? "content", value: "" });
+      });
+      if (!obj || !controls) return <>{pick}{txt("prop", "property")}{txt("value", "value", "grow")}</>;
+      const cur = controls.find((c) => c.key === action.prop) ?? controls[0];
+      return (
+        <>
+          {pick}
+          <span class="muted">set</span>
+          <select value={cur.key} onChange={(e) => onChange({ ...action, prop: (e.currentTarget as HTMLSelectElement).value, value: "" })}>
+            {controls.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <span class="muted">to</span>
+          {valueControl(cur, action.value, (v) => f("value", v))}
+        </>
+      );
+    }
     case "showObject": case "hideObject": return objSelect(objects ?? []);
     default: return null;
   }
