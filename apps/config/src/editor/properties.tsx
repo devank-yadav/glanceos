@@ -574,10 +574,24 @@ export function ObjectsPanel({ doc, stageEdit, onSelect, selectedIds }: {
     const t = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
     if (t) t.hidden = !t.hidden;
   });
+  // Reorder: swap the object with its neighbour in reading order (across rows too).
+  // Structure-preserving — each row keeps its column count; only the block in a slot
+  // changes (the block carries its own width). Safe for the row/column doc model.
+  const move = (id: string, dir: -1 | 1) => stageEdit((d) => {
+    const slots: { ri: number; bi: number }[] = [];
+    d.rows.forEach((r, ri) => r.blocks.forEach((_, bi) => slots.push({ ri, bi })));
+    const k = slots.findIndex((p) => d.rows[p.ri].blocks[p.bi].id === id);
+    const nk = k + dir;
+    if (k < 0 || nk < 0 || nk >= slots.length) return;
+    const a = slots[k]!, b = slots[nk]!;
+    const tmp = d.rows[a.ri]!.blocks[a.bi]!;
+    d.rows[a.ri]!.blocks[a.bi] = d.rows[b.ri]!.blocks[b.bi]!;
+    d.rows[b.ri]!.blocks[b.bi] = tmp;
+  });
   if (blocks.length === 0) return <p class="muted objects-empty">No objects yet — add a block to the board.</p>;
   return (
     <ul class="objects-list">
-      {blocks.map((b) => (
+      {blocks.map((b, i) => (
         <li key={b.id} class={`object-row${selectedIds.includes(b.id) ? " on" : ""}${b.hidden ? " is-hidden" : ""}`}>
           <button class="object-pick" title={`Select ${blockFor(b.type).label} on the board`} onClick={() => onSelect(b.id)}><BlockIcon type={b.type} /></button>
           <input class="object-name-input" value={b.name ?? ""} aria-label="Object name"
@@ -585,6 +599,10 @@ export function ObjectsPanel({ doc, stageEdit, onSelect, selectedIds }: {
             onBlur={() => resolveName(b.id)}
             onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} />
           <span class="object-type muted">{blockFor(b.type).label}</span>
+          <span class="object-move">
+            <button class="icon-btn" title="Move earlier" disabled={i === 0} onClick={() => move(b.id, -1)}>↑</button>
+            <button class="icon-btn" title="Move later" disabled={i === blocks.length - 1} onClick={() => move(b.id, 1)}>↓</button>
+          </span>
           <button class="icon-btn object-eye" title={b.hidden ? "Show on screens" : "Hide on screens"} aria-pressed={!!b.hidden} onClick={() => toggleHidden(b.id)}>
             {b.hidden ? <Icon.eyeOff /> : <Icon.eye />}
           </button>
