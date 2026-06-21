@@ -500,8 +500,8 @@ input[type="checkbox"] {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 16px;
 }
 
 .muted {
@@ -928,7 +928,10 @@ ul.tasks li:last-child {
 .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* board pickers (publish-a-board, change-content) — clickable preview tiles */
 .publish-grid, .picker-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
-.publish-board { display: flex; flex-direction: column; gap: 12px; }
+.publish-board { display: flex; flex-direction: column; gap: 10px; }
+/* the board list scrolls inside a capped height so the footer + Submit stay put */
+.publish-grid { max-height: 44vh; overflow-y: auto; margin-top: 4px; padding: 2px; }
+.publish-foot { position: sticky; bottom: 0; background: var(--bg); display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--rule); }
 .publish-pick, .picker-pick { display: flex; flex-direction: column; padding: 0; cursor: pointer; text-align: left; }
 .publish-pick:hover, .picker-pick:hover { border-color: var(--fg); }
 .publish-pick.on { outline: 2px solid var(--indigo); outline-offset: -1px; }
@@ -2471,8 +2474,8 @@ textarea:focus-visible,
 .sidebar-link[aria-current="page"] {
   color: var(--fg);
   font-weight: 600;
-  border-left-color: var(--indigo);
-  background: rgba(35, 131, 226, 0.1);
+  border-left-color: var(--fg);
+  background: var(--hover-bg);
 }
 .sidebar-link svg { width: 18px; height: 18px; flex: none; }
 
@@ -2606,6 +2609,7 @@ textarea:focus-visible,
    hover transform. */
 .menu-pop {
   position: fixed;
+  z-index: 200; /* above the sidebar (z-50) and chrome — it's a top-level portal */
   min-width: 188px;
   max-width: calc(100vw - 16px);
   background: var(--bg);
@@ -2700,6 +2704,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .setup-card-body .chip-row { margin: 0; }
 .setup-card-body .row.wrap { margin-top: 2px; }
 .setup-card-body .primary { width: 100%; justify-content: center; }
+/* tile status line (boards + screens): name above, live/idle status below */
+.tile-status { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; min-width: 0; }
+.tile-status > :last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tile-status.muted { color: var(--muted); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.status-dot.live { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
 
 /* Screen card: same full-bleed preview hero + padded body as board tiles (no card
    clipping — the 8-item kebab Menu opens downward and must not be cut off). */
@@ -2707,12 +2717,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .device-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .device-card .device-preview { margin: 0; }
 .device-card .device-preview .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }
-.device-card-body { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px 15px; }
-.device-card-body .chip-row, .device-card-body .setup-line { margin: 0; }
+.device-card-body { display: flex; flex-direction: column; gap: 7px; padding: 13px 15px 15px; }
+.device-card-body .tile-status { margin: 0; }
+.device-meta { font-size: 12px; }
 
-/* Template / hub tiles: same hero treatment, on a slightly larger grid so the
-   (often dark) full-screen designs are legible at a glance. */
-.cards.hub-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+/* Template / hub tiles: same hero treatment as board/screen tiles (shared .cards grid). */
 .hub-card { padding: 0; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
 .hub-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .hub-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }
@@ -2726,8 +2735,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .device-name:hover { background: var(--hover-bg); }
 .rename-input { font-size: 15px; font-weight: 600; padding: 3px 6px; }
 .device-id { gap: 9px; min-width: 0; }
-.device-actions .refresh-field { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
-.device-actions .refresh-field select { padding: 5px 8px; font-size: 13px; }
+.device-actions { gap: 8px; margin-top: 2px; }
+.device-actions .primary { flex: 1; justify-content: center; }
+.device-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+.device-controls .refresh-field { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.device-controls .refresh-field select { padding: 4px 8px; font-size: 12.5px; }
 .publish-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
 
 .danger-ghost { color: var(--muted); }

@@ -58,33 +58,25 @@ export function BoardPreview({
     return () => io.disconnect();
   }, [inView]);
 
-  // Source-check the ready ping: several previews can be mounted at once, so a
-  // bare "glanceos:ready" would cross-trigger and post state to iframes that
-  // haven't booted yet. Only react to OUR iframe's window.
+  // Hand the draft to OUR iframe. The runtime re-announces "ready" until it has
+  // state (see apps/screen bootPreview), so we answer EVERY ready ping from our
+  // own iframe with a fresh post — robust even when dozens of previews boot at
+  // once and the first posts race the iframe's listener. Plus a few timed posts
+  // as a backstop if we mounted after it already pinged.
   useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      if (e.source === iframeRef.current?.contentWindow && (e.data as { type?: string })?.type === "glanceos:ready") setReady(true);
-    };
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, []);
-
-  // Post the draft state once the iframe is up. We can't be sure whether the
-  // runtime's own state listener is attached yet (with many cached previews the
-  // ready ping can race), so post on ready AND retry a couple of times — the
-  // runtime just re-renders the same board, so extra posts are harmless.
-  useEffect(() => {
-    if (!ready) return;
+    if (!inView) return;
     const send = () =>
       iframeRef.current?.contentWindow?.postMessage(
         { type: "glanceos:state", payload: { claimed: true, state: { layoutVersion: 0, layout: doc, data: data ?? {}, deviceName: deviceName ?? "Preview" } } },
         targetOrigin(),
       );
-    send();
-    const t1 = setTimeout(send, 200);
-    const t2 = setTimeout(send, 600);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [ready, doc, data, deviceName]);
+    const onMsg = (e: MessageEvent) => {
+      if (e.source === iframeRef.current?.contentWindow && (e.data as { type?: string })?.type === "glanceos:ready") { setReady(true); send(); }
+    };
+    window.addEventListener("message", onMsg);
+    const timers = [150, 500, 1200, 2500].map((ms) => setTimeout(() => { setReady(true); send(); }, ms));
+    return () => { window.removeEventListener("message", onMsg); timers.forEach(clearTimeout); };
+  }, [inView, doc, data, deviceName]);
 
   return (
     <div ref={wrapRef} class={`board-preview${inView && ready ? "" : " is-loading"}`} style={{ aspectRatio: `${w} / ${h}` }}>

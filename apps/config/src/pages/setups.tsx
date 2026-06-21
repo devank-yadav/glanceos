@@ -166,16 +166,14 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
             ]}
           />
         </div>
-        <div class="chip-row">
-          <StatChip>{setup.widgetCount} blocks</StatChip>
-          <StatChip>{setup.rowCount} lines</StatChip>
-          {setup.usedBy > 0 ? <StatChip icon={<Icon.monitor />} title={setup.deviceNames.join(", ")}>live on {setup.usedBy}</StatChip> : <span class="chip subtle">not attached</span>}
-          {setup.published && <span class="chip published">in hub</span>}
-          {setup.importCount > 0 && <StatChip>imported {setup.importCount}×</StatChip>}
-        </div>
-        <div class="row wrap">
-          <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}><Icon.pencil /> Edit</button>
-        </div>
+        {setup.usedBy > 0 ? (
+          <p class="tile-status live" title={setup.deviceNames.join(", ")}>
+            <span class="status-dot live" aria-hidden="true" />
+            Live on {setup.deviceNames.length ? setup.deviceNames.join(", ") : `${setup.usedBy} screen${setup.usedBy > 1 ? "s" : ""}`}
+          </p>
+        ) : (
+          <p class="tile-status muted"><span class="status-dot" aria-hidden="true" /> Not on a screen</p>
+        )}
       </div>
       {sharing && <ShareDialog kind="layout" targetId={String(setup.id)} targetName={setup.name} onClose={() => setSharing(false)} />}
     </div>

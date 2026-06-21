@@ -12,7 +12,6 @@ import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { ScreensTabs } from "../components/ScreensTabs";
-import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { navigate } from "../router";
@@ -166,19 +165,15 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
         />
       </div>
 
-      <p class="muted setup-line">
-        {playlist ? <>Rotating <strong>{playlist.name}</strong> · {playlist.items.length} boards</>
+      <p class={`tile-status${device.online ? " live" : " muted"}`} title={device.online ? "Online" : "Offline"}>
+        {playlist ? <>Rotating <strong>{playlist.name}</strong></>
           : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
-            : <>No board yet — choose one</>}
+            : <>No content yet</>}
       </p>
-
-      <div class="chip-row">
-        <StatChip icon={<Icon.monitor />} title="Resolution">{device.resolution}</StatChip>
-        {device.platform && <StatChip title="Running on">{platformLabel(device.platform)}{device.nativeVersion ? ` ${device.nativeVersion}` : ""}</StatChip>}
-        <StatChip icon={<Icon.convert />} title="Refresh interval">{fmtDuration(device.refreshSeconds)}</StatChip>
-        {device.battery !== null && <StatChip title="Battery">{device.battery}%</StatChip>}
-        {device.rssi !== null && <StatChip title="Wi-Fi signal">{device.rssi} dBm</StatChip>}
-        {device.lastSeen && <StatChip title="Last contact">{fmtAgo(device.lastSeen)}</StatChip>}
+      <div class="device-meta muted">
+        {device.online ? "Online" : "Offline"} · {device.resolution}
+        {device.battery !== null ? ` · ${device.battery}%` : ""}
+        {device.lastSeen ? ` · seen ${fmtAgo(device.lastSeen)}` : ""}
       </div>
 
       {previewing && (
@@ -203,9 +198,11 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
         </div>
       )}
 
-      <div class="row wrap device-actions">
-        {device.layoutId !== null && <button class="primary" onClick={() => navigate(`/edit/${device.layoutId}`)}><Icon.pencil /> Edit board</button>}
-        <button onClick={onPick}>Change content</button>
+      <div class="row device-actions">
+        <button class="primary" onClick={onPick}><Icon.monitor /> Change content</button>
+        {device.layoutId !== null && <button onClick={() => navigate(`/edit/${device.layoutId}`)}><Icon.pencil /> Edit board</button>}
+      </div>
+      <div class="device-controls">
         <label class="field refresh-field">
           <span>Refresh</span>
           <select value={String(device.refreshSeconds)} onChange={(e) => setRefresh(Number((e.currentTarget as HTMLSelectElement).value))}>
@@ -348,13 +345,6 @@ function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: stri
   );
 }
 
-const PLATFORM_LABELS: Record<string, string> = {
-  firetv: "Fire TV", androidtv: "Android TV", tizen: "Samsung Tizen",
-  webos: "LG webOS", tvos: "Apple TV", pi: "Raspberry Pi", kiosk: "Kiosk",
-};
-function platformLabel(id: string): string {
-  return PLATFORM_LABELS[id.toLowerCase()] ?? id;
-}
 
 function fmtDuration(s: number): string {
   if (s < 60) return `${s}s`;

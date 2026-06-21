@@ -14,9 +14,11 @@ const CACHE_KEY = "glanceos.lastPayload";
  * posts draft state into it — same renderer as real screens, zero drift.
  */
 function bootPreview(): void {
+  let got = false;
   window.addEventListener("message", (e: MessageEvent) => {
     const msg = e.data as { type?: string; payload?: StreamPayloadT };
     if (msg?.type === "glanceos:state" && msg.payload) {
+      got = true;
       try {
         renderPayload(msg.payload);
       } catch {
@@ -24,7 +26,16 @@ function bootPreview(): void {
       }
     }
   });
-  window.parent.postMessage({ type: "glanceos:ready" }, "*");
+  // Announce readiness until we actually receive state. In a gallery of dozens of
+  // previews the parent's first posts can land before this iframe's listener is
+  // attached; re-pinging lets the parent (whose listener is up) answer when we're
+  // truly ready, so a tile never sits on a blank background.
+  let tries = 0;
+  const ping = () => {
+    window.parent.postMessage({ type: "glanceos:ready" }, "*");
+    if (!got && tries++ < 25) setTimeout(ping, 250);
+  };
+  ping();
 }
 
 /**

@@ -17,12 +17,11 @@ type GalleryItem = { key: string; name: string; category: string; description: s
 
 const COMMUNITY = "Community";
 
-export function StarterTemplates() {
+export function StarterTemplates({ publishing, onClosePublish }: { publishing: boolean; onClosePublish: () => void }) {
   const [cat, setCat] = useState<string>("All");
   const [viewing, setViewing] = useState<GalleryItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [community, setCommunity] = useState<HubItem[]>([]);
-  const [publishing, setPublishing] = useState(false);
   const toast = useToast();
 
   // Approved community templates show alongside the starters. Submissions wait in
@@ -55,13 +54,10 @@ export function StarterTemplates() {
 
   return (
     <section class="starter-section">
-      <div class="starter-head">
-        <div class="filter-chips" role="tablist" aria-label="Template categories">
-          {categories.map((c) => (
-            <button key={c} role="tab" aria-selected={cat === c} class={`filter-chip${cat === c ? " on" : ""}`} onClick={() => setCat(c)}>{c}</button>
-          ))}
-        </div>
-        <button class="ghost publish-board-btn" onClick={() => setPublishing(true)}><Icon.upload /> Publish a board</button>
+      <div class="filter-chips" role="tablist" aria-label="Template categories">
+        {categories.map((c) => (
+          <button key={c} role="tab" aria-selected={cat === c} class={`filter-chip${cat === c ? " on" : ""}`} onClick={() => setCat(c)}>{c}</button>
+        ))}
       </div>
 
       <div class="cards hub-cards">
@@ -100,8 +96,8 @@ export function StarterTemplates() {
         )}
       </Modal>
 
-      <Modal open={publishing} onClose={() => setPublishing(false)} title="Publish a board to Templates">
-        {publishing && <PublishBoard onClose={() => setPublishing(false)} onDone={() => setPublishing(false)} />}
+      <Modal open={publishing} onClose={onClosePublish} title="Publish a board to Templates">
+        {publishing && <PublishBoard onClose={onClosePublish} onDone={onClosePublish} />}
       </Modal>
     </section>
   );
@@ -132,7 +128,9 @@ function PublishBoard({ onClose, onDone }: { onClose: () => void; onDone: () => 
 
   return (
     <div class="publish-board">
-      <p class="muted" style={{ marginTop: 0 }}>Choose a board to share with everyone on this server. It goes live in Templates once an admin approves it.</p>
+      <p class="muted" style={{ marginTop: 0 }}>Choose a board to share with everyone on this server. It goes live in Templates once the Glance team reviews it.</p>
+      {/* the grid scrolls inside a fixed height so the footer (and Submit) is always
+          reachable even with dozens of boards */}
       <div class="cards publish-grid">
         {boards.map((b) => (
           <button key={b.id} class={`card hub-card publish-pick${picked?.id === b.id ? " on" : ""}`} onClick={() => setPicked(b)}>
@@ -141,15 +139,15 @@ function PublishBoard({ onClose, onDone }: { onClose: () => void; onDone: () => 
           </button>
         ))}
       </div>
-      {picked && (
+      <div class="publish-foot">
         <label class="field grow">
-          <span>Short description (optional)</span>
-          <input value={desc} maxLength={280} placeholder="What is this board for?" onInput={(e) => setDesc((e.currentTarget as HTMLInputElement).value)} />
+          <span>{picked ? `Description for “${picked.name}” (optional)` : "Pick a board above to publish"}</span>
+          <input value={desc} maxLength={280} disabled={!picked} placeholder="What is this board for?" onInput={(e) => setDesc((e.currentTarget as HTMLInputElement).value)} />
         </label>
-      )}
-      <div class="row starter-detail-actions">
-        <button class="ghost" onClick={onClose}>Cancel</button>
-        <button class="primary" disabled={!picked || busy} onClick={submit}><Icon.upload /> {busy ? "Submitting…" : "Submit for review"}</button>
+        <div class="row starter-detail-actions">
+          <button class="ghost" onClick={onClose}>Cancel</button>
+          <button class="primary" disabled={!picked || busy} onClick={submit}><Icon.upload /> {busy ? "Submitting…" : "Submit for review"}</button>
+        </div>
       </div>
     </div>
   );

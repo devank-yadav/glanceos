@@ -28,9 +28,19 @@ export function Menu({ trigger, items, align = "right", triggerClass = "icon-btn
       if (!wrapRef.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // The panel is fixed at open-time coords, so it can't follow the trigger —
+    // close it on scroll/resize instead of letting it float over the page.
+    const onScroll = () => setOpen(false);
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [open]);
 
   const toggle = () => {
