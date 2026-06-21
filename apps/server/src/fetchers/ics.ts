@@ -1,5 +1,6 @@
 import type { CalendarDataT, CalendarEventT } from "@glanceos/schema";
 import * as rruleLib from "rrule";
+import { getText } from "./cache";
 
 // rrule ships a CJS main and an ESM module build. Node (tsx) loads the CJS one,
 // where named exports aren't statically detectable; Vite/vitest load the ESM one.
@@ -122,9 +123,10 @@ export async function calendarData(props: { url: string; maxEvents: number }): P
 
   let data: CalendarDataT;
   try {
-    const res = await fetch(props.url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = { events: parseIcs(await res.text()) };
+    // Route through the SSRF-guarded helper (assertSafeUrl + validating dispatcher):
+    // props.url is user-supplied, so a raw fetch would allow requests to private /
+    // loopback / cloud-metadata addresses.
+    data = { events: parseIcs(await getText(props.url, { accept: "text/calendar, text/plain, */*" })) };
   } catch {
     data = { events: hit?.data.events ?? [], error: "calendar unreachable" };
   }
