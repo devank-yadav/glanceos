@@ -1,5 +1,6 @@
 import type { LayoutT } from "@glanceos/schema";
 import { useEffect, useRef, useState } from "preact/hooks";
+import { api } from "../api";
 
 // A live, full-colour mini-render of a board: the real screen runtime in an
 // /screen/?preview=1 iframe (the same renderer screens use), scaled down to fit
@@ -81,4 +82,23 @@ export function BoardPreview({
       />
     </div>
   );
+}
+
+// Fetch-by-id wrapper for board listings (My boards, Shared with me, …) where the
+// card only knows the layout id. Lazy + browser-cached; shows a skeleton until the
+// document arrives, and renders nothing if it can't be read.
+export function BoardPreviewById({ layoutId, name }: { layoutId: number; name?: string }) {
+  const [doc, setDoc] = useState<LayoutT | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setDoc(null); setFailed(false);
+    api.get<{ document: LayoutT }>(`/api/layouts/${layoutId}`)
+      .then((r) => { if (live) setDoc(r.document); })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [layoutId]);
+  if (failed) return null;
+  if (!doc) return <div class="board-preview board-preview-skeleton" style={{ aspectRatio: "1920 / 1080" }} />;
+  return <BoardPreview doc={doc} deviceName={name} />;
 }

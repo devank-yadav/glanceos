@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { api, type LayoutRecord, type SetupSummary } from "../api";
+import { BoardPreviewById } from "../components/BoardPreview";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Menu } from "../components/Menu";
@@ -107,6 +108,9 @@ function SharedBoards({ items }: { items: SharedLayout[] | null }) {
             <h3 class="card-title">{s.name}</h3>
             <span class={`chip ${s.access === "editor" ? "published" : "subtle"}`}>{s.access}</span>
           </div>
+          <button class="board-preview-link" onClick={() => navigate(`/edit/${s.id}`)} title="Open" aria-label={`Open ${s.name}`}>
+            <BoardPreviewById layoutId={s.id} name={s.name} />
+          </button>
           <div class="chip-row">
             <StatChip>{s.widgetCount} blocks</StatChip>
             <StatChip title="Shared by">by {s.ownerName}</StatChip>
@@ -180,6 +184,9 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
           ]}
         />
       </div>
+      <button class="board-preview-link" onClick={() => navigate(`/edit/${setup.id}`)} title="Open studio" aria-label={`Open ${setup.name}`}>
+        <BoardPreviewById layoutId={setup.id} name={setup.name} />
+      </button>
       <div class="chip-row">
         <StatChip>{setup.widgetCount} blocks</StatChip>
         <StatChip>{setup.rowCount} lines</StatChip>

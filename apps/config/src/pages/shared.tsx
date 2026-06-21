@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
+import { BoardPreviewById } from "../components/BoardPreview";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatChip } from "../components/StatChip";
@@ -35,6 +36,9 @@ export function SharedPage() {
                   <h3 class="card-title">{s.name}</h3>
                   <span class={`chip ${s.access === "editor" ? "published" : "subtle"}`}>{s.access}</span>
                 </div>
+                <button class="board-preview-link" onClick={() => navigate(`/edit/${s.id}`)} title="Open" aria-label={`Open ${s.name}`}>
+                  <BoardPreviewById layoutId={s.id} name={s.name} />
+                </button>
                 <div class="chip-row">
                   <StatChip>{s.widgetCount} blocks</StatChip>
                   <StatChip title="Shared by">by {s.ownerName}</StatChip>

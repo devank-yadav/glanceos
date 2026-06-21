@@ -771,6 +771,22 @@ input[type="checkbox"] {
 }
 .board-preview.is-loading { animation: pulse 1.4s var(--ease) infinite; }
 .preview-empty-icon { display: grid; place-items: center; opacity: 0.45; }
+
+/* clickable board thumbnail on listing cards (My boards, Shared) → opens the studio */
+.board-preview-link {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.board-preview-link:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.board-preview-link:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.board-preview-skeleton { background: var(--thumb-bg); animation: pulse 1.4s var(--ease) infinite; }
 .preview-empty-icon svg { width: 26px; height: 26px; }
 .preview-tag {
   position: absolute;
