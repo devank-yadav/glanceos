@@ -3,6 +3,7 @@ import { api, type HubItem } from "../api";
 import { BoardPreview } from "../components/BoardPreview";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { StarterTemplates } from "../components/StarterTemplates";
 import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
@@ -44,6 +45,8 @@ export function HubPage() {
     <>
       <PageHeader title="Templates" actions={actions} />
       <div class="shell-content">
+        <StarterTemplates />
+        <h2 class="section-head section-head-spaced">From this server</h2>
         <p class="muted page-intro">
           Boards shared by everyone on this server. Import one for your own editable copy — publish your own from <a href="#/boards">Boards</a>.
         </p>
