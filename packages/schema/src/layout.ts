@@ -324,6 +324,10 @@ export const WayfindingProps = z.object({ items: line(600).default("Reception | 
 export const StopwatchProps = z.object({ label: line(40).default("Elapsed"), since: z.string().default("2026-01-01T09:00"), showSeconds: z.boolean().default(true) });
 export const LiveCounterProps = z.object({ label: line(40).default(""), start: z.number().default(0), perDay: z.number().default(1440), since: z.string().default("2026-01-01"), unit: line(12).default(""), decimals: z.number().int().min(0).max(4).default(0) });
 export const OnAirProps = z.object({ label: line(40).default(""), start: z.number().min(0).max(24).default(9), end: z.number().min(0).max(24).default(17), onText: line(20).default("ON AIR"), offText: line(20).default("OFF AIR") });
+// v5.0 time/place — agenda objects. Work from typed `items` (HH:MM | Title | Location)
+// offline; when bound to a calendar source the live events override.
+export const UpNextProps = z.object({ label: line(40).default("Up next"), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom") });
+export const DayTimelineProps = z.object({ label: line(40).default(""), items: line(1200).default("09:00 | Standup\n12:30 | Lunch\n14:00 | Focus block\n16:00 | Review"), max: z.number().int().min(1).max(20).default(8) });
 export const SunArcProps = z.object({ latitude: z.number().default(28.6139), longitude: z.number().default(77.209), label: line(40).default("") });
 export const NextFullMoonProps = z.object({ label: line(40).default("") });
 
@@ -577,6 +581,9 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("onAir"), props: OnAirProps }),
   z.object({ ...b, type: z.literal("sunArc"), props: SunArcProps }),
   z.object({ ...b, type: z.literal("nextFullMoon"), props: NextFullMoonProps }),
+  // v5.0 time/place agenda objects
+  z.object({ ...b, type: z.literal("upNext"), props: UpNextProps }),
+  z.object({ ...b, type: z.literal("dayTimeline"), props: DayTimelineProps }),
 ]);
 
 export const Row = z.object({

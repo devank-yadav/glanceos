@@ -893,6 +893,15 @@ body {
 .sunarc-sun { fill: #f5a623; }
 .sunarc-sun.down { fill: currentColor; opacity: 0.35; }
 .sunarc-times { display: flex; justify-content: space-between; font-size: calc(2vmin * var(--font-scale, 1)); opacity: 0.6; font-variant-numeric: tabular-nums; }
+.upnext-title { font-size: calc(5vmin * var(--font-scale, 1)); font-weight: 700; line-height: 1.1; }
+.upnext-meta { font-size: calc(2.6vmin * var(--font-scale, 1)); opacity: 0.7; margin-top: 0.4vmin; }
+.daytl { display: flex; flex-direction: column; gap: 0.8vmin; width: 100%; }
+.daytl-row { display: flex; gap: 1.4vmin; align-items: baseline; }
+.daytl-time { font-variant-numeric: tabular-nums; font-weight: 700; opacity: 0.7; min-width: 5.5em; }
+.daytl-title { font-weight: 600; }
+.daytl-row.past { opacity: 0.4; }
+.daytl-row.now .daytl-time, .daytl-row.now .daytl-title { color: var(--accent, currentColor); }
+.daytl-row.now { font-weight: 700; }
 .monthhabit { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.5vmin; }
 .mh-dot { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--fg); }
 .mh-dot.on { background: var(--fg); }

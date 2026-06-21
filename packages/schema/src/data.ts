@@ -15,6 +15,7 @@ export const CalendarEvent = z.object({
   end: z.string().optional(),
   title: z.string(),
   allDay: z.boolean().default(false),
+  location: z.string().optional(), // v5.0 — for "Up Next" + "Leave By"
 });
 
 export const CalendarData = z.object({

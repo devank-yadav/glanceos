@@ -2321,6 +2321,67 @@ const nextFullMoon: Render = (el, w) => {
   });
 };
 
+// ================= v5.0 — agenda objects (calendar-derived) =================
+
+// Parse "HH:MM | Title | Location" lines into today-anchored events.
+function parseAgendaItems(text: string): { start: number; title: string; location?: string }[] {
+  const now = new Date();
+  const out: { start: number; title: string; location?: string }[] = [];
+  for (const ln of lines(text)) {
+    const [t, title, loc] = ln.split("|").map((s) => s.trim());
+    const m = /^(\d{1,2}):(\d{2})/.exec(t || "");
+    if (!m || !title) continue;
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]));
+    out.push({ start: d.getTime(), title, location: loc || undefined });
+  }
+  return out;
+}
+// Map a bound calendar source ({events:[{start,title,location}]}) to the same shape.
+function eventsFrom(data: unknown): { start: number; title: string; location?: string }[] | null {
+  const evs = (data as { events?: { start?: string; title?: string; location?: string }[] } | null)?.events;
+  if (!Array.isArray(evs)) return null;
+  return evs.map((e) => ({ start: new Date(e.start ?? "").getTime(), title: String(e.title ?? ""), location: e.location }))
+    .filter((e) => !isNaN(e.start) && e.title);
+}
+const relWhen = (mins: number): string => (mins <= 0 ? "now" : mins < 60 ? `in ${mins} min` : `in ${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`);
+
+const upNext: Render = (el, w, data) => {
+  if (w.type !== "upNext") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const titleEl = div("upnext-title");
+  const metaEl = div("upnext-meta");
+  el.append(titleEl, metaEl);
+  return every(30_000, () => {
+    const now = Date.now();
+    const src = (eventsFrom(data) ?? parseAgendaItems(w.props.items)).sort((a, b) => a.start - b.start);
+    const next = src.find((e) => e.start + 3_600_000 > now); // upcoming or still within the hour
+    if (!next) { titleEl.textContent = "Nothing left today"; metaEl.textContent = ""; return; }
+    titleEl.textContent = next.title;
+    const when = relWhen(Math.round((next.start - now) / 60_000));
+    metaEl.textContent = next.location ? `${when} · ${next.location}` : when;
+  });
+};
+
+const dayTimeline: Render = (el, w, data) => {
+  if (w.type !== "dayTimeline") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const list = div("daytl");
+  el.appendChild(list);
+  return every(60_000, () => {
+    list.innerHTML = "";
+    const now = Date.now();
+    const src = (eventsFrom(data) ?? parseAgendaItems(w.props.items)).sort((a, b) => a.start - b.start).slice(0, w.props.max);
+    if (!src.length) { list.appendChild(div("placeholder", "No events")); return; }
+    for (const e of src) {
+      const past = e.start + 3_600_000 < now;
+      const soon = e.start <= now && e.start + 3_600_000 > now;
+      const row = div(`daytl-row${past ? " past" : ""}${soon ? " now" : ""}`);
+      row.append(div("daytl-time", new Date(e.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })), div("daytl-title", e.location ? `${e.title} · ${e.location}` : e.title));
+      list.appendChild(row);
+    }
+  });
+};
+
 export const WIDGETS: Record<WidgetT["type"], Render> = {
   clock, weather, calendar, tasks, text, queue, heading, divider, image, callout,
   subheading, quote, bulletList, numberedList, checklist, code, label, keyValue, table,
@@ -2354,4 +2415,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   stopwatch, liveCounter,
   // v4.7 new auto objects
   onAir, sunArc, nextFullMoon,
+  // v5.0 agenda objects
+  upNext, dayTimeline,
 };

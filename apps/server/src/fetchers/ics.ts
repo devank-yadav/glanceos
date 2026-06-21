@@ -38,6 +38,7 @@ interface PendingEvent {
   title?: string;
   allDay?: boolean;
   rrule?: string;
+  location?: string;
 }
 
 function emitEvent(events: CalendarEventT[], e: PendingEvent, windowStart: number, windowEnd: number): void {
@@ -53,6 +54,7 @@ function emitEvent(events: CalendarEventT[], e: PendingEvent, windowStart: numbe
           end: new Date(occurrence.getTime() + durationMs).toISOString(),
           title: e.title,
           allDay: e.allDay ?? false,
+          location: e.location,
         });
       }
       return;
@@ -101,6 +103,8 @@ export function parseIcs(text: string, now = Date.now()): CalendarEventT[] {
       if (p) current.end = p.date;
     } else if (key === "SUMMARY") {
       current.title = unescapeText(value);
+    } else if (key === "LOCATION") {
+      current.location = unescapeText(value).slice(0, 120) || undefined;
     } else if (key === "RRULE") {
       current.rrule = value;
     }

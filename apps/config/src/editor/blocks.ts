@@ -175,6 +175,8 @@ export const BLOCKS: BlockDef[] = [
   { type: "monthCalendar", label: "Month", glyph: "▦", category: "Time", defaultH: 10, description: "This month, today marked", keywords: "calendar month grid date", defaultProps: { label: "" } },
   { type: "weekStrip", label: "Week strip", glyph: "▤", category: "Time", defaultH: 5, description: "Mon–Sun, today marked", keywords: "week days strip", defaultProps: { label: "" } },
   { type: "nowNext", label: "Now / next", glyph: "▷", category: "Time", defaultH: 5, description: "Current + next from a schedule", keywords: "now next agenda schedule", defaultProps: { items: "09:00 | Standup\n12:30 | Lunch\n16:00 | Review" } },
+  { type: "upNext", label: "Up next", glyph: "◆", category: "Time", defaultH: 5, description: "Next event + countdown (live from a calendar)", keywords: "up next event meeting countdown agenda calendar leave", defaultProps: { label: "Up next", items: "09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom" } },
+  { type: "dayTimeline", label: "Day timeline", glyph: "☰", category: "Time", defaultH: 8, description: "Today's events on a timeline (live from a calendar)", keywords: "day timeline agenda schedule events calendar today", defaultProps: { label: "Today", items: "09:00 | Standup\n12:30 | Lunch\n14:00 | Focus block\n16:00 | Review", max: 8 } },
   { type: "ageCounter", label: "Age", glyph: "⧗", category: "Time", defaultH: 5, description: "Years since a date", keywords: "age years since birthday", defaultProps: { since: "2000-01-01", label: "Age" } },
   { type: "anniversary", label: "Anniversary", glyph: "❤", category: "Time", defaultH: 4, description: "Days until the next occurrence", keywords: "anniversary recurring yearly", defaultProps: { date: "2020-06-13", label: "Anniversary" } },
   { type: "timeBlocks", label: "Time blocks", glyph: "▣", category: "Time", defaultH: 6, description: "Today's time blocks", keywords: "schedule blocks plan day", defaultProps: { items: "09–10 | Focus\n10–11 | Email\n11–13 | Build" } },
@@ -377,7 +379,7 @@ export const SCALAR_BLOCKS = new Set<WidgetType>([
 // Newline-joined text lists (Todoist/Notion/GitHub issues → a list block).
 export const LIST_BLOCKS = new Set<WidgetType>(["bulletList", "numberedList", "checklist"]);
 // Already-typed live shapes — bind the whole block, no field mapping needed.
-export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying"]);
+export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying", "upNext", "dayTimeline"]);
 export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PASSTHROUGH_BLOCKS]);
 
 // Single-line types: never hold their own newlines.

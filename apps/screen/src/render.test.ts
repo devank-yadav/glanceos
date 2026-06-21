@@ -158,6 +158,33 @@ describe("new self-running objects", () => {
   });
 });
 
+describe("upNext agenda object", () => {
+  const upn = (props: object) =>
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [{ id: "u", type: "upNext", width: 1, props }] }] }) as StreamPayloadT);
+
+  it("shows the next event + countdown + location from typed items", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 50, 0)); // 10 min before the 09:00 standup
+      upn({ label: "", items: "09:00 | Standup | Room 3\n12:30 | Lunch" });
+      expect(document.querySelector(".upnext-title")!.textContent).toBe("Standup");
+      expect(document.querySelector(".upnext-meta")!.textContent).toBe("in 10 min · Room 3");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("prefers a bound calendar source over typed items", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 50, 0));
+      renderPayload({ claimed: true, state: { layoutVersion: 1, data: { u: { events: [{ start: new Date(2026, 5, 22, 9, 30, 0).toISOString(), title: "Dentist", location: "Clinic" }] } }, layout: {
+        ...baseLayout, rows: [{ id: "r", h: 6, blocks: [{ id: "u", type: "upNext", width: 1, props: { label: "", items: "09:00 | Standup" } }] }],
+      } } } as unknown as StreamPayloadT);
+      expect(document.querySelector(".upnext-title")!.textContent).toBe("Dentist"); // live wins
+      expect(document.querySelector(".upnext-meta")!.textContent).toBe("in 40 min · Clinic");
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe("signage blocks bind to live data with a static fallback", () => {
   const sensor = (data: Record<string, unknown>) =>
     renderPayload({ claimed: true, state: { layoutVersion: 1, data, layout: {
