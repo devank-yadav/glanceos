@@ -912,6 +912,7 @@ ul.tasks li:last-child {
 .starter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .publish-board-btn { flex: none; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.starter-section .filter-chips { margin-bottom: 18px; }
 /* board pickers (publish-a-board, change-content) — clickable preview tiles */
 .publish-grid, .picker-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
 .publish-board { display: flex; flex-direction: column; gap: 10px; }
