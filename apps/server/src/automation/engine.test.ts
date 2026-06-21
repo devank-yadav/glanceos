@@ -203,6 +203,30 @@ describe("fireAutomations + dryRun", () => {
   });
 });
 
+describe("interval trigger (v6.0)", () => {
+  it("fires only on the aligned minute, deduped within that minute", async () => {
+    const a = createAutomation(user.id, {
+      name: "Every 15", enabled: true, trigger: { kind: "interval", everyMinutes: 15 },
+      actions: [{ kind: "setData", key: "ivl", value: "tick" }],
+    });
+    const at = (h: number, m: number) => new Date(Date.UTC(2026, 0, 1, h, m)); // user tz = UTC
+    await fireAutomations(user.id, "interval", { now: at(0, 31) }); // 31 % 15 ≠ 0 → no fire
+    expect(listRuns(a.id, user.id).length).toBe(0);
+    await fireAutomations(user.id, "interval", { now: at(0, 30) }); // 30 % 15 = 0 → runs
+    await fireAutomations(user.id, "interval", { now: at(0, 30) }); // same minute → deduped
+    const runs = listRuns(a.id, user.id);
+    expect(runs.length).toBe(1);
+    expect(runs[0]!.matched).toBe(true);
+    expect(getCustomData(user.id, "ivl")).toBe("tick");
+  });
+
+  it("the schema bounds the cadence (1..1440)", async () => {
+    const { Automation } = await import("@glanceos/schema");
+    expect(Automation.safeParse({ name: "i", trigger: { kind: "interval", everyMinutes: 30 }, actions: [{ kind: "notify", message: "hi" }] }).success).toBe(true);
+    expect(Automation.safeParse({ name: "i", trigger: { kind: "interval", everyMinutes: 0 }, actions: [{ kind: "notify", message: "hi" }] }).success).toBe(false);
+  });
+});
+
 describe("objects — board-scoped reads & writes (v4.0)", () => {
   // A board with one static object (a heading) and one custom-data-bound object.
   const board = createLayout("Lobby", {

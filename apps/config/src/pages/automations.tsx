@@ -24,7 +24,7 @@ type Cond =
   | { type: "not"; condition: Cond }
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
-interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number }
+interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
@@ -75,10 +75,54 @@ const TRIGGERS: { id: string; label: string }[] = [
   { id: "deviceOnline", label: "A screen comes online" },
   { id: "deviceOffline", label: "A screen goes offline" },
   { id: "tick", label: "Every minute (check data)" },
+  { id: "interval", label: "Every N minutes" },
   { id: "time", label: "At a time of day" },
   { id: "sun", label: "At sunrise / sunset" },
   { id: "presence", label: "When you arrive / leave home" },
 ];
+// Friendly one-tap "When…" scenarios — each seeds the trigger (and a starter
+// condition) so you don't have to assemble it by hand. Built on the existing
+// senses (time/interval/sun/weather/presence/screen/webhook/data). Grouped for
+// scanning; picking one replaces the When + Only-if, leaving Name + Then-do.
+const WEEKDAYS_MASK = 62; // Mon–Fri (bits 1..5)
+const WEEKENDS_MASK = 65; // Sun + Sat (bits 0,6)
+const fcond = (field: string, op: string, value: unknown): Cond => ({ type: "all", conditions: [{ type: "field", field, op, value }] });
+interface WhenScenario { id: string; group: string; label: string; trigger: Trigger; conditions?: Cond }
+const WHEN_SCENARIOS: WhenScenario[] = [
+  // Time of day
+  { id: "wd-morning", group: "Time", label: "Weekday mornings (8am)", trigger: { kind: "time", atMinute: 480, daysMask: WEEKDAYS_MASK } },
+  { id: "every-morning", group: "Time", label: "Every morning (7am)", trigger: { kind: "time", atMinute: 420, daysMask: 127 } },
+  { id: "every-evening", group: "Time", label: "Every evening (6pm)", trigger: { kind: "time", atMinute: 1080, daysMask: 127 } },
+  { id: "weekend-am", group: "Time", label: "Weekend mornings (9am)", trigger: { kind: "time", atMinute: 540, daysMask: WEEKENDS_MASK } },
+  { id: "midnight", group: "Time", label: "At midnight (daily reset)", trigger: { kind: "time", atMinute: 0, daysMask: 127 } },
+  { id: "lunch", group: "Time", label: "Workday lunchtime (12pm)", trigger: { kind: "time", atMinute: 720, daysMask: WEEKDAYS_MASK } },
+  // On a cadence
+  { id: "every-5", group: "Cadence", label: "Every 5 minutes", trigger: { kind: "interval", everyMinutes: 5 } },
+  { id: "every-15", group: "Cadence", label: "Every 15 minutes", trigger: { kind: "interval", everyMinutes: 15 } },
+  { id: "every-hour", group: "Cadence", label: "Every hour", trigger: { kind: "interval", everyMinutes: 60 } },
+  // Sun
+  { id: "sunrise", group: "Sun", label: "At sunrise", trigger: { kind: "sun", event: "sunrise", offsetMin: 0, daysMask: 127 } },
+  { id: "sunset", group: "Sun", label: "At sunset", trigger: { kind: "sun", event: "sunset", offsetMin: 0, daysMask: 127 } },
+  { id: "before-sunset", group: "Sun", label: "30 min before sunset", trigger: { kind: "sun", event: "sunset", offsetMin: -30, daysMask: 127 } },
+  { id: "after-sunrise", group: "Sun", label: "30 min after sunrise", trigger: { kind: "sun", event: "sunrise", offsetMin: 30, daysMask: 127 } },
+  // Weather (checked each minute)
+  { id: "rain-start", group: "Weather", label: "When it starts raining", trigger: { kind: "tick" }, conditions: fcond("weather.isRaining", "eq", true) },
+  { id: "hot", group: "Weather", label: "When it's hot (above 30°C)", trigger: { kind: "tick" }, conditions: fcond("weather.tempC", "gt", 30) },
+  { id: "cold", group: "Weather", label: "When it's cold (below 5°C)", trigger: { kind: "tick" }, conditions: fcond("weather.tempC", "lt", 5) },
+  { id: "rain-likely", group: "Weather", label: "When rain is likely (≥60%)", trigger: { kind: "tick" }, conditions: fcond("weather.precipProbPct", "gte", 60) },
+  // Presence
+  { id: "arrive", group: "Presence", label: "When someone gets home", trigger: { kind: "presence", event: "enter" } },
+  { id: "leave", group: "Presence", label: "When everyone leaves", trigger: { kind: "presence", event: "leave" } },
+  // Screen health
+  { id: "offline", group: "Screen", label: "When a screen goes offline", trigger: { kind: "deviceOffline" } },
+  { id: "online", group: "Screen", label: "When a screen comes online", trigger: { kind: "deviceOnline" } },
+  // Data & webhooks
+  { id: "webhook", group: "Data", label: "When a webhook arrives", trigger: { kind: "webhook" } },
+  { id: "flag-on", group: "Data", label: "When a flag turns on", trigger: { kind: "tick" }, conditions: fcond("data.flag", "eq", true) },
+  { id: "counter-cross", group: "Data", label: "When a counter crosses a number", trigger: { kind: "tick" }, conditions: fcond("data.count", "gte", 10) },
+  { id: "value-changed", group: "Data", label: "When a value changes", trigger: { kind: "tick" }, conditions: fcond("data.value", "changed", "") },
+];
+const WHEN_GROUPS = [...new Set(WHEN_SCENARIOS.map((s) => s.group))];
 const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "setData", label: "Set custom data" },
   { id: "incrementData", label: "Add to a number" },
@@ -387,12 +431,28 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
           const seeded: Trigger = kind === "time" ? { kind, atMinute: 540, daysMask: 127 }
             : kind === "sun" ? { kind, event: "sunset", offsetMin: 0, daysMask: 127 }
               : kind === "presence" ? { kind, event: "enter" }
-                : { kind };
+                : kind === "interval" ? { kind, everyMinutes: 15 }
+                  : { kind };
           set({ trigger: seeded });
         }}>
           {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
       </label>
+      <details class="scenario-picker">
+        <summary>Or pick a ready-made “when”…</summary>
+        <div class="scenario-groups">
+          {WHEN_GROUPS.map((g) => (
+            <div key={g} class="scenario-group">
+              <span class="scenario-group-label">{g}</span>
+              <div class="scenario-chips">
+                {WHEN_SCENARIOS.filter((s) => s.group === g).map((s) => (
+                  <button key={s.id} class="ghost scenario-chip" onClick={() => set({ trigger: s.trigger, conditions: s.conditions })}>{s.label}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
       {a.trigger.kind === "webhook" && <WebhookInlets />}
       {a.trigger.kind === "time" && (
         <div class="row wrap">
@@ -422,6 +482,15 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             <input type="number" min={-180} max={180} value={a.trigger.offsetMin ?? 0} onInput={(e) => set({ trigger: { ...a.trigger, offsetMin: Number((e.currentTarget as HTMLInputElement).value) || 0 } })} />
           </label>
           <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Uses the location set on your screen. e.g. Sunset with −30 fires 30 min before sunset.</p>
+        </div>
+      )}
+      {a.trigger.kind === "interval" && (
+        <div class="row wrap">
+          <label class="field"><span>Every</span>
+            <input type="number" min={1} max={1440} value={a.trigger.everyMinutes ?? 15} onInput={(e) => set({ trigger: { ...a.trigger, everyMinutes: Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 15)) } })} />
+          </label>
+          <span class="muted" style={{ alignSelf: "flex-end", paddingBottom: "10px" }}>minutes</span>
+          <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Runs on a fixed cadence, aligned to the clock (e.g. 15 → :00 :15 :30 :45). Pair with an <strong>Only if</strong> to act only when something is true.</p>
         </div>
       )}
       {a.trigger.kind === "presence" && (

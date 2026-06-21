@@ -355,6 +355,17 @@ function sunMatches(trigger: Extract<TriggerT, { kind: "sun" }>, ctx: Ctx, autoI
   return true;
 }
 
+// "interval" trigger — fires every N minutes, aligned to the minute-of-day so
+// cadences are predictable (e.g. every 15 → :00 :15 :30 :45). Deduped per minute.
+function intervalMatches(trigger: Extract<TriggerT, { kind: "interval" }>, ctx: Ctx, autoId: string): boolean {
+  const every = Math.max(1, trigger.everyMinutes);
+  if (ctx.time.minuteOfDay % every !== 0) return false;
+  const stamp = Math.floor(ctx.time.ts / 60_000);
+  if (lastTimeFire.get(autoId) === stamp) return false;
+  lastTimeFire.set(autoId, stamp);
+  return true;
+}
+
 // Per-context previous snapshot (for "changed") + per-device presence (for edges),
 // in-memory by design: a restart simply re-baselines (no spurious fires). The key
 // is the user (global rules) or `user:layoutId` (a board's objects).
@@ -397,6 +408,7 @@ export async function fireAutomations(
   for (const a of autos) {
     const { board, ctx } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
+    if (a.trigger.kind === "interval" && !intervalMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "presence" && a.trigger.event !== opts.presenceEvent) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
@@ -419,6 +431,7 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
   for (const userId of allUserIds()) {
     const ctx = buildContext(userId, { now });
     await fireAutomations(userId, "tick", { ctx, now, usePrev: true });
+    await fireAutomations(userId, "interval", { ctx, now });
     await fireAutomations(userId, "time", { ctx, now });
     await fireAutomations(userId, "sun", { ctx, now });
     for (const d of devicesOwnedBy(userId)) {

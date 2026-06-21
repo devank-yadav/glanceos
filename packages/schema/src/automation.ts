@@ -39,6 +39,8 @@ export const Trigger = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("deviceOffline") }),
   z.object({ kind: z.literal("deviceOnline") }),
   z.object({ kind: z.literal("tick") }), // evaluated every minute (data thresholds / "changed")
+  // v6.0 — fires on a fixed cadence ("every N minutes"), aligned to the minute-of-day.
+  z.object({ kind: z.literal("interval"), everyMinutes: z.number().int().min(1).max(1440).default(15) }),
   z.object({ kind: z.literal("time"), atMinute: z.number().int().min(0).max(1439), daysMask: z.number().int().min(0).max(127).default(127) }),
   // v5.0 — fires at the sun event (± offset) in the user's location/timezone.
   z.object({ kind: z.literal("sun"), event: z.enum(["sunrise", "sunset"]), offsetMin: z.number().int().min(-180).max(180).default(0), daysMask: z.number().int().min(0).max(127).default(127) }),
@@ -47,7 +49,7 @@ export const Trigger = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("presence"), event: z.enum(["enter", "leave"]) }),
 ]);
 export type TriggerT = z.infer<typeof Trigger>;
-export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "time", "sun", "presence"] as const;
+export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "interval", "time", "sun", "presence"] as const;
 
 // ---- Action ----
 // Every action carries an optional `enabled` flag (default = on); runActions skips a
