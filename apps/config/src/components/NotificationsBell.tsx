@@ -1,3 +1,4 @@
+import { createPortal } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api";
 import { Icon } from "../editor/icons";
@@ -16,6 +17,7 @@ export function NotificationsBell() {
   // own scroll/overflow can't clip or mis-place it.
   const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const load = () => api.get<Feed>("/api/notifications").then(setFeed).catch(() => {});
   useEffect(() => {
@@ -25,11 +27,22 @@ export function NotificationsBell() {
   }, []);
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current && !ref.current.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("pointerdown", onDown); window.removeEventListener("keydown", onKey); };
+    // Move focus into the portaled panel so keyboard users can reach its controls,
+    // and restore focus to the bell when it closes (role=dialog focus contract).
+    const focus = setTimeout(() => panelRef.current?.focus(), 0);
+    return () => {
+      clearTimeout(focus);
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+      (ref.current?.querySelector(".notif-bell") as HTMLElement | null)?.focus();
+    };
   }, [open]);
 
   const toggle = () => {
@@ -43,7 +56,6 @@ export function NotificationsBell() {
     setOpen(true);
   };
   const markRead = async (id: number) => { await api.post(`/api/notifications/${id}/read`).catch(() => {}); load(); };
-  const markAll = async () => { await api.post("/api/notifications/read-all").catch(() => {}); load(); };
   const clearAll = async () => { await api.post("/api/notifications/clear-all").catch(() => {}); load(); };
 
   return (
@@ -55,14 +67,11 @@ export function NotificationsBell() {
         onClick={toggle}
       />
       {feed.unread > 0 && <span class="notif-badge" aria-hidden="true">{feed.unread > 9 ? "9+" : feed.unread}</span>}
-      {open && (
-        <div class="notif-panel card" role="dialog" aria-label="Notifications" style={{ position: "fixed", left: `${pos.left}px`, bottom: `${pos.bottom}px`, top: "auto" }}>
+      {open && createPortal(
+        <div ref={panelRef} class="notif-panel" role="dialog" aria-label="Notifications" style={{ position: "fixed", left: `${pos.left}px`, bottom: `${pos.bottom}px`, top: "auto" }}>
           <div class="row spread notif-head">
             <strong>Notifications</strong>
-            <span class="row notif-head-actions">
-              {feed.unread > 0 && <button class="ghost" onClick={markAll}>Mark all read</button>}
-              {feed.notifications.length > 0 && <button class="ghost" onClick={clearAll}>Clear all</button>}
-            </span>
+            {feed.notifications.length > 0 && <button class="ghost" onClick={clearAll}>Clear all</button>}
           </div>
           {feed.notifications.length === 0 ? (
             <p class="muted notif-empty">You're all caught up.</p>
@@ -79,7 +88,8 @@ export function NotificationsBell() {
               ))}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

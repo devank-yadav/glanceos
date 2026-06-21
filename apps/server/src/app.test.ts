@@ -174,10 +174,20 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(before.length).toBeGreaterThanOrEqual(4); // builtins
     expect(before.every((i: { author: string }) => i.author === "GlanceOS")).toBe(true);
 
-    await app.request(`/api/layouts/${setupId}`, {
-      method: "PATCH",
-      ...authed(cookieA, { published: true, description: "A calm desk board" }),
+    // Publishing now submits for review — it does NOT appear in the public hub yet.
+    await app.request(`/api/layouts/${setupId}/publish`, {
+      method: "POST",
+      ...authed(cookieA, { description: "A calm desk board" }),
     });
+    const pending = await (await app.request("/api/hub?q=desk", { headers: { cookie: cookieB } })).json();
+    expect(pending.find((i: { name: string }) => i.name === "Desk")).toBeUndefined();
+
+    // The admin (Asha — the first registered user) approves it.
+    const queue = await (await app.request("/api/templates/pending", { headers: { cookie: cookieA } })).json();
+    const submitted = queue.find((i: { name: string }) => i.name === "Desk");
+    expect(submitted).toMatchObject({ author: "Asha", description: "A calm desk board" });
+    expect((await app.request("/api/templates/pending", { headers: { cookie: cookieB } })).status).toBe(403); // non-admin
+    await app.request(`/api/templates/${submitted.id}/review`, { method: "POST", ...authed(cookieA, { approved: true }) });
 
     const found = await (await app.request("/api/hub?q=desk", { headers: { cookie: cookieB } })).json();
     const mine = found.find((i: { name: string }) => i.name === "Desk");

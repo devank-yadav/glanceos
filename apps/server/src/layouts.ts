@@ -18,6 +18,7 @@ export interface LayoutRecord {
   published: boolean;
   description: string;
   importCount: number;
+  reviewStatus: string; // 'pending' | 'approved' — only meaningful when published
 }
 
 export interface SetupSummary extends LayoutRecord {
@@ -32,6 +33,7 @@ export interface HubItem {
   author: string;
   importCount: number;
   document: LayoutT;
+  reviewStatus?: string;
 }
 
 interface LayoutRow {
@@ -44,6 +46,7 @@ interface LayoutRow {
   published: number;
   description: string;
   import_count: number;
+  review_status: string;
 }
 
 function toRecord(row: LayoutRow): LayoutRecord {
@@ -59,6 +62,7 @@ function toRecord(row: LayoutRow): LayoutRecord {
     published: row.published === 1,
     description: row.description,
     importCount: row.import_count,
+    reviewStatus: row.review_status ?? "approved",
   };
 }
 
@@ -160,8 +164,8 @@ export function createLayout(
 ): LayoutRecord {
   const result = db
     .prepare(
-      `INSERT INTO layouts (name, version, document, is_template, user_id, published, description, import_count, created_at)
-       VALUES (?, 1, ?, ?, ?, ?, ?, 0, ?)`,
+      `INSERT INTO layouts (name, version, document, is_template, user_id, published, description, import_count, created_at, review_status)
+       VALUES (?, 1, ?, ?, ?, ?, ?, 0, ?, ?)`,
     )
     .run(
       name,
@@ -171,6 +175,8 @@ export function createLayout(
       opts.published ? 1 : 0,
       opts.description ?? "",
       Date.now(),
+      // Published-at-creation = trusted builtins (seed) → live in the gallery immediately.
+      opts.published ? "approved" : "pending",
     );
   return getLayout(Number(result.lastInsertRowid))!;
 }
@@ -223,32 +229,65 @@ export function deleteLayout(id: number): string[] {
   return affected;
 }
 
+function mapHubItem(row: LayoutRow & { author: string }): HubItem {
+  const record = toRecord(row);
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description,
+    author: row.author,
+    importCount: record.importCount,
+    document: record.document,
+    reviewStatus: record.reviewStatus,
+  };
+}
+
+// The public gallery: only APPROVED published boards (moderation gate).
 export function listPublished(q?: string): HubItem[] {
   const filter = q ? `%${q}%` : "%";
   const rows = db
     .prepare(
       `SELECT l.*, COALESCE(u.name, 'GlanceOS') AS author
        FROM layouts l LEFT JOIN users u ON u.id = l.user_id
-       WHERE l.published = 1 AND (l.name LIKE ? OR l.description LIKE ?)
+       WHERE l.published = 1 AND l.review_status = 'approved' AND (l.name LIKE ? OR l.description LIKE ?)
        ORDER BY l.import_count DESC, l.id`,
     )
     .all(filter, filter) as Array<LayoutRow & { author: string }>;
-  return rows.map((row) => {
-    const record = toRecord(row);
-    return {
-      id: record.id,
-      name: record.name,
-      description: record.description,
-      author: row.author,
-      importCount: record.importCount,
-      document: record.document,
-    };
-  });
+  return rows.map(mapHubItem);
+}
+
+// Admin review queue: published boards awaiting approval.
+export function listPendingTemplates(): HubItem[] {
+  const rows = db
+    .prepare(
+      `SELECT l.*, COALESCE(u.name, 'GlanceOS') AS author
+       FROM layouts l LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.published = 1 AND l.review_status = 'pending'
+       ORDER BY l.id DESC`,
+    )
+    .all() as Array<LayoutRow & { author: string }>;
+  return rows.map(mapHubItem);
+}
+
+/** Submit an owned board to the template gallery — published but pending review. */
+export function publishForReview(id: number, description: string): LayoutRecord | undefined {
+  if (!getLayout(id)) return undefined;
+  db.prepare("UPDATE layouts SET published = 1, review_status = 'pending', description = ? WHERE id = ?").run(description, id);
+  return getLayout(id);
+}
+
+/** Admin moderation: approve a pending template, or reject it (unpublish). */
+export function setReviewStatus(id: number, approved: boolean): LayoutRecord | undefined {
+  const existing = getLayout(id);
+  if (!existing) return undefined;
+  if (approved) db.prepare("UPDATE layouts SET review_status = 'approved' WHERE id = ?").run(id);
+  else db.prepare("UPDATE layouts SET published = 0, review_status = 'pending' WHERE id = ?").run(id);
+  return getLayout(id);
 }
 
 export function importFromHub(hubId: number, userId: string): LayoutRecord | undefined {
   const source = getLayout(hubId);
-  if (!source || !source.published) return undefined;
+  if (!source || !source.published || source.reviewStatus !== "approved") return undefined;
   db.prepare("UPDATE layouts SET import_count = import_count + 1 WHERE id = ?").run(hubId);
   return createLayout(source.name, { ...source.document, name: source.name }, { userId });
 }

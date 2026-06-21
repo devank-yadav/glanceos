@@ -917,15 +917,23 @@ ul.tasks li:last-child {
 .hub-cards .hub-card {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 0;
 }
 
 /* "Start from a template" gallery (Templates page) */
 .section-head { font-size: 17px; letter-spacing: -0.01em; margin: 0 0 4px; }
 .section-head-spaced { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--rule); }
-.starter-head { margin-bottom: 16px; }
-.starter-head .muted { margin: 0 0 12px; font-size: 13px; }
+.starter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.publish-board-btn { flex: none; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* board pickers (publish-a-board, change-content) — clickable preview tiles */
+.publish-grid, .picker-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+.publish-board { display: flex; flex-direction: column; gap: 12px; }
+.publish-pick, .picker-pick { display: flex; flex-direction: column; padding: 0; cursor: pointer; text-align: left; }
+.publish-pick:hover, .picker-pick:hover { border-color: var(--fg); }
+.publish-pick.on { outline: 2px solid var(--indigo); outline-offset: -1px; }
+.picker-meta { font-size: 12px; }
+.picker-attach { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--indigo); }
 .filter-chip {
   padding: 5px 11px;
   border: 1px solid var(--rule);
@@ -938,7 +946,18 @@ ul.tasks li:last-child {
 }
 .filter-chip:hover { background: var(--hover-bg); color: var(--fg); }
 .filter-chip.on { background: var(--solid-bg); color: var(--solid-fg); border-color: var(--solid-bg); }
-.starter-card .hub-desc { font-size: 12.5px; color: var(--muted); margin: 0; flex: 1; }
+.hub-card .hub-desc { font-size: 12.5px; color: var(--muted); margin: 0; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* the preview is a click-to-preview hit area on starter cards */
+.starter-view-hit { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.starter-view-hit .board-preview { transition: opacity 0.12s var(--ease); }
+.starter-view-hit:hover .board-preview { opacity: 0.92; }
+.starter-view-hit:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
+/* big preview in the View modal */
+.starter-detail { display: flex; flex-direction: column; gap: 12px; }
+.starter-detail-preview .board-preview { border: 1px solid var(--rule); border-radius: var(--r-md); }
+.starter-detail-meta { align-items: center; }
+.starter-detail-desc { margin: 0; font-size: 13.5px; }
+.starter-detail-actions { justify-content: flex-end; gap: 8px; }
 
 .hub-byline {
   font-size: 13px;
@@ -2476,6 +2495,7 @@ textarea:focus-visible,
   color: var(--fg);
   font-size: 13.5px;
   justify-content: flex-start;
+  text-decoration: none; /* the Templates entry is an <a> — keep it un-underlined like the account button */
 }
 .sidebar-account:hover { background: var(--hover-bg); }
 .avatar {
@@ -2663,16 +2683,36 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .chip.subtle { color: var(--faint); background: transparent; }
 
 /* setups / device cards */
-/* Board tile: the live preview is the full-bleed hero; metadata + actions sit in a padded body. */
-.setup-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
+/* Board tile: the live preview is the full-bleed hero; metadata + actions sit in a padded body.
+   NB: do NOT clip the card with overflow:hidden — the inline kebab Menu opens downward and
+   would be cut off. Round the preview's own top corners to match the card instead. */
+.setup-card { padding: 0; display: flex; flex-direction: column; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
 .setup-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.setup-card .board-preview-link { margin: 0; border-radius: 0; }
+.setup-card .board-preview-link { margin: 0; border-radius: var(--r-md) var(--r-md) 0 0; }
 .setup-card .board-preview-link:hover { transform: none; box-shadow: none; }
-.setup-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; }
+.setup-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }
 .setup-card-body { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px 15px; }
 .setup-card-body .chip-row { margin: 0; }
 .setup-card-body .row.wrap { margin-top: 2px; }
 .setup-card-body .primary { width: 100%; justify-content: center; }
+
+/* Screen card: same full-bleed preview hero + padded body as board tiles (no card
+   clipping — the 8-item kebab Menu opens downward and must not be cut off). */
+.device-card { padding: 0; display: flex; flex-direction: column; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
+.device-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.device-card .device-preview { margin: 0; }
+.device-card .device-preview .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }
+.device-card-body { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px 15px; }
+.device-card-body .chip-row, .device-card-body .setup-line { margin: 0; }
+
+/* Template / hub tiles: same hero treatment. */
+.hub-card { padding: 0; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
+.hub-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.hub-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }
+.hub-card-body { display: flex; flex-direction: column; gap: 7px; padding: 13px 15px 15px; flex: 1; }
+.hub-card-body .hub-foot { margin-top: auto; }
+.hub-card-body .primary { justify-content: center; }
+
 .setup-card .row.wrap, .device-actions { margin-top: 4px; }
 .setup-card .card-title, .device-name { cursor: default; }
 .device-name { cursor: text; border-radius: 5px; padding: 1px 4px; margin: -1px -4px; }
@@ -2882,8 +2922,14 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   display: grid; place-items: center; line-height: 1;
 }
 .notif-panel {
-  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60;
-  width: 300px; max-width: 78vw; padding: 10px;
+  position: fixed; z-index: 70;
+  width: 320px; max-width: calc(100vw - 28px); padding: 10px;
+  /* solid elevated surface — portaled to <body>, so it can't inherit the
+     translucent card bg (which read as transparent) or be clipped by the sidebar */
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg, var(--shadow-md));
   animation: rise 0.14s var(--ease) both;
 }
 .notif-head { margin-bottom: 6px; }

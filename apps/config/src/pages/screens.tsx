@@ -2,7 +2,7 @@ import type { LayoutT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type DisplayGroup, type LayoutRecord, type Playlist, type SetupSummary } from "../api";
-import { BoardPreview } from "../components/BoardPreview";
+import { BoardPreview, BoardPreviewById } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
@@ -140,6 +140,8 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
 
   return (
     <div class="card device-card">
+      <DevicePreview device={device} playlists={playlists} />
+      <div class="device-card-body">
       <div class="row spread">
         <div class="row device-id">
           <span class={device.online ? "dot online" : "dot"} aria-label={device.online ? "Online" : "Offline"} title={device.online ? "Online" : "Offline"} />
@@ -150,7 +152,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           )}
         </div>
         <Menu
-          trigger={<Icon.list />}
+          trigger={<Icon.more />}
           items={[
             { label: "Reload now", icon: <Icon.convert />, onClick: () => command("reload") },
             { label: "Identify (flash)", icon: <Icon.target />, onClick: () => command("identify") },
@@ -163,8 +165,6 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           ]}
         />
       </div>
-
-      <DevicePreview device={device} playlists={playlists} />
 
       <p class="muted setup-line">
         {playlist ? <>Rotating <strong>{playlist.name}</strong> · {playlist.items.length} boards</>
@@ -221,6 +221,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
             </select>
           </label>
         )}
+      </div>
       </div>
 
       <Modal open={scheduling} onClose={() => setScheduling(false)} title={`Schedule — ${device.name ?? "screen"}`}>
@@ -462,14 +463,18 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
       {setups.length > 0 && (
         <>
           <p class="muted">…or attach an existing board (screens can share one):</p>
-          <ul class="picker-list">
+          <div class="cards picker-cards">
             {setups.map((s) => (
-              <li key={s.id} class="row spread">
-                <span><strong>{s.name}</strong> <span class="muted">{s.widgetCount} blocks{s.usedBy > 0 ? ` · live on ${s.usedBy}` : ""}</span></span>
-                <button disabled={busy} onClick={() => assign(s.id)}>Attach</button>
-              </li>
+              <button key={s.id} class="card hub-card picker-pick" disabled={busy} title={`Attach ${s.name}`} onClick={() => assign(s.id)}>
+                <BoardPreviewById layoutId={s.id} name={s.name} />
+                <div class="hub-card-body">
+                  <h3 class="card-title" title={s.name}>{s.name}</h3>
+                  <span class="muted picker-meta">{s.widgetCount} blocks{s.usedBy > 0 ? ` · live on ${s.usedBy}` : ""}</span>
+                  <span class="picker-attach">Attach</span>
+                </div>
+              </button>
             ))}
-          </ul>
+          </div>
         </>
       )}
       {playlists.length > 0 && (

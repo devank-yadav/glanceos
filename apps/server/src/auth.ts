@@ -12,6 +12,7 @@ export interface PublicUser {
   name: string;
   email: string;
   defaultTimezone: string | null;
+  isAdmin: boolean;
 }
 
 interface UserRow {
@@ -21,6 +22,7 @@ interface UserRow {
   password_hash: string;
   created_at: number;
   default_timezone: string | null;
+  is_admin: number;
 }
 
 export function hashPassword(password: string): string {
@@ -37,11 +39,18 @@ export function verifyHash(password: string, stored: string): boolean {
 }
 
 function toPublic(row: UserRow): PublicUser {
-  return { id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null };
+  return { id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null, isAdmin: (row.is_admin ?? 0) === 1 };
 }
 
 export function userCount(): number {
   return (db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
+}
+
+/** The instance owner — the first registered account — is the admin who reviews
+ *  submitted templates. Cheap point lookup, no caching needed. */
+export function isUserAdmin(userId: string): boolean {
+  const row = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId) as { is_admin: number } | undefined;
+  return (row?.is_admin ?? 0) === 1;
 }
 
 // The first account can always be created — otherwise a fresh deploy with
@@ -52,6 +61,8 @@ export function registrationOpen(): boolean {
 }
 
 export function createUser(name: string, email: string, password: string): PublicUser | null {
+  // The very first account on a fresh install becomes the admin (template reviewer).
+  const firstUser = userCount() === 0;
   const user: UserRow = {
     id: randomUUID(),
     name: name.trim(),
@@ -59,11 +70,12 @@ export function createUser(name: string, email: string, password: string): Publi
     password_hash: hashPassword(password),
     created_at: Date.now(),
     default_timezone: null,
+    is_admin: firstUser ? 1 : 0,
   };
   try {
     db.prepare(
-      "INSERT INTO users (id, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(user.id, user.name, user.email, user.password_hash, user.created_at);
+      "INSERT INTO users (id, name, email, password_hash, created_at, is_admin) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(user.id, user.name, user.email, user.password_hash, user.created_at, user.is_admin);
   } catch {
     return null; // email UNIQUE (case-insensitive) violated
   }

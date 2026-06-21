@@ -5,6 +5,7 @@ export interface UserInfo {
   name: string;
   email: string;
   defaultTimezone: string | null;
+  isAdmin: boolean;
 }
 
 export interface AuthStatus {
@@ -95,6 +96,7 @@ export interface HubItem {
   author: string;
   importCount: number;
   document: LayoutT;
+  reviewStatus?: string;
 }
 
 export interface TaskItem {

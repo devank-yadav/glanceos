@@ -27,6 +27,11 @@ export function BoardPreview({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [scale, setScale] = useState(0);
+  // Only boot the iframe (a full screen-runtime instance) once the card is near
+  // the viewport. A gallery can mount 50 previews at once; without this they all
+  // hand-shake simultaneously and the runtimes flicker/race ("glitchy"). Once
+  // seen, it stays mounted.
+  const [inView, setInView] = useState(false);
 
   // Scale the native-size iframe down to whatever width the card gives us.
   useEffect(() => {
@@ -38,6 +43,20 @@ export function BoardPreview({
     ro.observe(el);
     return () => ro.disconnect();
   }, [w]);
+
+  // Mount-gate on visibility.
+  useEffect(() => {
+    if (inView) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") { setInView(true); return; } // very old browsers: just mount
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) { setInView(true); io.disconnect(); } },
+      { rootMargin: "300px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
 
   // Source-check the ready ping: several previews can be mounted at once, so a
   // bare "glanceos:ready" would cross-trigger and post state to iframes that
@@ -68,18 +87,20 @@ export function BoardPreview({
   }, [ready, doc, data, deviceName]);
 
   return (
-    <div ref={wrapRef} class="board-preview" style={{ aspectRatio: `${w} / ${h}` }}>
-      <iframe
-        ref={iframeRef}
-        class="board-preview-frame"
-        src={previewUrl()}
-        width={w}
-        height={h}
-        loading="lazy"
-        title={deviceName ? `${deviceName} preview` : "Board preview"}
-        style={{ transform: `scale(${scale})`, transformOrigin: "top left", visibility: scale ? "visible" : "hidden" }}
-        onLoad={() => setReady(true)}
-      />
+    <div ref={wrapRef} class={`board-preview${inView && ready ? "" : " is-loading"}`} style={{ aspectRatio: `${w} / ${h}` }}>
+      {inView && (
+        <iframe
+          ref={iframeRef}
+          class="board-preview-frame"
+          src={previewUrl()}
+          width={w}
+          height={h}
+          loading="lazy"
+          title={deviceName ? `${deviceName} preview` : "Board preview"}
+          style={{ transform: `scale(${scale})`, transformOrigin: "top left", visibility: scale && ready ? "visible" : "hidden" }}
+          onLoad={() => setReady(true)}
+        />
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
-  registrationOpen, sessionUserId, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, registrationOpen, sessionUserId, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
 import {
@@ -35,8 +35,9 @@ import { limiter } from "./ratelimit";
 import { emit, isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
-  getLayoutByShareToken, getOwnedLayout, getShareInfo, importFromHub, listPublished, listSetups,
-  setShareToken, shareExpired, updateLayout, updateLayoutMeta, verifySharePassword,
+  getLayoutByShareToken, getOwnedLayout, getShareInfo, importFromHub, listPendingTemplates,
+  listPublished, listSetups, publishForReview, setReviewStatus, setShareToken, shareExpired,
+  updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
 import {
   createShare, getReadableLayout, getWritableLayout, listSharesByOwner, revokeShare, sharedLayouts, updateShareAccess,
@@ -911,6 +912,27 @@ export function buildApp(): Hono<Env> {
     const copy = importFromHub(Number(c.req.param("id")), c.get("userId"));
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
+  });
+
+  // Submit one of your own boards to the template gallery — pending admin review.
+  app.post("/api/layouts/:id/publish", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { description?: string };
+    const rec = publishForReview(id, (body.description ?? "").slice(0, 280));
+    return rec ? c.json(rec) : c.json({ error: "not found" }, 404);
+  });
+
+  // ---- template moderation (admin only) ----
+  app.get("/api/templates/pending", (c) => {
+    if (!isUserAdmin(c.get("userId"))) return c.json({ error: "forbidden" }, 403);
+    return c.json(listPendingTemplates());
+  });
+  app.post("/api/templates/:id/review", async (c) => {
+    if (!isUserAdmin(c.get("userId"))) return c.json({ error: "forbidden" }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { approved?: boolean };
+    const rec = setReviewStatus(Number(c.req.param("id")), body.approved === true);
+    return rec ? c.json(rec) : c.json({ error: "not found" }, 404);
   });
 
   // ---- tasks (the widget's backing store) ----

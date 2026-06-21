@@ -120,10 +120,7 @@ function SharedBoards({ items }: { items: SharedLayout[] | null }) {
 }
 
 function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const [publishing, setPublishing] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [description, setDescription] = useState(setup.description);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -136,17 +133,6 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Exported");
-  };
-
-  const togglePublish = async () => {
-    setBusy(true);
-    try {
-      await api.patch(`/api/layouts/${setup.id}`, { published: !setup.published, description });
-      toast.success(setup.published ? "Removed from hub" : "Published to hub");
-      setPublishing(false);
-      await onChanged();
-    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
   };
 
   const remove = async () => {
@@ -176,7 +162,6 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
               { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
               { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
               { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
-              { label: setup.published ? "Hub settings" : "Publish to hub…", icon: <Icon.upload />, onClick: () => setPublishing((v) => !v) },
               { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
             ]}
           />
@@ -192,15 +177,6 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
           <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}><Icon.pencil /> Edit</button>
         </div>
       </div>
-      {publishing && (
-        <div class="publish-row">
-          <label class="field grow">
-            <span>Hub description</span>
-            <input value={description} placeholder="What is this board for?" onInput={(e) => setDescription((e.currentTarget as HTMLInputElement).value)} />
-          </label>
-          <button disabled={busy} onClick={togglePublish}>{setup.published ? "Unpublish" : "Publish"}</button>
-        </div>
-      )}
       {sharing && <ShareDialog kind="layout" targetId={String(setup.id)} targetName={setup.name} onClose={() => setSharing(false)} />}
     </div>
   );
