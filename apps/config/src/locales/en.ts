@@ -11,6 +11,7 @@ const en: Record<string, string> = {
   "nav.hub": "Hub",
   "nav.integrations": "Integrations",
   "nav.inlets": "Inlets",
+  "nav.automations": "Automations",
   "nav.shared": "Shared",
   "nav.account": "Account",
   "nav.search": "Search…",

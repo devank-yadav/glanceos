@@ -13,6 +13,7 @@ export type Route =
   | { name: "hub" }
   | { name: "integrations" }
   | { name: "inlets" }
+  | { name: "automations" }
   | { name: "shared" }
   | { name: "account" }
   | { name: "edit"; layoutId: number };
@@ -28,6 +29,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/hub") return { name: "hub" };
   if (path === "/integrations") return { name: "integrations" };
   if (path === "/inlets") return { name: "inlets" };
+  if (path === "/automations") return { name: "automations" };
   if (path === "/shared") return { name: "shared" };
   if (path === "/account") return { name: "account" };
   const edit = /^\/edit\/(\d+)$/.exec(path);
@@ -45,6 +47,7 @@ export const SECTION: Record<string, { path: string; label: string }> = {
   hub: { path: "#/hub", label: "Hub" },
   integrations: { path: "#/integrations", label: "Integrations" },
   inlets: { path: "#/inlets", label: "Data inlets" },
+  automations: { path: "#/automations", label: "Automations" },
   shared: { path: "#/shared", label: "Shared with me" },
   account: { path: "#/account", label: "Account" },
 };

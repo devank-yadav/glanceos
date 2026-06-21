@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  BlockSource, ClaimRequest, RegisterRequest, UserLoginRequest, UserRegisterRequest, safeParseDocument,
+  Automation, BlockSource, ClaimRequest, RegisterRequest, UserLoginRequest, UserRegisterRequest, safeParseDocument,
 } from "@glanceos/schema";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono, type Context } from "hono";
@@ -49,6 +49,10 @@ import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
+import {
+  countAutomations, createAutomation, deleteAutomation, getAutomation, listAutomations, listRuns, MAX_AUTOMATIONS_PER_USER, setAutomationEnabled, updateAutomation,
+} from "./automations";
+import { dryRunAutomation } from "./automation/engine";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
@@ -271,6 +275,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
   app.use("/api/data", limiter("data", 120, 60_000, userKey));
   app.use("/api/inlets", limiter("inlets", 60, 60_000, userKey));
+  app.use("/api/automations", limiter("automations", 60, 60_000, userKey));
   app.use("/api/hooks/*", limiter("hooks", 240, 60_000, (c) => c.req.path)); // per-secret (the path)
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
@@ -1007,8 +1012,53 @@ export function buildApp(): Hono<Env> {
     }
     let payload: Record<string, unknown> = {};
     try { const p = JSON.parse(raw || "{}"); if (p && typeof p === "object") payload = p as Record<string, unknown>; } catch { /* non-JSON → empty */ }
-    return c.json({ ok: true, ...(await routeInlet(inlet, payload)) });
+    // Don't re-fire automations if this hook was itself produced by an automation's webhook action.
+    const fromAutomation = c.req.header("x-glanceos-automation") === "1";
+    return c.json({ ok: true, ...(await routeInlet(inlet, payload, { fireAutos: !fromAutomation })) });
   });
+
+  // ---- automations (session-only; not in API_ALLOW so keys can't manage them) ----
+  // Bound nesting BEFORE zod parses (z.lazy on the recursive Condition would
+  // otherwise blow the stack on a pathologically deep payload).
+  const tooDeep = (v: unknown, d = 0): boolean => {
+    if (d > 40) return true;
+    if (Array.isArray(v)) return v.some((x) => tooDeep(x, d + 1));
+    if (v && typeof v === "object") return Object.values(v as Record<string, unknown>).some((x) => tooDeep(x, d + 1));
+    return false;
+  };
+  app.get("/api/automations", (c) => c.json(listAutomations(c.get("userId"))));
+  app.post("/api/automations", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
+    const parsed = Automation.safeParse(body);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    if (countAutomations(c.get("userId")) >= MAX_AUTOMATIONS_PER_USER) return c.json({ error: `at most ${MAX_AUTOMATIONS_PER_USER} automations` }, 409);
+    return c.json(createAutomation(c.get("userId"), parsed.data), 201);
+  });
+  app.post("/api/automations/test", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
+    const parsed = Automation.safeParse(body);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    return c.json(dryRunAutomation(parsed.data, c.get("userId"))); // no side effects
+  });
+  app.get("/api/automations/:id/runs", (c) =>
+    getAutomation(c.req.param("id"), c.get("userId")) ? c.json(listRuns(c.req.param("id"), c.get("userId"))) : c.json({ error: "not found" }, 404));
+  app.patch("/api/automations/:id", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    // a bare {enabled} toggle from the list (exactly that one key), else a full update
+    if (body && typeof body === "object" && Object.keys(body).length === 1 && typeof (body as { enabled?: unknown }).enabled === "boolean") {
+      return setAutomationEnabled(c.req.param("id"), c.get("userId"), (body as { enabled: boolean }).enabled)
+        ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+    }
+    if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
+    const parsed = Automation.safeParse(body);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    const updated = updateAutomation(c.req.param("id"), c.get("userId"), parsed.data);
+    return updated ? c.json(updated) : c.json({ error: "not found" }, 404);
+  });
+  app.delete("/api/automations/:id", (c) =>
+    deleteAutomation(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {

@@ -3,6 +3,8 @@ import { buildApp } from "./api";
 import { validateConfig } from "./config";
 import { checkpoint, migrate } from "./db";
 import { runAlertChecks } from "./notifications";
+import { runAutomationTick } from "./automation/engine";
+import { pruneAutomationRuns } from "./automations";
 import { pruneProofOfPlay } from "./playlog";
 import { gcRateLimits } from "./ratelimit";
 import { undecryptableSecretCount } from "./rotate";
@@ -54,6 +56,17 @@ setInterval(() => {
 setInterval(() => {
   try { runAlertChecks(); } catch { /* never let the sweep crash the loop */ }
 }, 60 * 1000);
+
+// Run automations: data-threshold/"changed", time-of-day, and screen on/offline edges.
+setInterval(() => {
+  runAutomationTick().catch(() => {}); // never let a bad automation crash the loop
+}, 60 * 1000);
+
+// Prune the automation run-log beyond its retention window (default 30 days).
+const AUTO_RUN_RETENTION_DAYS = Math.max(1, Number(process.env.GLANCEOS_AUTOMATION_LOG_RETENTION_DAYS) || 30);
+setInterval(() => {
+  try { pruneAutomationRuns(Date.now() - AUTO_RUN_RETENTION_DAYS * 86_400_000); } catch { /* never crash the loop */ }
+}, 6 * 60 * 60 * 1000);
 
 // Drop expired rate-limit windows so the map stays bounded.
 setInterval(() => gcRateLimits(), 5 * 60 * 1000);

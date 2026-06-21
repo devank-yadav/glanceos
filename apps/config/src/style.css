@@ -2947,6 +2947,30 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .key-scopes { font-size: 12px; }
 @media (max-width: 560px) { .scope-grid { grid-template-columns: 1fr; } }
 
+/* ---------- automations editor ---------- */
+.auto-editor { gap: 14px; max-width: 720px; }
+.auto-editor > .field > span { font-size: 13px; color: var(--text-muted); margin-bottom: 2px; }
+.cond-group { border: 1px solid var(--rule); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); }
+.cond-group .cond-group { background: var(--card-bg); }
+.cond-comb { max-width: 130px; font-size: 13px; }
+.cond-row { display: flex; gap: 6px; align-items: center; }
+.cond-row .cond-field { flex: 2; min-width: 0; }
+.cond-row .cond-val { flex: 2; min-width: 0; }
+.cond-row select { flex: 1; min-width: 88px; }
+.cond-not { display: flex; align-items: flex-start; gap: 8px; }
+.cond-not-label { font-size: 11px; font-weight: 700; color: var(--text-muted); padding-top: 8px; }
+.cond-add { gap: 6px; }
+.cond-add .ghost { font-size: 12px; padding: 4px 8px; }
+.action-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.action-row > select { flex: none; min-width: 150px; }
+.action-row input { min-width: 0; }
+.action-row input.grow { flex: 1; }
+.icon-btn { padding: 4px 9px; flex: none; }
+.day-toggle { border: 1px solid var(--rule); background: var(--card-bg); color: var(--text-muted); border-radius: 6px; padding: 5px 7px; font-size: 12px; cursor: pointer; }
+.day-toggle.on { background: var(--accent); color: var(--accent-contrast, #fff); border-color: var(--accent); }
+.callout.subtle { opacity: 0.85; }
+.callout ul { margin: 6px 0 0; padding-left: 18px; }
+
 /* ---------- per-device TV settings editor ---------- */
 .tv-editor { display: flex; flex-direction: column; gap: 12px; }
 .tv-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }

@@ -76,6 +76,17 @@ describe("POST /api/hooks/:secret (public, no session/CSRF)", () => {
     expect((await post(inlet.secret, "{}")).status).toBe(404);
   });
 
+  it("routeInlet with fireAutos:false skips automations (HTTP self-call loop guard)", async () => {
+    const { createAutomation } = await import("./automations");
+    const { getCustomData } = await import("./customdata");
+    createAutomation(user.id, { name: "loop", enabled: true, trigger: { kind: "webhook" }, actions: [{ kind: "setData", key: "loopGuard", value: 1 }] });
+    const { inlet } = createInlet(user.id, { name: "guard", sinkKind: "none" });
+    await routeInlet(resolveInlet(inlet.secret)!, {}, { fireAutos: false });
+    expect(getCustomData(user.id, "loopGuard")).toBeUndefined();
+    await routeInlet(resolveInlet(inlet.secret)!, {}); // default → fires
+    expect(getCustomData(user.id, "loopGuard")).toBe(1);
+  });
+
   it("401s a signed inlet without/with a wrong signature, 200 with the right one", async () => {
     const { inlet, signingKey } = createInlet(user.id, { name: "secure", sinkKind: "data", sinkTarget: "k", requireSignature: true });
     const raw = JSON.stringify({ value: 7 });

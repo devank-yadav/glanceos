@@ -5,6 +5,7 @@ import { addTask } from "./tasks";
 import { advanceQueue } from "./queues";
 import { setCustomData } from "./customdata";
 import { pushUserDevices } from "./state";
+import { fireAutomations } from "./automation/engine";
 
 // Inbound webhook inlets. POST /api/hooks/:secret (no session/CSRF — the secret
 // is the capability). An optional HMAC key requires a signed body. A fired inlet
@@ -89,8 +90,11 @@ const asText = (payload: Record<string, unknown>): string => {
   return (typeof t === "string" ? t : JSON.stringify(payload)).slice(0, 500);
 };
 
-/** Route a fired inlet's payload to its sink, mark it fired, and refresh screens. */
-export async function routeInlet(row: InletRow, payload: Record<string, unknown>, now = Date.now()): Promise<{ routed: SinkKind }> {
+/** Route a fired inlet's payload to its sink, mark it fired, and refresh screens.
+ *  `fireAutos` is set false when the call originated from an automation's own
+ *  webhook action (marker header), preventing an HTTP self-trigger loop. */
+export async function routeInlet(row: InletRow, payload: Record<string, unknown>, opts: { fireAutos?: boolean } = {}): Promise<{ routed: SinkKind }> {
+  const now = Date.now();
   const uid = row.user_id;
   switch (row.sink_kind) {
     case "task":
@@ -110,6 +114,7 @@ export async function routeInlet(row: InletRow, payload: Record<string, unknown>
       break;
   }
   db.prepare("UPDATE inlets SET last_fired = ? WHERE id = ?").run(now, row.id);
+  if (opts.fireAutos !== false) await fireAutomations(uid, "webhook", { webhook: payload }); // reactive: a hook can trigger automations
   await pushUserDevices(uid);
   return { routed: row.sink_kind };
 }
