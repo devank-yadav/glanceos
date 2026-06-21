@@ -16,6 +16,7 @@ export function AccountPage() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [delPw, setDelPw] = useState("");
+  const [boardText, setBoardText] = useState("");
   const [importMode, setImportMode] = useState<"append" | "replace">("append");
   const [importBusy, setImportBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,21 @@ export function AccountPage() {
       if (fileRef.current) fileRef.current.value = "";
     } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
     finally { setImportBusy(false); }
+  };
+
+  const importBoard = async (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw) as { name?: string };
+      await api.post("/api/layouts", { name: parsed?.name ?? "Imported board", document: parsed });
+      toast.success("Board imported — find it under Boards");
+      setBoardText("");
+    } catch (e) {
+      toast.error(e instanceof SyntaxError ? "That isn't valid JSON." : String(e instanceof Error ? e.message : e));
+    }
+  };
+  const onBoardFile = (e: Event) => {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (file) file.text().then(importBoard);
   };
 
   const saveName = async () => {
@@ -118,6 +134,15 @@ export function AccountPage() {
                 <option value="replace">Replace everything</option>
               </select>
               <button class="primary" disabled={importBusy} onClick={restore}>{importBusy ? "Restoring…" : "Restore"}</button>
+            </div>
+          </div>
+          <div class="restore-block">
+            <h3>Import a board</h3>
+            <p class="muted">Paste an exported board's JSON, or pick a <code>.glanceos.json</code> file. It's added to your Boards.</p>
+            <textarea rows={4} placeholder='{"schemaVersion":3, …}' value={boardText} onInput={(e) => setBoardText((e.currentTarget as HTMLTextAreaElement).value)} />
+            <div class="row wrap restore-row">
+              <input type="file" accept=".json,application/json" onChange={onBoardFile} aria-label="Choose a board file" />
+              <button class="primary" disabled={!boardText.trim()} onClick={() => importBoard(boardText)}>Import board</button>
             </div>
           </div>
         </section>

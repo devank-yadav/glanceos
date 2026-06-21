@@ -5,7 +5,6 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Menu } from "../components/Menu";
 import { ShareDialog } from "../components/ShareDialog";
-import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
@@ -19,7 +18,6 @@ export function SetupsPage() {
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
   const [shared, setShared] = useState<SharedLayout[] | null>(null);
   const [q, setQ] = useState("");
-  const [importing, setImporting] = useState(false);
   const toast = useToast();
 
   const refresh = async () => {
@@ -49,8 +47,6 @@ export function SetupsPage() {
           <input placeholder="Search boards…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search boards" />
         </label>
       )}
-      <button class="ghost" onClick={() => navigate("/hub")}><Icon.convert /> Templates</button>
-      <button class="ghost" onClick={() => setImporting(true)}><Icon.upload /> Import</button>
       <button class="primary" onClick={newBoard}><Icon.plus /> New board</button>
     </>
   );
@@ -84,9 +80,6 @@ export function SetupsPage() {
                 {filtered.map((s) => <SetupCard key={s.id} setup={s} onChanged={refresh} />)}
               </div>
             )}
-            <Modal open={importing} onClose={() => setImporting(false)} title="Import a board">
-              <ImportForm onImported={async () => { setImporting(false); await refresh(); }} />
-            </Modal>
           </>
         ) : (
           <SharedBoards items={shared} />
@@ -171,31 +164,33 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
 
   return (
     <div class="card setup-card">
-      <div class="row spread">
-        <h3 class="card-title">{setup.name}</h3>
-        <Menu
-          trigger={<Icon.list />}
-          items={[
-            { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
-            { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
-            { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
-            { label: setup.published ? "Hub settings" : "Publish to hub…", icon: <Icon.upload />, onClick: () => setPublishing((v) => !v) },
-            { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
-          ]}
-        />
-      </div>
-      <button class="board-preview-link" onClick={() => navigate(`/edit/${setup.id}`)} title="Open studio" aria-label={`Open ${setup.name}`}>
+      <button class="board-preview-link" onClick={() => navigate(`/edit/${setup.id}`)} title="Edit board" aria-label={`Edit ${setup.name}`}>
         <BoardPreviewById layoutId={setup.id} name={setup.name} />
       </button>
-      <div class="chip-row">
-        <StatChip>{setup.widgetCount} blocks</StatChip>
-        <StatChip>{setup.rowCount} lines</StatChip>
-        {setup.usedBy > 0 ? <StatChip icon={<Icon.monitor />} title={setup.deviceNames.join(", ")}>live on {setup.usedBy}</StatChip> : <span class="chip subtle">not attached</span>}
-        {setup.published && <span class="chip published">in hub</span>}
-        {setup.importCount > 0 && <StatChip>imported {setup.importCount}×</StatChip>}
-      </div>
-      <div class="row wrap">
-        <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}><Icon.pencil /> Open studio</button>
+      <div class="setup-card-body">
+        <div class="row spread">
+          <h3 class="card-title" title={setup.name}>{setup.name}</h3>
+          <Menu
+            trigger={<Icon.more />}
+            items={[
+              { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
+              { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
+              { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
+              { label: setup.published ? "Hub settings" : "Publish to hub…", icon: <Icon.upload />, onClick: () => setPublishing((v) => !v) },
+              { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
+            ]}
+          />
+        </div>
+        <div class="chip-row">
+          <StatChip>{setup.widgetCount} blocks</StatChip>
+          <StatChip>{setup.rowCount} lines</StatChip>
+          {setup.usedBy > 0 ? <StatChip icon={<Icon.monitor />} title={setup.deviceNames.join(", ")}>live on {setup.usedBy}</StatChip> : <span class="chip subtle">not attached</span>}
+          {setup.published && <span class="chip published">in hub</span>}
+          {setup.importCount > 0 && <StatChip>imported {setup.importCount}×</StatChip>}
+        </div>
+        <div class="row wrap">
+          <button class="primary" onClick={() => navigate(`/edit/${setup.id}`)}><Icon.pencil /> Edit</button>
+        </div>
       </div>
       {publishing && (
         <div class="publish-row">
@@ -208,37 +203,5 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
       )}
       {sharing && <ShareDialog kind="layout" targetId={String(setup.id)} targetName={setup.name} onClose={() => setSharing(false)} />}
     </div>
-  );
-}
-
-function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
-  const [text, setText] = useState("");
-  const toast = useToast();
-
-  const importJson = async (raw: string) => {
-    try {
-      const parsed = JSON.parse(raw) as { name?: string };
-      await api.post("/api/layouts", { name: parsed?.name ?? "Imported board", document: parsed });
-      toast.success("Board imported");
-      await onImported();
-    } catch (e) {
-      toast.error(e instanceof SyntaxError ? "That isn't valid JSON." : String(e instanceof Error ? e.message : e));
-    }
-  };
-
-  const onFile = (e: Event) => {
-    const file = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (file) file.text().then(importJson);
-  };
-
-  return (
-    <>
-      <p class="muted" style={{ marginTop: 0 }}>Paste exported JSON, or pick a <code>.glanceos.json</code> file.</p>
-      <textarea rows={5} placeholder='{"schemaVersion":3, …}' value={text} onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)} />
-      <div class="row spread">
-        <input type="file" accept=".json,application/json" onChange={onFile} aria-label="Choose a board file" />
-        <button class="primary" disabled={!text.trim()} onClick={() => importJson(text)}>Import</button>
-      </div>
-    </>
   );
 }

@@ -204,7 +204,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       )}
 
       <div class="row wrap device-actions">
-        {device.layoutId !== null && <button class="primary" onClick={() => navigate(`/edit/${device.layoutId}`)}><Icon.pencil /> Open studio</button>}
+        {device.layoutId !== null && <button class="primary" onClick={() => navigate(`/edit/${device.layoutId}`)}><Icon.pencil /> Edit board</button>}
         <button onClick={onPick}>Change content</button>
         <label class="field refresh-field">
           <span>Refresh</span>

@@ -64,18 +64,24 @@ export function Sidebar({
       </nav>
 
       <div class="sidebar-foot">
-        <Menu
-          align="left"
-          triggerClass="sidebar-account"
-          triggerLabel="Account menu"
-          trigger={<><span class="avatar" aria-hidden="true">{(userName || "?").slice(0, 1).toUpperCase()}</span><span class="sidebar-label">{userName}</span></>}
-          items={[
-            { label: "Settings", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
-            { label: themeLabel(theme), icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, onClick: onCycleTheme },
-            { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
-          ]}
-        />
-        <NotificationsBell />
+        <a class="sidebar-account sidebar-templates" href="#/hub" aria-current={page === "hub" ? "page" : undefined} onClick={onNavigate} title="Templates">
+          <span class="avatar" aria-hidden="true"><Icon.convert /></span>
+          <span class="sidebar-label">Templates</span>
+        </a>
+        <div class="sidebar-foot-row">
+          <Menu
+            align="left"
+            triggerClass="sidebar-account"
+            triggerLabel="Account menu"
+            trigger={<><span class="avatar" aria-hidden="true">{(userName || "?").slice(0, 1).toUpperCase()}</span><span class="sidebar-label">{userName}</span></>}
+            items={[
+              { label: "Settings", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
+              { label: themeLabel(theme), icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, onClick: onCycleTheme },
+              { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
+            ]}
+          />
+          <NotificationsBell />
+        </div>
       </div>
     </aside>
   );

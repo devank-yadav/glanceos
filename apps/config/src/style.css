@@ -2438,8 +2438,11 @@ textarea:focus-visible,
 .sidebar-link svg { width: 18px; height: 18px; flex: none; }
 
 /* Account row + notification bell share one line: account grows, bell pinned right. */
-.sidebar-foot { border-top: 1px solid var(--rule); padding-top: var(--space-sm); display: flex; align-items: center; gap: 4px; }
-.sidebar-foot .menu-wrap { flex: 1; min-width: 0; }
+.sidebar-foot { border-top: 1px solid var(--rule); padding-top: var(--space-sm); display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.sidebar-foot-row { display: flex; align-items: center; gap: 4px; }
+.sidebar-foot-row .menu-wrap { flex: 1; min-width: 0; }
+.sidebar-templates .avatar svg { width: 15px; height: 15px; }
+.app-shell.collapsed .sidebar-foot-row { flex-direction: column; gap: 4px; }
 .sidebar-account {
   display: flex;
   align-items: center;
@@ -2640,6 +2643,16 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .chip.subtle { color: var(--faint); background: transparent; }
 
 /* setups / device cards */
+/* Board tile: the live preview is the full-bleed hero; metadata + actions sit in a padded body. */
+.setup-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
+.setup-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.setup-card .board-preview-link { margin: 0; border-radius: 0; }
+.setup-card .board-preview-link:hover { transform: none; box-shadow: none; }
+.setup-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; }
+.setup-card-body { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px 15px; }
+.setup-card-body .chip-row { margin: 0; }
+.setup-card-body .row.wrap { margin-top: 2px; }
+.setup-card-body .primary { width: 100%; justify-content: center; }
 .setup-card .row.wrap, .device-actions { margin-top: 4px; }
 .setup-card .card-title, .device-name { cursor: default; }
 .device-name { cursor: text; border-radius: 5px; padding: 1px 4px; margin: -1px -4px; }
@@ -2775,6 +2788,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   max-width: calc(100vw - 28px);
   padding: 16px;
   animation: rise 0.14s var(--ease) both;
+  /* portaled over the canvas — needs a solid, opaque surface (the translucent
+     .card background read as "transparent / glitchy" floating over content) */
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-md);
 }
 .share-popover h3 { margin: 0 0 6px; font-size: 15px; }
 .share-popover p { margin: 0 0 12px; font-size: 13px; }
@@ -2789,6 +2807,9 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   max-width: calc(100vw - 28px);
   padding: 14px;
   animation: rise 0.14s var(--ease) both;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-md);
 }
 .display-popover h3 { margin: 0 0 8px; font-size: 15px; }
 .display-list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 280px; overflow-y: auto; }

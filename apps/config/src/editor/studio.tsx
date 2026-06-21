@@ -899,8 +899,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <aside class={`studio-side pinned${sideShown ? " open" : ""}`}>
           <div class="sidebar-header">
             <h3>Blocks</h3>
-            <span class="spacer" />
-            <button class="icon-btn" title="Hide panel" onClick={() => setSidebarOpen(false)}><Icon.panelToggle /></button>
           </div>
           <Palette
             stageRef={stageRef}

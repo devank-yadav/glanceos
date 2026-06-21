@@ -42,6 +42,7 @@ export const Icon = {
   sun: svg([<circle cx="12" cy="12" r="4" />, <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />]),
   bell: svg([<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />, <path d="M10 20a2 2 0 0 0 4 0" />]),
   list: svg([<path d="M8 6h13M8 12h13M8 18h13" />, <path d="M3 6h.01M3 12h.01M3 18h.01" />]),
+  more: svg([<circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" />, <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />, <circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none" />]),
   eye: svg([<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />, <circle cx="12" cy="12" r="3" />]),
   eyeOff: svg([<path d="M9.9 4.2A9.5 9.5 0 0 1 12 4c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.2 3.1" />, <path d="M6.6 6.6A17.6 17.6 0 0 0 2 12s3.5 7 10 7a9.3 9.3 0 0 0 5.4-1.6" />, <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />, <line x1="3" y1="3" x2="21" y2="21" />]),
   command: svg(<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z" />),
