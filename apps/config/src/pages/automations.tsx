@@ -178,7 +178,8 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
         : act.kind === "advanceQueue" ? { ...act, delta: Number(act.delta) || 1 }
           : act.kind === "setData" || act.kind === "setObjectProp" ? { ...act, value: coerce(act.value) }
             : act);
-    return { ...a, layoutId: layoutId ?? a.layoutId ?? null, conditions, actions };
+    // Existing rules keep their own board; only a new draft adopts this modal's board.
+    return { ...a, layoutId: a.id ? a.layoutId ?? null : layoutId ?? a.layoutId ?? null, conditions, actions };
   };
 
   const save = async () => {
@@ -377,15 +378,20 @@ function ActionFields({ action, objects, onChange }: { action: Action; objects?:
   // Object picker for the object-targeting actions — settable objects only, and we
   // stash the current name + primary prop alongside the stable id.
   const settable = (objects ?? []).filter((o) => o.settable);
-  const objSelect = () => (
-    <select value={String(action.objectId ?? "")} onChange={(e) => {
-      const o = settable.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
-      onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, ...(action.kind === "setObjectText" ? { prop: o?.prop } : {}) });
-    }}>
-      <option value="" disabled>Pick an object…</option>
-      {settable.map((o) => <option key={o.id} value={o.id}>{`${o.name} (${o.label})`}</option>)}
-    </select>
-  );
+  const objSelect = () => {
+    const cur = String(action.objectId ?? "");
+    const missing = cur !== "" && !settable.some((o) => o.id === cur); // target was renamed away or deleted
+    return (
+      <select value={cur} onChange={(e) => {
+        const o = settable.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
+        onChange({ ...action, objectId: o?.id ?? "", objectName: o?.name, ...(action.kind === "setObjectText" ? { prop: o?.prop } : {}) });
+      }}>
+        <option value="" disabled>Pick an object…</option>
+        {missing && <option value={cur}>{`⚠ ${action.objectName ?? cur} (missing)`}</option>}
+        {settable.map((o) => <option key={o.id} value={o.id}>{`${o.name} (${o.label})`}</option>)}
+      </select>
+    );
+  };
   switch (action.kind) {
     case "setData": return <>{txt("key", "data key")}{txt("value", "value", "grow")}</>;
     case "addTask": return <>{txt("listId", "list")}{txt("text", "task text", "grow")}</>;

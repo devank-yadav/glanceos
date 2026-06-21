@@ -1,4 +1,4 @@
-import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT } from "@glanceos/schema";
+import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT, WidgetT } from "@glanceos/schema";
 import { getUser } from "../auth";
 import { listCustomData, setCustomData } from "../customdata";
 import { getOwnedLayout, updateLayout } from "../layouts";
@@ -45,22 +45,23 @@ function primaryProp(props: Record<string, unknown>): string | undefined {
  *  live-data blocks are present but read-only (value undefined offline). */
 function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>): Record<string, ObjEntry> {
   const out: Record<string, ObjEntry> = {};
-  for (const block of layout.rows.flatMap((r) => r.blocks)) {
-    if (!block.name) continue;
+  const named = layout.rows.flatMap((r) => r.blocks).filter((b) => b.name);
+  const entryFor = (block: WidgetT): ObjEntry => {
     const props = block.props as Record<string, unknown>;
-    let entry: ObjEntry;
     if (block.type === "customData") {
       const key = String(props.key ?? "");
-      entry = { value: dataStore[key], settable: !!key, kind: "data", key };
-    } else if (block.source) {
-      entry = { value: undefined, settable: false, kind: "live" };
-    } else {
-      const prop = primaryProp(props);
-      entry = { value: prop ? props[prop] : undefined, settable: !!prop, kind: "static", prop };
+      // No data key (malformed) → read nothing, not dataStore[""].
+      return key ? { value: dataStore[key], settable: true, kind: "data", key } : { value: undefined, settable: false, kind: "data", key: "" };
     }
-    out[block.id] = entry;
-    out[block.name] = entry; // same entry, also reachable by current name
-  }
+    if (block.source) return { value: undefined, settable: false, kind: "live" };
+    const prop = primaryProp(props);
+    return { value: prop ? props[prop] : undefined, settable: !!prop, kind: "static", prop };
+  };
+  // Ids are authoritative — conditions/actions reference objects.<id>, so build all
+  // id keys first. Names are a readability alias added second; never let a name
+  // clobber an id (or an earlier name — autoNameObjects keeps names unique anyway).
+  for (const block of named) out[block.id] = entryFor(block);
+  for (const block of named) if (!(block.name! in out)) out[block.name!] = out[block.id]!;
   return out;
 }
 
@@ -194,8 +195,12 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, b
           } else {
             const prop = a.kind === "setObjectText" ? (a.prop || primaryProp(props)) : a.prop;
             if (!prop) throw new Error("object has no settable text");
+            const original = props[prop];
             props[prop] = next;
-            updateLayout(board.id, board.document);
+            // Keep the in-memory doc consistent with persistence: if the save fails,
+            // roll the mutation back so sibling automations in this pass don't read it.
+            try { updateLayout(board.id, board.document); }
+            catch (e) { props[prop] = original; throw e; }
           }
           touched = true;
           break;

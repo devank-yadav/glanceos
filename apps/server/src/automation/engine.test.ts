@@ -182,6 +182,19 @@ describe("objects — board-scoped reads & writes (v4.0)", () => {
     expect(getCustomData(user.id, "lobbyTemp")).toBe("26");
   });
 
+  it("keys objects by id authoritatively — a name never clobbers a block id", () => {
+    const b = createLayout("Collide", {
+      schemaVersion: 3, name: "Collide",
+      rows: [{ id: "r1", blocks: [
+        { id: "dup", name: "Alpha", type: "heading", props: { content: "A" } }, // id "dup"
+        { id: "other", name: "dup", type: "heading", props: { content: "B" } }, // name "dup" — must NOT overwrite block id "dup"
+      ] }],
+    } as Parameters<typeof createLayout>[1], { userId: user.id });
+    const c = buildContext(user.id, { layout: getLayout(b.id)!.document });
+    expect((c.objects.dup as { value: unknown }).value).toBe("A"); // the block whose id is "dup", not the one named "dup"
+    expect((c.objects.other as { value: unknown }).value).toBe("B");
+  });
+
   it("object actions are inert without a board, and a dangling id is a reported error", async () => {
     const noBoard = await runActions([{ kind: "setObjectText", objectId: "h1", text: "x" }], user.id, buildContext(user.id));
     expect(noBoard.run).toBe(0);
