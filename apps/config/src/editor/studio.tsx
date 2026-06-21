@@ -868,7 +868,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               <>
                 <div class="popover-backdrop" onPointerDown={() => setOptionsOpen(false)} />
                 <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
-                  <BlockFields block={primaryBlock} stageEdit={stageEdit} />
+                  <BlockFields block={primaryBlock} stageEdit={stageEdit} onMakeLive={() => { setOptionsOpen(false); setDataOpen(true); }} />
                 </div>
               </>
             )}

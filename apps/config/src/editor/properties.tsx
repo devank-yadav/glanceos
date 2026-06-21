@@ -254,9 +254,11 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
 export function BlockFields({
   block,
   stageEdit,
+  onMakeLive,
 }: {
   block: WidgetT;
   stageEdit: (mutate: (d: LayoutT) => void) => void;
+  onMakeLive?: () => void;
 }) {
   const editProp = (key: string, value: unknown) =>
     stageEdit((d) => {
@@ -290,6 +292,11 @@ export function BlockFields({
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.visibility = v === "whenData" ? "whenData" : undefined;
+    });
+  const clearSource = () =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.source = undefined;
     });
   const props = block.props as Record<string, unknown>;
   const fields = PROP_FIELDS[block.type];
@@ -325,6 +332,20 @@ export function BlockFields({
             <option value="markdown">Markdown (**bold**, *italic*, [link](url))</option>
           </select>
         </label>
+      )}
+      {BINDABLE.has(block.type) && onMakeLive && (
+        <div class="field make-live">
+          <span>Live data <span class="muted">— update on its own</span></span>
+          {block.source ? (
+            <div class="row make-live-row">
+              <span class="make-live-badge"><span class="status-dot live" aria-hidden="true" /> Live · {block.source.kind.split(".")[0]}</span>
+              <button class="ghost" type="button" onClick={onMakeLive}>Edit source</button>
+              <button class="ghost" type="button" onClick={clearSource}>Make static</button>
+            </div>
+          ) : (
+            <button class="primary make-live-btn" type="button" onClick={onMakeLive}><Icon.link /> Make it live</button>
+          )}
+        </div>
       )}
       {BINDABLE.has(block.type) && (
         <label class="field">
