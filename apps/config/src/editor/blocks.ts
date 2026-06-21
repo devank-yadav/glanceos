@@ -367,11 +367,14 @@ export const SERIES_BLOCKS = new Set<WidgetType>([
 ]);
 export const SCALAR_BLOCKS = new Set<WidgetType>([
   "stat", "metric", "bigNumber", "trend", "deltaStat", "percentBig", "progress", "gauge",
+  // v4.7 — signage/sensor blocks made bindable (sensor → Home Assistant, money → FX, …);
+  // each falls back to its typed prop when no source is attached, so old boards are unchanged.
+  "sensor", "thermostat", "moneyStat", "deviceStatus", "roomStatus", "openSign", "splitFlap",
 ]);
 // Newline-joined text lists (Todoist/Notion/GitHub issues → a list block).
 export const LIST_BLOCKS = new Set<WidgetType>(["bulletList", "numberedList", "checklist"]);
 // Already-typed live shapes — bind the whole block, no field mapping needed.
-export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines"]);
+export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying"]);
 export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PASSTHROUGH_BLOCKS]);
 
 // Single-line types: never hold their own newlines.

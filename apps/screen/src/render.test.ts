@@ -128,3 +128,18 @@ describe("pomodoro is a live, self-running timer", () => {
     } finally { vi.useRealTimers(); }
   });
 });
+
+describe("signage blocks bind to live data with a static fallback", () => {
+  const sensor = (data: Record<string, unknown>) =>
+    renderPayload({ claimed: true, state: { layoutVersion: 1, data, layout: {
+      ...baseLayout,
+      rows: [{ id: "r", h: 6, blocks: [{ id: "s", type: "sensor", width: 1, props: { label: "Room", value: "21", unit: "°C" } }] }],
+    } } } as unknown as StreamPayloadT);
+
+  it("shows the typed prop when unbound, the live value when data arrives", () => {
+    sensor({}); // no data → the offline fallback
+    expect(document.querySelector(".metric-value")!.textContent).toBe("21");
+    sensor({ s: { value: 42.5 } }); // bound → the resolved value
+    expect(document.querySelector(".metric-value")!.textContent).toBe("42.5");
+  });
+});

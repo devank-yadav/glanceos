@@ -88,6 +88,8 @@ const boundLines = (w: WidgetT, data: unknown, prop: string): string => {
   }
   return String((w.props as Record<string, unknown>)[prop] ?? "");
 };
+// Coerce a bound on/off-ish value to a boolean (for signage: device on, sign open…).
+const truthy = (s: string): boolean => /^\s*(on|true|1|yes|open|active|playing)\s*$/i.test(s);
 
 // ---------- existing ----------
 
@@ -583,28 +585,29 @@ const menuList: Render = (el, w) => {
 
 // ---------- smart-home placeholders ----------
 
-const deviceStatus: Render = (el, w) => {
+const deviceStatus: Render = (el, w, data) => {
   if (w.type !== "deviceStatus") return;
   el.appendChild(div("widget-heading", w.props.label));
+  const state = boundStr(w, data, "state") || "off";
+  const on = truthy(state);
   const row = div("device-row");
-  const dot = div(`device-dot ${w.props.state === "on" ? "on" : "off"}`);
-  row.append(dot, div("device-state", w.props.state.toUpperCase()));
+  row.append(div(`device-dot ${on ? "on" : "off"}`), div("device-state", state.toUpperCase()));
   el.appendChild(row);
 };
 
-const sensor: Render = (el, w) => {
+const sensor: Render = (el, w, data) => {
   if (w.type !== "sensor") return;
   el.appendChild(div("widget-heading", w.props.label));
   const row = div("metric-row");
-  row.append(div("metric-value", w.props.value));
+  row.append(div("metric-value", boundStr(w, data, "value")));
   if (w.props.unit) row.append(div("metric-unit", w.props.unit));
   el.appendChild(row);
 };
 
-const thermostat: Render = (el, w) => {
+const thermostat: Render = (el, w, data) => {
   if (w.type !== "thermostat") return;
   el.appendChild(div("widget-heading", w.props.label));
-  el.appendChild(div("thermo-temp", `${w.props.temperature}°${w.props.unit}`));
+  el.appendChild(div("thermo-temp", `${Math.round(boundNum(w, data, "temperature"))}°${w.props.unit}`));
 };
 
 // ===================== v0.6 blocks =====================
@@ -1673,11 +1676,12 @@ const checklistProgress: Render = (el, w) => {
 };
 
 // ---- signage & office ----
-const roomStatus: Render = (el, w) => {
+const roomStatus: Render = (el, w, data) => {
   if (w.type !== "roomStatus") return;
   el.appendChild(div("widget-heading", w.props.room));
-  const big = div("openbig", w.props.status.toUpperCase());
-  big.classList.toggle("is-open", w.props.status === "free");
+  const status = boundStr(w, data, "status") || "free";
+  const big = div("openbig", status.toUpperCase());
+  big.classList.toggle("is-open", /^\s*(free|available|open|vacant)\s*$/i.test(status));
   el.appendChild(big);
 };
 const directory: Render = (el, w) => {
@@ -1695,23 +1699,24 @@ const eventBanner: Render = (el, w) => {
   el.appendChild(div("event-title", w.props.title));
   el.appendChild(div("event-when", w.props.when));
 };
-const openSign: Render = (el, w) => {
+const openSign: Render = (el, w, data) => {
   if (w.type !== "openSign") return;
   if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
-  const big = div("openbig", w.props.open ? "OPEN" : "CLOSED");
-  big.classList.toggle("is-open", w.props.open);
+  const open = data == null ? w.props.open : truthy(boundStr(w, data, "open"));
+  const big = div("openbig", open ? "OPEN" : "CLOSED");
+  big.classList.toggle("is-open", open);
   el.appendChild(big);
 };
-const nowPlaying: Render = (el, w) => {
+const nowPlaying: Render = (el, w, data) => {
   if (w.type !== "nowPlaying") return;
   el.appendChild(div("widget-heading", "♪ Now playing"));
-  el.appendChild(div("np-title", w.props.title));
-  el.appendChild(div("np-artist", w.props.artist));
+  el.appendChild(div("np-title", boundStr(w, data, "title")));
+  el.appendChild(div("np-artist", boundStr(w, data, "artist")));
 };
-const splitFlap: Render = (el, w) => {
+const splitFlap: Render = (el, w, data) => {
   if (w.type !== "splitFlap") return;
   const wrap = div("splitflap");
-  for (const ch of w.props.text.toUpperCase().slice(0, 16)) wrap.appendChild(div("flap", ch === " " ? " " : ch));
+  for (const ch of boundStr(w, data, "text").toUpperCase().slice(0, 16)) wrap.appendChild(div("flap", ch === " " ? " " : ch));
   el.appendChild(wrap);
 };
 
