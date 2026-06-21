@@ -74,7 +74,7 @@ export const Action = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("incrementData"), key: z.string().min(1).max(100), delta: z.number().min(-1_000_000).max(1_000_000).default(1) }),
   z.object({ kind: z.literal("toggleData"), key: z.string().min(1).max(100) }),
   // Pause between actions (a Shortcuts "Wait").
-  z.object({ kind: z.literal("delay"), ms: z.number().int().min(50).max(30_000) }),
+  z.object({ kind: z.literal("delay"), ms: z.number().int().min(50).max(5_000) }), // bounded: a delay blocks the shared automation tick
 ]);
 export type ActionT = z.infer<typeof Action>;
 export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp", "showObject", "hideObject", "incrementData", "toggleData", "delay"] as const;

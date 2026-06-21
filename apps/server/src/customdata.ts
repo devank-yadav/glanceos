@@ -22,7 +22,7 @@ export function getCustomData(userId: string, key: string): unknown {
 
 /** All of a user's entries, newest first. */
 export function listCustomData(userId: string): CustomDataEntry[] {
-  return (db.prepare("SELECT key, value, updated_at FROM custom_data WHERE user_id = ? ORDER BY updated_at DESC").all(userId) as CustomDataRow[])
+  return (db.prepare("SELECT key, value, updated_at FROM custom_data WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC").all(userId) as CustomDataRow[])
     .map((r) => ({ key: r.key, value: parse(r.value), updatedAt: r.updated_at }));
 }
 

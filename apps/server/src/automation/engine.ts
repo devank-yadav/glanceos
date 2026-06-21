@@ -66,6 +66,15 @@ function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>)
 }
 
 const num = (x: unknown): number | null => { const n = Number(x); return Number.isFinite(n) ? n : null; };
+// JS has no regex timeout, and the ~60s tick evaluates every user's conditions in
+// turn — so a user-supplied "matches" pattern must never be able to backtrack
+// unboundedly (ReDoS). Refuse patterns with nested/stacked quantifiers (the classic
+// catastrophic-backtracking trap) and bound both the pattern and the tested input.
+function safeRegexTest(pattern: string, input: string): boolean {
+  if (pattern.length > 120) return false;
+  if (/[)\]][*+?{]/.test(pattern) || /[*+?][*+?]/.test(pattern)) return false;
+  try { return new RegExp(pattern).test(input.slice(0, 2000)); } catch { return false; }
+}
 // Defensive: never throw on circular/BigInt values, even though the context is
 // currently always JSON-derived (keeps compare()/changed strictly total).
 const safeStringify = (v: unknown): string => { try { return JSON.stringify(v) ?? "undefined"; } catch { return "[unstringifiable]"; } };
@@ -91,7 +100,7 @@ function compare(op: ComparatorT, actual: unknown, expected: unknown): boolean {
       return String(actual ?? "").includes(String(expected ?? ""));
     case "startsWith": return String(actual ?? "").startsWith(String(expected ?? ""));
     case "endsWith": return String(actual ?? "").endsWith(String(expected ?? ""));
-    case "matches": { try { return new RegExp(String(expected ?? "")).test(String(actual ?? "")); } catch { return false; } }
+    case "matches": return safeRegexTest(String(expected ?? ""), String(actual ?? ""));
     default: return false; // exists/changed/between handled in evaluate
   }
 }
@@ -234,7 +243,7 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, b
           touched = true;
           break;
         }
-        case "delay": { await new Promise((r) => setTimeout(r, Math.min(30_000, Math.max(0, a.ms)))); break; }
+        case "delay": { await new Promise((r) => setTimeout(r, Math.min(5_000, Math.max(0, a.ms)))); break; } // bounded: the tick is shared across users
       }
       run++;
     } catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }

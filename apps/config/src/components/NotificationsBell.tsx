@@ -35,7 +35,11 @@ export function NotificationsBell() {
   const toggle = () => {
     if (open) { setOpen(false); return; }
     const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ left: Math.max(8, r.left), bottom: Math.round(window.innerHeight - r.top + 8) });
+    if (r) {
+      // Anchor above the bell; clamp so the panel (≤ ~360px tall) stays on-screen.
+      const bottom = Math.round(window.innerHeight - r.top + 8);
+      setPos({ left: Math.max(8, r.left), bottom: Math.max(8, Math.min(bottom, window.innerHeight - 360)) });
+    }
     setOpen(true);
   };
   const markRead = async (id: number) => { await api.post(`/api/notifications/${id}/read`).catch(() => {}); load(); };

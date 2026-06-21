@@ -224,6 +224,13 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   // Object actions appear when the board has any named object (show/hide work on any;
   // set-text/prop list only settable ones in their picker).
   const actionKinds = objects && objects.length ? [...ACTION_KINDS, ...OBJECT_ACTIONS] : ACTION_KINDS;
+  // Required-field check so we don't POST an action the schema will 400 on.
+  const actionsValid = a.actions.every((act) => {
+    if (act.kind === "setData" || act.kind === "incrementData" || act.kind === "toggleData") return !!String(act.key ?? "").trim();
+    if (act.kind === "setObjectProp") return !!act.objectId && !!String(act.prop ?? "").trim();
+    if (act.kind === "setObjectText" || act.kind === "showObject" || act.kind === "hideObject") return !!act.objectId;
+    return true;
+  });
 
   // Normalise the draft for the API: empty condition group → undefined (always),
   // and coerce field/value strings to typed JSON. layoutId rides along so the
@@ -242,7 +249,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
       act.kind === "switchBoard" ? { ...act, layoutId: Number(act.layoutId) || 0 }
         : act.kind === "advanceQueue" ? { ...act, delta: Number(act.delta) || 1 }
           : act.kind === "incrementData" ? { ...act, delta: Number(act.delta) || 1 }
-            : act.kind === "delay" ? { ...act, ms: Number(act.ms) || 1000 }
+            : act.kind === "delay" ? { ...act, ms: Math.max(50, Math.min(5000, Number(act.ms) || 1000)) }
               : act.kind === "setData" || act.kind === "setObjectProp" ? { ...act, value: coerce(act.value) }
                 : act);
     // Existing rules keep their own board; only a new draft adopts this modal's board.
@@ -314,7 +321,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             {a.actions.length > 1 && <button class="ghost danger icon-btn" onClick={() => set({ actions: a.actions.filter((_, j) => j !== i) })}>×</button>}
           </div>
         ))}
-        <button class="ghost" onClick={() => set({ actions: [...a.actions, defaultAction(settable.length ? "setObjectText" : "setData", objects)] })}>+ Add action</button>
+        <button class="ghost" onClick={() => set({ actions: [...a.actions, defaultAction(objects && objects.length ? (settable.length ? "setObjectText" : "showObject") : "setData", objects)] })}>+ Add action</button>
       </div>
 
       {preview && (
@@ -328,7 +335,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
         <button class="ghost" onClick={test}>Test now</button>
         <span class="row" style={{ gap: "8px" }}>
           <button class="ghost" onClick={onCancel}>Cancel</button>
-          <button class="primary" disabled={busy || !a.name.trim()} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+          <button class="primary" disabled={busy || !a.name.trim() || !actionsValid} onClick={save}>{busy ? "Saving…" : "Save"}</button>
         </span>
       </div>
     </section>

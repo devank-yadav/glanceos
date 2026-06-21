@@ -61,6 +61,10 @@ describe("evaluate — v4.1 comparators", () => {
     expect(evaluate(field("data.status", "endsWith", "en"), ctx())).toBe(true);
     expect(evaluate(field("data.status", "matches", "^o.+n$"), ctx())).toBe(true);
     expect(evaluate(field("data.status", "matches", "["), ctx())).toBe(false); // invalid regex
+    // ReDoS guard: a nested-quantifier pattern is refused (returns fast, never hangs).
+    const t0 = Date.now();
+    expect(evaluate(field("data.status", "matches", "(a+)+$"), ctx({ data: { status: "aaaaaaaaaaaaaaaaaaaaaaaaaaX" } }))).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(100);
   });
 });
 
