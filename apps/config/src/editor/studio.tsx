@@ -14,6 +14,8 @@ import { Present } from "./present";
 import { castBoard, castConfigured } from "../cast";
 import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
+import { Modal } from "../components/Modal";
+import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings } from "./properties";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
@@ -142,6 +144,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -680,9 +683,19 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <button class="ghost icon-btn" disabled={state.future.length === 0} title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
         <button class="ghost icon-btn" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
         <button class="ghost icon-btn" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
+        <button class={`ghost icon-btn${autoOpen ? " on" : ""}`} title="Automations — make this board react" onClick={() => setAutoOpen(true)}><Icon.command /></button>
         <button class={`ghost icon-btn${shareOpen ? " on" : ""}`} title="Share" onClick={() => (shareOpen ? setShareOpen(false) : openShare())}><Icon.link /></button>
         <button class={`ghost icon-btn${sideShown ? " on" : ""}`} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
       </header>
+      {autoOpen && (
+        <Modal open={autoOpen} onClose={() => setAutoOpen(false)} title="Automations" width={680}>
+          <AutomationsPage
+            embedded
+            layoutId={layoutId}
+            objects={state.present.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, settable: !b.source, prop: TEXT_PROP[b.type] }))}
+          />
+        </Modal>
+      )}
       {shareOpen && (
         <>
           <div class="popover-backdrop" onPointerDown={() => setShareOpen(false)} />

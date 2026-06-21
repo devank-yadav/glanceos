@@ -2995,6 +2995,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 /* ---------- studio: object name field ---------- */
 .object-name-field { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
 
+/* ---------- automations: webhook-trigger inlet URLs ---------- */
+.webhook-inlets { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.webhook-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.webhook-url { font-size: 12px; word-break: break-all; color: var(--muted); }
+.auto-embed .page-intro { margin-top: 0; }
+
 /* ---------- page tabs (Boards: My boards / Shared) ---------- */
 .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .tabs .tab { appearance: none; background: none; border: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--text-muted); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; text-decoration: none; }
