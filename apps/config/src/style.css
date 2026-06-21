@@ -788,20 +788,6 @@ input[type="checkbox"] {
 .board-preview-link:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
 .board-preview-skeleton { background: var(--thumb-bg); animation: pulse 1.4s var(--ease) infinite; }
 .preview-empty-icon svg { width: 26px; height: 26px; }
-.preview-tag {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--glass-border);
-  color: var(--fg);
-}
 
 .playlist-items {
   list-style: none;

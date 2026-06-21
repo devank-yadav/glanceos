@@ -166,7 +166,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       </div>
 
       <p class={`tile-status${device.online ? " live" : " muted"}`} title={device.online ? "Online" : "Offline"}>
-        {playlist ? <>Rotating <strong>{playlist.name}</strong></>
+        {playlist ? <>Rotating <strong>{playlist.name}</strong> · {playlist.items.length} board{playlist.items.length === 1 ? "" : "s"}</>
           : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
             : <>No content yet</>}
       </p>
@@ -511,7 +511,6 @@ function DevicePreview({ device, playlists }: { device: DeviceSummary; playlists
   if (!doc) return <div class="device-preview"><div class="board-preview is-loading" style={{ aspectRatio: `${w} / ${h}` }} /></div>;
   return (
     <div class="device-preview">
-      {playlist && <span class="preview-tag">Playlist · {playlist.items.length}</span>}
       <BoardPreview doc={doc} w={w} h={h} deviceName={device.name ?? undefined} />
     </div>
   );
