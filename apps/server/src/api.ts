@@ -11,7 +11,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
-  isUserAdmin, registrationOpen, sessionUserId, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, registrationOpen, sessionUserId, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
 import {
@@ -26,7 +26,7 @@ import {
   registerDevice, setDeviceLocation, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
-import { geocodeSearch } from "./fetchers/geocode";
+import { geocodeSearch, reverseGeocode } from "./fetchers/geocode";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
 import { clearAll, listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
@@ -273,6 +273,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
   app.use("/api/geocode", limiter("geocode", 60, 60_000, userKey));
+  app.use("/api/reverse-geocode", limiter("revgeo", 60, 60_000, userKey));
   app.use("/api/uploads", limiter("upload", 30, 60_000, userKey));
   app.use("/api/data", limiter("data", 120, 60_000, userKey));
   app.use("/api/inlets", limiter("inlets", 60, 60_000, userKey));
@@ -1119,7 +1120,7 @@ export function buildApp(): Hono<Env> {
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null };
     const userId = c.get("userId");
     let u = getUser(userId);
     if (typeof body.name === "string") {
@@ -1130,10 +1131,22 @@ export function buildApp(): Hono<Env> {
       u = updateUserTimezone(userId, body.defaultTimezone);
       if (!u) return c.json({ error: "invalid timezone" }, 400);
     }
+    if (body.home !== undefined) {
+      // null clears the home; an object sets it (coordinates bounded server-side).
+      const home = body.home === null ? null : { name: String(body.home.name ?? ""), latitude: Number(body.home.latitude), longitude: Number(body.home.longitude) };
+      u = setUserHome(userId, home);
+      if (!u) return c.json({ error: "invalid location" }, 400);
+    }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });
-  // City search → coordinates for the per-screen location picker (SSRF-guarded).
+  // City search → coordinates (+ timezone) for the location pickers (SSRF-guarded).
   app.get("/api/geocode", async (c) => c.json(await geocodeSearch(c.req.query("q") ?? "").catch(() => [])));
+  // Coordinates → a human place name, for a one-time browser geolocation (SSRF-guarded).
+  app.get("/api/reverse-geocode", async (c) => {
+    const lat = Number(c.req.query("lat")), lon = Number(c.req.query("lon"));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return c.json({ error: "lat & lon required" }, 400);
+    return c.json((await reverseGeocode(lat, lon).catch(() => null)) ?? { name: "My location" });
+  });
   // The canonical IANA zone list (matches the server's own validation) for the
   // timezone <select>s. Static + cacheable.
   app.get("/api/timezones", (c) => {

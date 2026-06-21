@@ -5,6 +5,14 @@ import { api, type QueueState, type TaskItem } from "../api";
 import { BINDABLE, blockFor, type WidgetType } from "./blocks";
 import { BlockIcon } from "./blockIcons";
 import { Icon } from "./icons";
+import { LocationPicker } from "../components/LocationPicker";
+
+// A geo block left at these schema-default coordinates inherits the screen's
+// location (then the account home) at render time — so "Use the screen's location"
+// just means resetting to the default. Mirrors widgets.ts geoFor on the server.
+const GEO_DEFAULT_LAT = 28.6139, GEO_DEFAULT_LON = 77.209;
+const isInheritGeo = (lat: unknown, lon: unknown): boolean =>
+  typeof lat === "number" && typeof lon === "number" && Math.abs(lat - GEO_DEFAULT_LAT) < 1e-4 && Math.abs(lon - GEO_DEFAULT_LON) < 1e-4;
 
 // The right-hand panel: props of the selected block, or board settings when
 // nothing is selected. Position is structural (lines and columns), so there
@@ -306,8 +314,19 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.source = undefined;
     });
+  // Set a geo block's coordinates in one edit (the two raw lat/lon fields are
+  // replaced by a friendly location control — search a city or use my location).
+  const setGeo = (lat: number, lon: number) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) { const p = target.props as Record<string, unknown>; p.latitude = lat; p.longitude = lon; }
+    });
   const props = block.props as Record<string, unknown>;
-  const fields = PROP_FIELDS[block.type];
+  const allFields = PROP_FIELDS[block.type];
+  // Hide raw latitude/longitude inputs when the block is geo-aware — a LocationField
+  // takes their place. Other props still render normally.
+  const hasGeo = allFields.some((f) => f.key === "latitude") && allFields.some((f) => f.key === "longitude");
+  const fields = hasGeo ? allFields.filter((f) => f.key !== "latitude" && f.key !== "longitude") : allFields;
   const style = block.style;
 
   return (
@@ -327,8 +346,22 @@ export function BlockFields({
         {fields.map((f) => (
           <PropField key={f.key} field={f} value={props[f.key]} onChange={(v) => editProp(f.key, v)} />
         ))}
-        {fields.length === 0 && <p class="muted">Nothing to configure.</p>}
+        {fields.length === 0 && !hasGeo && <p class="muted">Nothing to configure.</p>}
       </div>
+      {hasGeo && (
+        <div class="field grow geo-field">
+          <span>Location <span class="muted">— for this block</span></span>
+          {isInheritGeo(props.latitude, props.longitude) ? (
+            <p class="muted setting-help">Following the screen's location (or your account home). Search a city or use your location to pin this block to a specific place.</p>
+          ) : (
+            <div class="row spread geo-current">
+              <span class="muted">📍 {Number(props.latitude).toFixed(3)}, {Number(props.longitude).toFixed(3)}</span>
+              <button class="ghost" onClick={() => setGeo(GEO_DEFAULT_LAT, GEO_DEFAULT_LON)}>Follow screen</button>
+            </div>
+          )}
+          <LocationPicker current={null} onPick={(l) => setGeo(l.latitude, l.longitude)} onClear={() => setGeo(GEO_DEFAULT_LAT, GEO_DEFAULT_LON)} />
+        </div>
+      )}
       {block.type === "image" && <ImageUpload onUploaded={(url) => editProp("url", url)} />}
       {block.type === "tasks" && <TasksItemsEditor listId={(props.listId as string) || "default"} />}
       {block.type === "queue" && <QueueCounterEditor queueId={(props.queueId as string) || "default"} />}

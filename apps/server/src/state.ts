@@ -1,5 +1,5 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
-import { getUser } from "./auth";
+import { getUser, userHomeGeo } from "./auth";
 import { connLookupFor } from "./connections";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
@@ -8,6 +8,15 @@ import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
+
+// A screen inherits the account home location when it has none of its own, so a
+// weather/sun block resolves sensibly even on an unconfigured screen (precedence:
+// block geo → screen location → account home → server default).
+function geoForDevice(device: DeviceRow): { latitude: number; longitude: number } | undefined {
+  if (device.latitude != null && device.longitude != null) return { latitude: device.latitude, longitude: device.longitude };
+  const home = device.user_id ? userHomeGeo(device.user_id) : null;
+  return home ? { latitude: home.lat, longitude: home.lon } : undefined;
+}
 
 /** The layout a device shows right now. The device's own settings win — schedule
  *  → playlist → plain setup — then it falls back to its display group's:
@@ -83,7 +92,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
         layout.document,
         device.user_id ?? "",
         connLookupFor(device.user_id ?? ""),
-        device.latitude != null && device.longitude != null ? { latitude: device.latitude, longitude: device.longitude } : undefined,
+        geoForDevice(device),
       ),
       deviceName: device.name ?? undefined,
       tv,

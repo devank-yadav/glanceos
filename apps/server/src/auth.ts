@@ -12,6 +12,11 @@ export interface PublicUser {
   name: string;
   email: string;
   defaultTimezone: string | null;
+  // The account "home" location (city search or one-time browser geolocation).
+  // Used as the fallback for geo blocks / screens with no location of their own.
+  homeLocationName: string | null;
+  homeLatitude: number | null;
+  homeLongitude: number | null;
   isAdmin: boolean;
 }
 
@@ -22,6 +27,9 @@ interface UserRow {
   password_hash: string;
   created_at: number;
   default_timezone: string | null;
+  home_location_name: string | null;
+  home_latitude: number | null;
+  home_longitude: number | null;
   is_admin: number;
 }
 
@@ -39,7 +47,18 @@ export function verifyHash(password: string, stored: string): boolean {
 }
 
 function toPublic(row: UserRow): PublicUser {
-  return { id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null, isAdmin: (row.is_admin ?? 0) === 1 };
+  return {
+    id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null,
+    homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
+    isAdmin: (row.is_admin ?? 0) === 1,
+  };
+}
+
+/** The account's home coordinates, or null if unset — the geo fallback after a
+ *  screen's own location. */
+export function userHomeGeo(userId: string): { lat: number; lon: number } | null {
+  const row = db.prepare("SELECT home_latitude AS lat, home_longitude AS lon FROM users WHERE id = ?").get(userId) as { lat: number | null; lon: number | null } | undefined;
+  return row && typeof row.lat === "number" && typeof row.lon === "number" ? { lat: row.lat, lon: row.lon } : null;
 }
 
 export function userCount(): number {
@@ -70,6 +89,9 @@ export function createUser(name: string, email: string, password: string): Publi
     password_hash: hashPassword(password),
     created_at: Date.now(),
     default_timezone: null,
+    home_location_name: null,
+    home_latitude: null,
+    home_longitude: null,
     is_admin: firstUser ? 1 : 0,
   };
   try {
@@ -142,6 +164,19 @@ export function updateUserTimezone(userId: string, tz: string | null): PublicUse
   const trimmed = tz?.trim() || null;
   if (trimmed && !isValidTimezone(trimmed)) return null;
   db.prepare("UPDATE users SET default_timezone = ? WHERE id = ?").run(trimmed, userId);
+  return getUser(userId);
+}
+
+/** Set (or clear, with null) the account home location. Coordinates are bounded;
+ *  an out-of-range or partial location is rejected (returns null). */
+export function setUserHome(userId: string, home: { name: string; latitude: number; longitude: number } | null): PublicUser | null {
+  if (home === null) {
+    db.prepare("UPDATE users SET home_location_name = NULL, home_latitude = NULL, home_longitude = NULL WHERE id = ?").run(userId);
+    return getUser(userId);
+  }
+  const { name, latitude, longitude } = home;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  db.prepare("UPDATE users SET home_location_name = ?, home_latitude = ?, home_longitude = ? WHERE id = ?").run(String(name).slice(0, 120), latitude, longitude, userId);
   return getUser(userId);
 }
 

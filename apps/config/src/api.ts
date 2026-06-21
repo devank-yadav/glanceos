@@ -5,6 +5,9 @@ export interface UserInfo {
   name: string;
   email: string;
   defaultTimezone: string | null;
+  homeLocationName: string | null;
+  homeLatitude: number | null;
+  homeLongitude: number | null;
   isAdmin: boolean;
 }
 

@@ -1,5 +1,5 @@
 import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT, WidgetT } from "@glanceos/schema";
-import { getUser } from "../auth";
+import { getUser, userHomeGeo } from "../auth";
 import { getCustomData, listCustomData, setCustomData } from "../customdata";
 import { getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
@@ -156,9 +156,12 @@ function zonedTime(now: Date, tz: string): Ctx["time"] {
   }
 }
 
-// The user's "home" location for sun math: the first screen that has a location set
-// (most setups have one). Undefined → no sun context / sun trigger no-ops gracefully.
+// The user's "home" location for sun/weather math: the account home (v6.0) if set,
+// else the first screen that has a location. Undefined → no sun context / sun trigger
+// no-ops gracefully.
 function userGeo(userId: string): { lat: number; lon: number } | null {
+  const home = userHomeGeo(userId);
+  if (home) return home;
   for (const d of devicesOwnedBy(userId)) {
     if (typeof d.latitude === "number" && typeof d.longitude === "number") return { lat: d.latitude, lon: d.longitude };
   }

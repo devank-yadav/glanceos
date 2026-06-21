@@ -6,7 +6,7 @@ import { BoardPreview, BoardPreviewById } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
-import { LocationPicker } from "../components/LocationPicker";
+import { LocationPicker, type ChosenLocation } from "../components/LocationPicker";
 import { TimezoneSelect } from "../components/TimezoneSelect";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
@@ -248,10 +248,19 @@ function ScreenSettings({ device, onSaved }: { device: DeviceSummary; onSaved: (
     try { await api.patch(`/api/devices/${device.id}`, { timezone: next || null }); await onSaved(); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
-  const saveLoc = async (loc: { name: string; latitude: number; longitude: number } | null) => {
+  const saveLoc = async (loc: ChosenLocation | null) => {
     setLocName(loc ? loc.name : null);
-    try { await api.patch(`/api/devices/${device.id}`, { location: loc }); await onSaved(); toast.success(loc ? "Location set" : "Location cleared"); }
-    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+    try {
+      // Picking a city (or "use my location") sets the clock too — the screen's
+      // timezone comes along, so you don't have to set it separately.
+      const patch: { location: { name: string; latitude: number; longitude: number } | null; timezone?: string } = {
+        location: loc ? { name: loc.name, latitude: loc.latitude, longitude: loc.longitude } : null,
+      };
+      if (loc?.timezone) { patch.timezone = loc.timezone; setTz(loc.timezone); }
+      await api.patch(`/api/devices/${device.id}`, patch);
+      await onSaved();
+      toast.success(loc ? (loc.timezone ? "Location & timezone set" : "Location set") : "Location cleared");
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
   return (

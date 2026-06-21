@@ -47,6 +47,8 @@ function Splash() {
 
 const SIDEBAR_KEY = "glanceos.sidebar";
 const BOOTSTRAP_KEY = "glanceos.bootstrapped"; // per-session guard for the new-account → fresh-board jump
+const GEO_ASKED_KEY = "glanceos.geoAsked"; // one-time guard for the post-login location offer
+const browserTz = (): string | null => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 
 export function App() {
   const route = useRoute();
@@ -58,6 +60,9 @@ export function App() {
   const [drawer, setDrawer] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [onboard, setOnboard] = useState(false);
+  const [geoOffer, setGeoOffer] = useState(false);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoMsg, setGeoMsg] = useState("");
 
   const refreshAuth = async () => {
     try { setStatus(await api.get<AuthStatus>("/api/auth/status")); }
@@ -87,6 +92,35 @@ export function App() {
       })
       .catch(() => {});
   }, [status?.authed]);
+
+  // One-time, post-login location offer: only when the account has no home set AND
+  // the user hasn't already been asked (granted, denied, or dismissed). Never nags —
+  // if skipped or denied, it's re-offered from Settings, not here.
+  useEffect(() => {
+    if (!status?.authed || !status.user) return;
+    let asked = false;
+    try { asked = localStorage.getItem(GEO_ASKED_KEY) === "1"; } catch { /* ignore */ }
+    if (!asked && status.user.homeLatitude == null) setGeoOffer(true);
+  }, [status?.authed]);
+
+  const markGeoAsked = () => { try { localStorage.setItem(GEO_ASKED_KEY, "1"); } catch { /* ignore */ } };
+  const dismissGeo = () => { markGeoAsked(); setGeoOffer(false); };
+  const grantLocation = () => {
+    setGeoMsg("");
+    if (!navigator.geolocation) { setGeoMsg("This browser can't share a location — add one in Settings."); markGeoAsked(); return; }
+    setGeoBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        let name = "My location";
+        try { name = (await api.get<{ name: string }>(`/api/reverse-geocode?lat=${latitude}&lon=${longitude}`)).name || name; } catch { /* keep fallback */ }
+        try { await api.patch("/api/account", { home: { name, latitude, longitude }, defaultTimezone: status?.user?.defaultTimezone || browserTz() || undefined }); } catch { /* ignore */ }
+        markGeoAsked(); setGeoBusy(false); setGeoOffer(false); refreshAuth();
+      },
+      () => { setGeoBusy(false); setGeoMsg("Couldn't get your location. You can add it from Settings anytime."); markGeoAsked(); },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 600_000 },
+    );
+  };
 
   // ⌘K opens the palette; close the mobile drawer whenever the route changes.
   useEffect(() => {
@@ -156,6 +190,19 @@ export function App() {
         />
         {drawer && <div class="sidebar-scrim" onClick={() => setDrawer(false)} />}
         <main id="main" class="shell-main page-enter">
+          {geoOffer && (
+            <div class="geo-offer card">
+              <div class="geo-offer-text">
+                <strong>Set your location</strong>
+                <span class="muted">{geoMsg || "Get accurate weather, sunrise/sunset and the right time zone on your screens. Used once — change it anytime in Settings."}</span>
+              </div>
+              <div class="row geo-offer-actions" style={{ gap: "8px" }}>
+                <button class="primary" disabled={geoBusy} onClick={grantLocation}>{geoBusy ? "Locating…" : "Use my location"}</button>
+                <button class="ghost" onClick={() => { dismissGeo(); navigate("/account"); }}>Search a city</button>
+                <button class="ghost" onClick={dismissGeo}>Not now</button>
+              </div>
+            </div>
+          )}
           {page.name === "boards" && <SetupsPage />}
           {page.name === "screens" && <ScreensPage />}
           {page.name === "groups" && <GroupsPage />}

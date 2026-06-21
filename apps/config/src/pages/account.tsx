@@ -5,6 +5,7 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
 import { SettingsTabs } from "../components/SettingsTabs";
 import { TimezoneSelect } from "../components/TimezoneSelect";
+import { LocationPicker, type ChosenLocation } from "../components/LocationPicker";
 import { useToast } from "../components/Toast";
 
 // Account management: rename, change password, log out everywhere, export a
@@ -13,6 +14,7 @@ export function AccountPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [name, setName] = useState("");
   const [tz, setTz] = useState("");
+  const [homeName, setHomeName] = useState<string | null>(null);
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [delPw, setDelPw] = useState("");
@@ -25,7 +27,7 @@ export function AccountPage() {
 
   useEffect(() => {
     api.get<{ user: UserInfo | null }>("/api/auth/status")
-      .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); } })
+      .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); setHomeName(s.user.homeLocationName ?? null); } })
       .catch(() => {});
   }, []);
 
@@ -70,6 +72,20 @@ export function AccountPage() {
     try { await api.patch("/api/account", { defaultTimezone: next || null }); toast.success("Default timezone saved"); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
+  const saveHome = async (loc: ChosenLocation | null) => {
+    setHomeName(loc ? loc.name : null);
+    try {
+      // Picking a home (city search or "use my location") sets the account timezone
+      // too when none is set yet — so a fresh account is fully located in one step.
+      const body: { home: { name: string; latitude: number; longitude: number } | null; defaultTimezone?: string } = {
+        home: loc ? { name: loc.name, latitude: loc.latitude, longitude: loc.longitude } : null,
+      };
+      if (loc?.timezone && !tz) { body.defaultTimezone = loc.timezone; setTz(loc.timezone); }
+      const u = await api.patch<UserInfo>("/api/account", body);
+      setUser(u);
+      toast.success(loc ? "Home location saved" : "Home location cleared");
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
   const savePassword = async () => {
     try {
       await api.post("/api/account/password", { current: cur, next });
@@ -102,6 +118,9 @@ export function AccountPage() {
           <label class="field grow"><span>Default timezone <em>(screens with no timezone of their own use this)</em></span>
             <TimezoneSelect value={tz} onChange={saveTimezone} placeholder="Server timezone" />
           </label>
+          <div class="field grow"><span>Home location <em>(screens &amp; weather/sun blocks with no location of their own use this)</em></span>
+            <LocationPicker current={homeName} onPick={saveHome} onClear={() => saveHome(null)} />
+          </div>
           <div class="row"><button class="primary" onClick={saveName}>Save</button></div>
         </section>
 

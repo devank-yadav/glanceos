@@ -3008,6 +3008,13 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .location-results li + li { border-top: 1px solid var(--rule); }
 .location-result { width: 100%; text-align: left; justify-content: flex-start; border: none; border-radius: 0; background: transparent; padding: 8px 11px; font-size: 13.5px; }
 .location-result:hover { background: var(--hover-bg); }
+.location-actions { align-items: center; }
+.location-actions .grow { flex: 1 1 auto; min-width: 0; }
+/* one-time post-login location offer */
+.geo-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; margin-bottom: 16px; border: 1px solid var(--accent); }
+.geo-offer-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.geo-offer-text .muted { font-size: 13px; }
+.geo-offer-actions { flex: 0 0 auto; flex-wrap: wrap; }
 .danger-zone h2 { color: var(--bad); }
 .ghost.danger { color: var(--bad); }
 
