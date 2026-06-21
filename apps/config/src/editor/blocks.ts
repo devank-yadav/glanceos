@@ -66,6 +66,8 @@ export const BLOCKS: BlockDef[] = [
   { type: "weather", label: "Weather", glyph: "☼", category: "Nature", defaultH: 5, description: "Current conditions", keywords: "temperature forecast sun rain", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
   { type: "moonPhase", label: "Moon phase", glyph: "☾", category: "Nature", defaultH: 6, description: "Tonight's moon", keywords: "lunar moon", defaultProps: { label: "" } },
   { type: "sunriseSunset", label: "Sun times", glyph: "☀", category: "Nature", defaultH: 5, description: "Sunrise and sunset", keywords: "sunrise sunset dawn dusk", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "sunArc", label: "Sun arc", glyph: "☀", category: "Nature", defaultH: 6, description: "The sun's path, live", keywords: "sun arc path position daylight elevation", defaultProps: { latitude: 28.6139, longitude: 77.209, label: "" } },
+  { type: "nextFullMoon", label: "Next full moon", glyph: "☾", category: "Nature", defaultH: 5, description: "Counts down to the full moon", keywords: "moon full lunar countdown next", defaultProps: { label: "" } },
 
   // Info
   { type: "calendar", label: "Calendar", glyph: "🗓", category: "Info", defaultH: 8, description: "Upcoming ICS events", keywords: "agenda events ics schedule", defaultProps: { source: "ics", url: "https://example.com/calendar.ics", maxEvents: 5 } },
@@ -194,6 +196,7 @@ export const BLOCKS: BlockDef[] = [
   { type: "directory", label: "Directory", glyph: "≡", category: "Info", defaultH: 7, description: "Names → locations", keywords: "directory wayfinding rooms", defaultProps: { items: "Dr. Rao | Room 3\nReception | Floor 1\nPharmacy | Floor 2" } },
   { type: "eventBanner", label: "Event", glyph: "✸", category: "Info", defaultH: 5, description: "A big event + time", keywords: "event banner announce when", defaultProps: { title: "Annual Meetup", when: "Sat 6 PM · Hall A" } },
   { type: "openSign", label: "Open sign", glyph: "⊙", category: "Info", defaultH: 6, description: "OPEN / CLOSED", keywords: "open closed sign shop", defaultProps: { open: true, label: "" } },
+  { type: "onAir", label: "On-air sign", glyph: "◉", category: "Info", defaultH: 6, description: "Flips ON AIR by schedule", keywords: "on air recording live broadcast sign studio", defaultProps: { label: "", start: 9, end: 17, onText: "ON AIR", offText: "OFF AIR" } },
   { type: "nowPlaying", label: "Now playing", glyph: "♪", category: "Info", defaultH: 5, description: "Track + artist", keywords: "music now playing song", defaultProps: { title: "Quiet Song", artist: "Someone" } },
   { type: "splitFlap", label: "Split-flap", glyph: "❑", category: "Info", defaultH: 4, description: "A departures-board word", keywords: "splitflap board departures retro", defaultProps: { text: "DEPARTURES" } },
 

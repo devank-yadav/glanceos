@@ -165,6 +165,9 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   pomodoro: [N("workMin", "Work min"), N("breakMin", "Break min"), S("label", "Label")],
   stopwatch: [S("label", "Label"), S("since", "Start (YYYY-MM-DDTHH:MM)"), B("showSeconds", "Show seconds")],
   liveCounter: [S("label", "Label"), N("start", "Start value"), N("perDay", "Increase per day"), S("since", "Counting since (YYYY-MM-DD)"), S("unit", "Unit"), N("decimals", "Decimals")],
+  onAir: [S("label", "Label"), N("start", "Start hour (0–24)"), N("end", "End hour (0–24)"), S("onText", "On text"), S("offText", "Off text")],
+  sunArc: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
+  nextFullMoon: [S("label", "Label")],
   // v0.8 trackers
   monthHabit: [S("label", "Label"), T("days", "Days (x or . each)")],
   savingsGoal: [N("saved", "Saved"), N("target", "Target"), S("unit", "Unit"), S("label", "Label")],

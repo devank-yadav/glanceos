@@ -19,6 +19,14 @@ export function moonPhase(date: Date): { name: string; illumination: number; wax
   };
 }
 
+export const SYNODIC_DAYS = SYNODIC;
+/** Days elapsed in the current lunar cycle (0 = new moon, ~14.77 = full). */
+export function moonAge(date: Date): number {
+  let age = ((date.getTime() - REF_NEW_MOON) / 86_400_000) % SYNODIC;
+  if (age < 0) age += SYNODIC;
+  return age;
+}
+
 // Sunrise/sunset via the well-known SunCalc algorithm (Astronomical Almanac).
 const rad = Math.PI / 180;
 const dayMs = 86_400_000;

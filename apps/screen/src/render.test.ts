@@ -129,6 +129,35 @@ describe("pomodoro is a live, self-running timer", () => {
   });
 });
 
+describe("new self-running objects", () => {
+  const one = (block: object) =>
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [block] }] }) as StreamPayloadT);
+
+  it("onAir flips ON/OFF from its time window", () => {
+    vi.useFakeTimers();
+    try {
+      const blk = { id: "a", type: "onAir", width: 1, props: { label: "", start: 9, end: 17, onText: "ON AIR", offText: "OFF AIR" } };
+      vi.setSystemTime(new Date(2026, 5, 21, 10, 0, 0)); // inside the window
+      one(blk);
+      expect(document.querySelector(".openbig")!.textContent).toBe("ON AIR");
+      expect(document.querySelector(".openbig")!.className).toContain("on-air");
+      vi.setSystemTime(new Date(2026, 5, 21, 20, 0, 0)); // outside
+      one(blk);
+      expect(document.querySelector(".openbig")!.textContent).toBe("OFF AIR");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("nextFullMoon counts down — ~15 days from a new moon", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(Date.UTC(2000, 0, 6, 18, 14, 0))); // a reference new moon → half a cycle to full
+      one({ id: "m", type: "nextFullMoon", width: 1, props: { label: "" } });
+      expect(document.querySelector(".stat-value")!.textContent).toBe("15");
+      expect(document.querySelector(".stat-label")!.textContent).toContain("to full moon");
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe("signage blocks bind to live data with a static fallback", () => {
   const sensor = (data: Record<string, unknown>) =>
     renderPayload({ claimed: true, state: { layoutVersion: 1, data, layout: {

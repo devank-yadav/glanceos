@@ -3,7 +3,7 @@ import type {
   GithubDataT, HeadlinesDataT, HolidayDataT, IssDataT, OnThisDayDataT, PrecipDataT,
   QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
 } from "@glanceos/schema";
-import { isoWeek, moonPhase, sunTimes } from "./astro";
+import { isoWeek, moonAge, moonPhase, sunTimes, SYNODIC_DAYS } from "./astro";
 import { renderInlineMarkdown } from "./markdown";
 import { barSvg, nums, ringSvg, romanTime, seasonOf, sparkSvg, zodiacOf } from "./viz";
 import { CHECK_OFF, CHECK_ON, moonGlyph, seasonGlyph, STAR_EMPTY, STAR_FULL, stars } from "./glyphs";
@@ -2263,6 +2263,64 @@ const wayfinding: Render = (el, w) => {
   el.appendChild(list);
 };
 
+// ================= v4.7 — new self-running objects =================
+
+// ON AIR / OFF AIR from a daily time window — flips itself at the boundaries.
+const onAir: Render = (el, w) => {
+  if (w.type !== "onAir") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const big = div("openbig");
+  el.appendChild(big);
+  return every(15_000, () => {
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    const live = w.props.start <= w.props.end ? h >= w.props.start && h < w.props.end : h >= w.props.start || h < w.props.end;
+    big.textContent = live ? w.props.onText : w.props.offText;
+    big.classList.toggle("on-air", live);
+  });
+};
+
+// The sun's path for today with a marker at the current position — moves on its own.
+const sunArc: Render = (el, w, data) => {
+  if (w.type !== "sunArc") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const wrap = div("sunarc");
+  el.appendChild(wrap);
+  const g = geoFrom(data, w.props);
+  return every(60_000, () => {
+    const now = new Date();
+    const t = sunTimes(now, g.lat, g.lon);
+    if (!t) { wrap.innerHTML = '<div class="placeholder">polar day/night</div>'; return; }
+    const span = t.sunset.getTime() - t.sunrise.getTime();
+    const f = Math.max(0, Math.min(1, (now.getTime() - t.sunrise.getTime()) / span)); // 0=sunrise … 1=sunset
+    const up = now >= t.sunrise && now <= t.sunset;
+    // semicircle arc (sunrise left → noon top → sunset right); marker rides the arc.
+    const a = Math.PI * (1 - f), cx = 50 + 42 * Math.cos(a), cy = 52 - 40 * Math.sin(a);
+    wrap.innerHTML =
+      '<svg viewBox="0 0 100 60" class="sunarc-svg">' +
+      '<path d="M8 52 A42 42 0 0 1 92 52" class="sunarc-path"/>' +
+      '<line x1="8" y1="52" x2="92" y2="52" class="sunarc-horizon"/>' +
+      `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" class="sunarc-sun${up ? "" : " down"}"/></svg>` +
+      `<div class="sunarc-times"><span>${fmtTime(t.sunrise, { hour: "2-digit", minute: "2-digit" })}</span><span>${fmtTime(t.sunset, { hour: "2-digit", minute: "2-digit" })}</span></div>`;
+  });
+};
+
+// Days until the next full moon — counts itself down.
+const nextFullMoon: Render = (el, w) => {
+  if (w.type !== "nextFullMoon") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const big = div("stat-value");
+  const sub = div("stat-label");
+  el.append(big, sub);
+  return every(60_000, () => {
+    const toFull = (SYNODIC_DAYS / 2 - moonAge(new Date()) + SYNODIC_DAYS) % SYNODIC_DAYS;
+    const days = Math.round(toFull);
+    if (days === 0) { big.textContent = "🌕"; sub.textContent = "Full moon tonight"; return; }
+    big.textContent = String(days);
+    sub.textContent = `day${days === 1 ? "" : "s"} to full moon`;
+  });
+};
+
 export const WIDGETS: Record<WidgetT["type"], Render> = {
   clock, weather, calendar, tasks, text, queue, heading, divider, image, callout,
   subheading, quote, bulletList, numberedList, checklist, code, label, keyValue, table,
@@ -2294,4 +2352,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   customData,
   // v4.7 self-running time objects
   stopwatch, liveCounter,
+  // v4.7 new auto objects
+  onAir, sunArc, nextFullMoon,
 };

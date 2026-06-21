@@ -323,6 +323,9 @@ export const WayfindingProps = z.object({ items: line(600).default("Reception | 
 // ===== v4.7: self-running time objects (client-tick, no server state) =====
 export const StopwatchProps = z.object({ label: line(40).default("Elapsed"), since: z.string().default("2026-01-01T09:00"), showSeconds: z.boolean().default(true) });
 export const LiveCounterProps = z.object({ label: line(40).default(""), start: z.number().default(0), perDay: z.number().default(1440), since: z.string().default("2026-01-01"), unit: line(12).default(""), decimals: z.number().int().min(0).max(4).default(0) });
+export const OnAirProps = z.object({ label: line(40).default(""), start: z.number().min(0).max(24).default(9), end: z.number().min(0).max(24).default(17), onText: line(20).default("ON AIR"), offText: line(20).default("OFF AIR") });
+export const SunArcProps = z.object({ latitude: z.number().default(28.6139), longitude: z.number().default(77.209), label: line(40).default("") });
+export const NextFullMoonProps = z.object({ label: line(40).default("") });
 
 // ===== v1.0: data binding (optional, on every block) =====
 // A block can point a prop (or its whole data) at a live SOURCE instead of typed
@@ -570,6 +573,10 @@ export const Widget = z.discriminatedUnion("type", [
   // v4.7 self-running time objects
   z.object({ ...b, type: z.literal("stopwatch"), props: StopwatchProps }),
   z.object({ ...b, type: z.literal("liveCounter"), props: LiveCounterProps }),
+  // v4.7 new auto objects
+  z.object({ ...b, type: z.literal("onAir"), props: OnAirProps }),
+  z.object({ ...b, type: z.literal("sunArc"), props: SunArcProps }),
+  z.object({ ...b, type: z.literal("nextFullMoon"), props: NextFullMoonProps }),
 ]);
 
 export const Row = z.object({
