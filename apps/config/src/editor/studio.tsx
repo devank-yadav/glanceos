@@ -17,7 +17,7 @@ import { PreviewStage } from "./preview";
 import { createPortal } from "preact/compat";
 import { Modal } from "../components/Modal";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
-import { BlockFields, BoardSettings } from "./properties";
+import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
 import { TableEditor } from "./tableEditor";
@@ -163,6 +163,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
     return s ? (JSON.parse(s) as boolean) : true;
   });
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  const [objectsOpen, setObjectsOpen] = useState(false);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -910,6 +911,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type])}
           />
+          <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
+            <Icon.list /> <span>Objects</span>
+            <Icon.chevron class={`chevron${objectsOpen ? " open" : ""}`} />
+          </button>
+          {objectsOpen && <ObjectsPanel doc={state.present} stageEdit={stageEdit} selectedIds={state.selectedIds} onSelect={(id) => dispatch({ type: "select", id })} />}
           <button class="settings-toggle" onClick={() => setBoardSettingsOpen((v) => !v)}>
             <Icon.settings /> <span>Board settings</span>
             <Icon.chevron class={`chevron${boardSettingsOpen ? " open" : ""}`} />

@@ -3,6 +3,7 @@ import type { VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { api, type QueueState, type TaskItem } from "../api";
 import { BINDABLE, blockFor, type WidgetType } from "./blocks";
+import { BlockIcon } from "./blockIcons";
 import { Icon } from "./icons";
 
 // The right-hand panel: props of the selected block, or board settings when
@@ -542,5 +543,53 @@ function PropField({ field, value, onChange }: { field: Field; value: unknown; o
         }}
       />
     </label>
+  );
+}
+
+// A layers-style list of every named object on the board: click to select it on
+// the canvas, rename inline (kept unique), and show/hide it (the same `hidden`
+// flag automations toggle). Lives in the Studio side panel.
+export function ObjectsPanel({ doc, stageEdit, onSelect, selectedIds }: {
+  doc: LayoutT;
+  stageEdit: (mutate: (d: LayoutT) => void) => void;
+  onSelect: (id: string) => void;
+  selectedIds: string[];
+}) {
+  const blocks = doc.rows.flatMap((r) => r.blocks).filter((b) => b.name);
+  const setName = (id: string, raw: string) => stageEdit((d) => {
+    const t = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
+    if (t) t.name = raw.slice(0, 60);
+  });
+  const resolveName = (id: string) => stageEdit((d) => {
+    const all = d.rows.flatMap((r) => r.blocks);
+    const t = all.find((b) => b.id === id);
+    if (!t) return;
+    const desired = (t.name ?? "").trim() || blockFor(t.type).label;
+    const taken = new Set(all.filter((b) => b.id !== id && b.name).map((b) => b.name!.toLowerCase()));
+    let nm = desired;
+    for (let n = 2; taken.has(nm.toLowerCase()); n++) nm = `${desired} ${n}`;
+    t.name = nm;
+  });
+  const toggleHidden = (id: string) => stageEdit((d) => {
+    const t = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
+    if (t) t.hidden = !t.hidden;
+  });
+  if (blocks.length === 0) return <p class="muted objects-empty">No objects yet — add a block to the board.</p>;
+  return (
+    <ul class="objects-list">
+      {blocks.map((b) => (
+        <li key={b.id} class={`object-row${selectedIds.includes(b.id) ? " on" : ""}${b.hidden ? " is-hidden" : ""}`}>
+          <button class="object-pick" title={`Select ${blockFor(b.type).label} on the board`} onClick={() => onSelect(b.id)}><BlockIcon type={b.type} /></button>
+          <input class="object-name-input" value={b.name ?? ""} aria-label="Object name"
+            onInput={(e) => setName(b.id, (e.currentTarget as HTMLInputElement).value)}
+            onBlur={() => resolveName(b.id)}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} />
+          <span class="object-type muted">{blockFor(b.type).label}</span>
+          <button class="icon-btn object-eye" title={b.hidden ? "Show on screens" : "Hide on screens"} aria-pressed={!!b.hidden} onClick={() => toggleHidden(b.id)}>
+            {b.hidden ? <Icon.eyeOff /> : <Icon.eye />}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
