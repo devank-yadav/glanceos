@@ -94,6 +94,36 @@ const coerce = (v: unknown): unknown => {
 
 interface RunLog { id: number; trigger: string; matched: boolean; actionsRun: number; error: string | null; createdAt: number }
 
+// Starter templates — one-click pre-filled drafts so the builder isn't a blank
+// slate (the Shortcuts "Gallery" idea). They're starting points; the user edits
+// the specifics. Object-based ones only show when the board has objects.
+interface TCtx { scoped: boolean; layoutId?: number; objects?: ObjOption[] }
+const tmpl = (c: TCtx, name: string, trigger: Trigger, conditions: Cond | undefined, actions: Action[]): Automation =>
+  ({ name, enabled: true, trigger, conditions: conditions ?? { type: "all", conditions: [] }, actions, layoutId: c.layoutId ?? null });
+const TEMPLATES: { id: string; label: string; show: (c: TCtx) => boolean; build: (c: TCtx) => Automation }[] = [
+  {
+    id: "threshold", label: "Alert when a value crosses a number", show: () => true,
+    build: (c) => {
+      const o = c.objects?.find((x) => x.settable);
+      const field = c.scoped && c.objects?.[0] ? `objects.${c.objects[0].id}.value` : "data.count";
+      const action: Action = o ? { kind: "setObjectText", objectId: o.id, objectName: o.name, prop: o.prop, text: "Busy" } : { kind: "alert", severity: "warn", title: "Threshold crossed", target: "all" };
+      return tmpl(c, "When a value crosses 10", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field, op: "gt", value: 10 }] }, [action]);
+    },
+  },
+  {
+    id: "webhook-text", label: "Update an object on a webhook", show: (c) => !!c.objects?.some((o) => o.settable),
+    build: (c) => { const o = c.objects!.find((x) => x.settable)!; return tmpl(c, "Update on webhook", { kind: "webhook" }, undefined, [{ kind: "setObjectText", objectId: o.id, objectName: o.name, prop: o.prop, text: "" }]); },
+  },
+  {
+    id: "night-hide", label: "Hide an object at night", show: (c) => !!c.objects?.length,
+    build: (c) => { const o = c.objects![0]; return tmpl(c, "Hide at 10pm", { kind: "time", atMinute: 1320, daysMask: 127 }, undefined, [{ kind: "hideObject", objectId: o.id, objectName: o.name }]); },
+  },
+  {
+    id: "changed-notify", label: "Notify when data changes", show: () => true,
+    build: (c) => tmpl(c, "Notify on data change", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field: "data.status", op: "changed" }] }, [{ kind: "notify", message: "Data changed" }]),
+  },
+];
+
 export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: number; objects?: ObjOption[]; embedded?: boolean } = {}) {
   const [items, setItems] = useState<Automation[] | null>(null);
   const [editing, setEditing] = useState<Automation | null>(null);
@@ -146,8 +176,18 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
       {embedded && <p class="muted page-intro">Make this board react on its own — read and set its objects when a webhook arrives, on a schedule, or when data crosses a threshold.</p>}
 
       {!editing && (
-        <div class="row" style={{ marginBottom: "14px" }}>
-          <button class="primary" onClick={() => setEditing(newDraft())}><Icon.plus /> New automation</button>
+        <div class="auto-start" style={{ marginBottom: "14px" }}>
+          <div class="row"><button class="primary" onClick={() => setEditing(newDraft())}><Icon.plus /> New automation</button></div>
+          {(() => {
+            const tctx: TCtx = { scoped, layoutId, objects };
+            const shown = TEMPLATES.filter((t) => t.show(tctx));
+            return shown.length ? (
+              <div class="template-row">
+                <span class="muted">Start from a template:</span>
+                {shown.map((t) => <button key={t.id} class="ghost template-chip" onClick={() => setEditing(t.build(tctx))}>{t.label}</button>)}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
 
