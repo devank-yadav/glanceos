@@ -168,6 +168,9 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   onAir: [S("label", "Label"), N("start", "Start hour (0–24)"), N("end", "End hour (0–24)"), S("onText", "On text"), S("offText", "Off text")],
   upNext: [S("label", "Label"), T("items", "Schedule (HH:MM | Title | Location)")],
   dayTimeline: [S("label", "Label"), T("items", "Schedule (HH:MM | Title)"), N("max", "Max rows")],
+  myDay: [S("name", "Your name"), T("subtitle", "Subtitle line"), B("showDate", "Show date")],
+  healthRing: [S("label", "Label"), N("value", "Value"), N("goal", "Goal"), S("unit", "Unit")],
+  homeTile: [S("label", "Label"), S("icon", "Icon"), S("value", "Value"), S("unit", "Unit")],
   sunArc: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
   nextFullMoon: [S("label", "Label")],
   // v0.8 trackers

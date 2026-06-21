@@ -185,6 +185,25 @@ describe("upNext agenda object", () => {
   });
 });
 
+describe("ambient / self objects", () => {
+  it("myDay greets by time of day and shows bound weather", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 0, 0));
+      renderPayload({ claimed: true, state: { layoutVersion: 1, data: { d: { temperatureC: 19, summary: "rain" } }, layout: {
+        ...baseLayout, rows: [{ id: "r", h: 7, blocks: [{ id: "d", type: "myDay", width: 1, props: { name: "Devank", subtitle: "x", showDate: true } }] }],
+      } } } as unknown as StreamPayloadT);
+      expect(document.querySelector(".myday-greet")!.textContent).toBe("Good morning, Devank");
+      expect(document.querySelector(".myday-wx")!.textContent).toBe("19° · rain");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("healthRing shows the value (bound or typed) abbreviated", () => {
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 8, blocks: [{ id: "h", type: "healthRing", width: 1, props: { label: "Steps", value: 6200, goal: 10000, unit: "" } }] }] }) as StreamPayloadT);
+    expect(document.querySelector(".ring-value")!.textContent).toBe("6.2k");
+  });
+});
+
 describe("signage blocks bind to live data with a static fallback", () => {
   const sensor = (data: Record<string, unknown>) =>
     renderPayload({ claimed: true, state: { layoutVersion: 1, data, layout: {

@@ -328,6 +328,10 @@ export const OnAirProps = z.object({ label: line(40).default(""), start: z.numbe
 // offline; when bound to a calendar source the live events override.
 export const UpNextProps = z.object({ label: line(40).default("Up next"), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom") });
 export const DayTimelineProps = z.object({ label: line(40).default(""), items: line(1200).default("09:00 | Standup\n12:30 | Lunch\n14:00 | Focus block\n16:00 | Review"), max: z.number().int().min(1).max(20).default(8) });
+// v5.0 ambient / self / home fusion objects.
+export const MyDayProps = z.object({ name: line(40).default(""), subtitle: line(140).default("Have a calm, focused day."), showDate: z.boolean().default(true) });
+export const HealthRingProps = z.object({ label: line(40).default("Steps"), value: z.number().default(6200), goal: z.number().min(1).default(10000), unit: line(12).default("") });
+export const HomeTileProps = z.object({ label: line(40).default("Living room"), icon: line(8).default("⌂"), value: line(40).default("21"), unit: line(12).default("°C") });
 export const SunArcProps = z.object({ latitude: z.number().default(28.6139), longitude: z.number().default(77.209), label: line(40).default("") });
 export const NextFullMoonProps = z.object({ label: line(40).default("") });
 
@@ -584,6 +588,10 @@ export const Widget = z.discriminatedUnion("type", [
   // v5.0 time/place agenda objects
   z.object({ ...b, type: z.literal("upNext"), props: UpNextProps }),
   z.object({ ...b, type: z.literal("dayTimeline"), props: DayTimelineProps }),
+  // v5.0 ambient / self / home objects
+  z.object({ ...b, type: z.literal("myDay"), props: MyDayProps }),
+  z.object({ ...b, type: z.literal("healthRing"), props: HealthRingProps }),
+  z.object({ ...b, type: z.literal("homeTile"), props: HomeTileProps }),
 ]);
 
 export const Row = z.object({

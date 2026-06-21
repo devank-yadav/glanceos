@@ -902,6 +902,14 @@ body {
 .daytl-row.past { opacity: 0.4; }
 .daytl-row.now .daytl-time, .daytl-row.now .daytl-title { color: var(--accent, currentColor); }
 .daytl-row.now { font-weight: 700; }
+.myday-greet { font-size: calc(5.5vmin * var(--font-scale, 1)); font-weight: 700; line-height: 1.05; }
+.myday-date { font-size: calc(2.8vmin * var(--font-scale, 1)); opacity: 0.7; margin-top: 0.4vmin; }
+.myday-wx { font-size: calc(3vmin * var(--font-scale, 1)); margin-top: 0.8vmin; }
+.myday-sub { font-size: calc(2.6vmin * var(--font-scale, 1)); opacity: 0.6; margin-top: 0.8vmin; }
+.hometile { display: flex; align-items: center; gap: 2vmin; }
+.hometile-icon { font-size: calc(7vmin * var(--font-scale, 1)); line-height: 1; opacity: 0.85; }
+.hometile-value { font-size: calc(6vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hometile-label { font-size: calc(2.4vmin * var(--font-scale, 1)); opacity: 0.6; }
 .monthhabit { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.5vmin; }
 .mh-dot { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--fg); }
 .mh-dot.on { background: var(--fg); }

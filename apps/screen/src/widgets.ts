@@ -2382,6 +2382,59 @@ const dayTimeline: Render = (el, w, data) => {
   });
 };
 
+// ================= v5.0 — ambient / self / home fusion objects =================
+
+// The "smart home screen" header: time-of-day greeting + date + (bound) weather + a line.
+const myDay: Render = (el, w, data) => {
+  if (w.type !== "myDay") return;
+  const greet = div("myday-greet");
+  el.appendChild(greet);
+  const dateEl = w.props.showDate ? div("myday-date") : undefined;
+  if (dateEl) el.appendChild(dateEl);
+  const wd = data as { temperatureC?: number; summary?: string } | null;
+  if (wd && typeof wd.temperatureC === "number") {
+    el.appendChild(div("myday-wx", `${Math.round(wd.temperatureC)}° · ${wd.summary ?? ""}`.trim()));
+  }
+  if (w.props.subtitle) el.appendChild(div("myday-sub", w.props.subtitle));
+  return every(60_000, () => {
+    const now = new Date();
+    const h = now.getHours();
+    const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    greet.textContent = w.props.name ? `${part}, ${w.props.name}` : part;
+    if (dateEl) dateEl.textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  });
+};
+
+// A goal ring for steps / sleep / any number-vs-goal (binds to fitbit/oura, or typed).
+const healthRing: Render = (el, w, data) => {
+  if (w.type !== "healthRing") return;
+  const value = boundNum(w, data, "value");
+  const goal = Math.max(1, w.props.goal);
+  const pct = Math.max(0, Math.min(100, (value / goal) * 100));
+  const wrap = div("ring");
+  const g = div("ring-graphic");
+  g.innerHTML = ringSvg(pct);
+  const shown = value >= 1000 ? `${Math.round(value / 100) / 10}k` : String(Math.round(value));
+  g.appendChild(div("ring-value", w.props.unit ? `${shown}${w.props.unit}` : shown));
+  wrap.appendChild(g);
+  if (w.props.label) wrap.appendChild(div("ring-label", w.props.label));
+  el.appendChild(wrap);
+};
+
+// A polished smart-home entity tile: icon + value + unit + label (binds to a HA entity).
+const homeTile: Render = (el, w, data) => {
+  if (w.type !== "homeTile") return;
+  const row = div("hometile");
+  if (w.props.icon) row.appendChild(div("hometile-icon", w.props.icon));
+  const body = div("hometile-body");
+  const valRow = div("metric-row");
+  valRow.appendChild(div("hometile-value", boundStr(w, data, "value")));
+  if (w.props.unit) valRow.appendChild(div("metric-unit", w.props.unit));
+  body.append(valRow, div("hometile-label", w.props.label));
+  row.appendChild(body);
+  el.appendChild(row);
+};
+
 export const WIDGETS: Record<WidgetT["type"], Render> = {
   clock, weather, calendar, tasks, text, queue, heading, divider, image, callout,
   subheading, quote, bulletList, numberedList, checklist, code, label, keyValue, table,
@@ -2417,4 +2470,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   onAir, sunArc, nextFullMoon,
   // v5.0 agenda objects
   upNext, dayTimeline,
+  // v5.0 ambient / self / home
+  myDay, healthRing, homeTile,
 };

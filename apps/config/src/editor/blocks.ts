@@ -177,6 +177,9 @@ export const BLOCKS: BlockDef[] = [
   { type: "nowNext", label: "Now / next", glyph: "▷", category: "Time", defaultH: 5, description: "Current + next from a schedule", keywords: "now next agenda schedule", defaultProps: { items: "09:00 | Standup\n12:30 | Lunch\n16:00 | Review" } },
   { type: "upNext", label: "Up next", glyph: "◆", category: "Time", defaultH: 5, description: "Next event + countdown (live from a calendar)", keywords: "up next event meeting countdown agenda calendar leave", defaultProps: { label: "Up next", items: "09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom" } },
   { type: "dayTimeline", label: "Day timeline", glyph: "☰", category: "Time", defaultH: 8, description: "Today's events on a timeline (live from a calendar)", keywords: "day timeline agenda schedule events calendar today", defaultProps: { label: "Today", items: "09:00 | Standup\n12:30 | Lunch\n14:00 | Focus block\n16:00 | Review", max: 8 } },
+  { type: "myDay", label: "My Day", glyph: "◔", category: "Time", defaultH: 7, description: "Greeting + date + weather digest", keywords: "my day digest greeting good morning home screen briefing today", defaultProps: { name: "", subtitle: "Have a calm, focused day.", showDate: true } },
+  { type: "healthRing", label: "Health ring", glyph: "◍", category: "Trackers", defaultH: 8, description: "Steps / sleep vs a goal (live)", keywords: "health steps sleep ring goal fitbit oura activity", defaultProps: { label: "Steps", value: 6200, goal: 10000, unit: "" } },
+  { type: "homeTile", label: "Home tile", glyph: "⌂", category: "Smart home", defaultH: 5, description: "A smart-home entity (icon + value)", keywords: "home assistant entity tile sensor smart home icon", defaultProps: { label: "Living room", icon: "⌂", value: "21", unit: "°C" } },
   { type: "ageCounter", label: "Age", glyph: "⧗", category: "Time", defaultH: 5, description: "Years since a date", keywords: "age years since birthday", defaultProps: { since: "2000-01-01", label: "Age" } },
   { type: "anniversary", label: "Anniversary", glyph: "❤", category: "Time", defaultH: 4, description: "Days until the next occurrence", keywords: "anniversary recurring yearly", defaultProps: { date: "2020-06-13", label: "Anniversary" } },
   { type: "timeBlocks", label: "Time blocks", glyph: "▣", category: "Time", defaultH: 6, description: "Today's time blocks", keywords: "schedule blocks plan day", defaultProps: { items: "09–10 | Focus\n10–11 | Email\n11–13 | Build" } },
@@ -375,11 +378,13 @@ export const SCALAR_BLOCKS = new Set<WidgetType>([
   // v4.7 — signage/sensor blocks made bindable (sensor → Home Assistant, money → FX, …);
   // each falls back to its typed prop when no source is attached, so old boards are unchanged.
   "sensor", "thermostat", "moneyStat", "deviceStatus", "roomStatus", "openSign", "splitFlap",
+  // v5.0 — health ring (steps/sleep), home tile (HA entity) bind a single value
+  "healthRing", "homeTile",
 ]);
 // Newline-joined text lists (Todoist/Notion/GitHub issues → a list block).
 export const LIST_BLOCKS = new Set<WidgetType>(["bulletList", "numberedList", "checklist"]);
 // Already-typed live shapes — bind the whole block, no field mapping needed.
-export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying", "upNext", "dayTimeline"]);
+export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying", "upNext", "dayTimeline", "myDay"]);
 export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PASSTHROUGH_BLOCKS]);
 
 // Single-line types: never hold their own newlines.
