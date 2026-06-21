@@ -97,6 +97,17 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(new Set(types).size).toBe(200);
   });
 
+  it("accepts an optional object name on a block (v4.0, additive)", () => {
+    const doc = Layout.parse({
+      schemaVersion: 3,
+      name: "Named",
+      rows: [{ id: "r", blocks: [{ id: "a", type: "clock", name: "Lobby Clock", props: {} }] }],
+    });
+    expect(doc.rows[0]!.blocks[0]!.name).toBe("Lobby Clock");
+    // name is optional — a block without one still parses
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [{ id: "r", blocks: [{ id: "a", type: "clock", props: {} }] }] }).success).toBe(true);
+  });
+
   it("defaults block style and board align (v0.6, additive)", () => {
     const doc = Layout.parse({
       schemaVersion: 3,

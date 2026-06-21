@@ -99,6 +99,25 @@ interface Editing {
   multiline: boolean;
 }
 
+// Every object on a board carries a unique, human-editable name (shown in the
+// Objects panel + used to target it from automations). New/unnamed blocks get an
+// auto name from their type ("Clock", "Clock 2"); user-set names are preserved.
+// Runs on every committed edit — idempotent once everything is named.
+function autoNameObjects(doc: LayoutT): void {
+  const blocks = doc.rows.flatMap((r) => r.blocks);
+  if (blocks.every((b) => b.name)) return; // fast path: nothing to name
+  const taken = new Set<string>();
+  for (const b of blocks) if (b.name) taken.add(b.name.toLowerCase());
+  for (const b of blocks) {
+    if (b.name) continue;
+    const base = blockFor(b.type).label;
+    let nm = base;
+    for (let n = 2; taken.has(nm.toLowerCase()); n++) nm = `${base} ${n}`;
+    b.name = nm;
+    taken.add(nm.toLowerCase());
+  }
+}
+
 export function Studio({ layoutId }: { layoutId: number }) {
   const [state, dispatch] = useReducer(editorReducer, PLACEHOLDER, initialEditor);
   const [loaded, setLoaded] = useState(false);
@@ -282,12 +301,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
     }
   }, [editing?.id]);
 
-  const commitDoc = (doc: LayoutT) => dispatch({ type: "commit", doc });
+  const commitDoc = (doc: LayoutT) => { autoNameObjects(doc); dispatch({ type: "commit", doc }); };
 
   const stageEdit = (mutate: (d: LayoutT) => void) => {
     dispatch({ type: "gestureStart" });
     const doc = structuredClone(docRef.current);
     mutate(doc);
+    autoNameObjects(doc); // every object carries a unique, editable name (used by automations)
     dispatch({ type: "gestureUpdate", doc });
     window.clearTimeout(typingTimer.current);
     typingTimer.current = window.setTimeout(() => dispatch({ type: "gestureEnd" }), 500);

@@ -260,6 +260,24 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) (target.props as Record<string, unknown>)[key] = value;
     });
+  // The object's name (used to target it from automations). Type freely; on blur
+  // we resolve collisions so names stay unique within the board.
+  const setName = (raw: string) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.name = raw.slice(0, 60);
+    });
+  const resolveName = () =>
+    stageEdit((d) => {
+      const blocks = d.rows.flatMap((r) => r.blocks);
+      const target = blocks.find((b) => b.id === block.id);
+      if (!target) return;
+      const desired = (target.name ?? "").trim() || blockFor(target.type).label;
+      const taken = new Set(blocks.filter((b) => b.id !== block.id && b.name).map((b) => b.name!.toLowerCase()));
+      let nm = desired;
+      for (let n = 2; taken.has(nm.toLowerCase()); n++) nm = `${desired} ${n}`;
+      target.name = nm;
+    });
   const editStyle = (patch: Partial<{ invert: boolean; align: string; valign: string }>) =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
@@ -277,6 +295,16 @@ export function BlockFields({
   return (
     <div class="block-fields">
       <h3>{blockFor(block.type).label}</h3>
+      <label class="field object-name-field">
+        <span>Object name <span class="muted">— refer to it in automations</span></span>
+        <input
+          value={block.name ?? ""}
+          placeholder={blockFor(block.type).label}
+          onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)}
+          onBlur={resolveName}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+        />
+      </label>
       <div class="row wrap">
         {fields.map((f) => (
           <PropField key={f.key} field={f} value={props[f.key]} onChange={(v) => editProp(f.key, v)} />

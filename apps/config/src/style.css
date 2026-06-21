@@ -2992,6 +2992,9 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
   .page-intro { font-size: 13px; }
 }
 
+/* ---------- studio: object name field ---------- */
+.object-name-field { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+
 /* ---------- page tabs (Boards: My boards / Shared) ---------- */
 .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .tabs .tab { appearance: none; background: none; border: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--text-muted); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; text-decoration: none; }
