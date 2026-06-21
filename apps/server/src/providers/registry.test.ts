@@ -1,11 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { AuthError } from "../fetchers/cache";
-import { PROVIDERS, slackError } from "./registry";
+import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fitbitSteps } from "./registry";
 
 describe("provider registry", () => {
-  it("registers the v1.5 providers (17 total)", () => {
-    expect(PROVIDERS.size).toBe(17);
+  it("registers the providers (22 total incl. v5.0 smart-life)", () => {
+    expect(PROVIDERS.size).toBe(22);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
+    for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
+  });
+
+  it("v5.0 smart-life providers carry the right auth + category", () => {
+    expect(PROVIDERS.get("osrm")?.authKind).toBe("none"); // keyless
+    expect(PROVIDERS.get("osrm")?.category).toBe("place");
+    expect(PROVIDERS.get("gmail")?.authKind).toBe("oauth2");
+    expect(PROVIDERS.get("gmail")?.oauth?.scopes).toContain("https://www.googleapis.com/auth/gmail.readonly");
+    expect(PROVIDERS.get("oura")?.authKind).toBe("token");
+    expect(PROVIDERS.get("fitbit")?.oauth?.tokenAuth).toBe("basic");
+  });
+
+  it("v5.0 pure mappers shape the raw payloads", () => {
+    expect(formatTravelTime({ routes: [{ duration: 540, distance: 4200 }] })).toEqual({ durationMin: 9, distanceKm: 4.2, value: "9 min" });
+    expect(formatTravelTime({ routes: [] })).toBeNull();
+    expect(gmailUnread({ messagesUnread: 7 }).value).toBe(7);
+    expect(gmailUnread(null).value).toBe(0);
+    expect(outlookUnread({ unreadItemCount: 3 }).value).toBe(3);
+    expect(fitbitSteps({ summary: { steps: 8421 } }).value).toBe(8421);
   });
 
   it("classifies auth kinds: slack=oauth2, asana/jira/trello=token", () => {

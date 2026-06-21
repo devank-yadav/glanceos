@@ -14,6 +14,7 @@ import { Icon } from "../editor/icons";
 const CAT_LABEL: Record<string, string> = {
   tasks: "Tasks", issues: "Issues", docs: "Docs & sheets", dev: "Developer", calendar: "Calendar",
   "smart-home": "Smart home", media: "Media", generic: "Generic", mail: "Mail",
+  place: "Travel & place", health: "Health",
 };
 
 interface ProviderInfo {
@@ -35,7 +36,7 @@ interface Connection {
   config: Record<string, unknown>;
 }
 
-const CAT_ORDER = ["tasks", "issues", "docs", "dev", "calendar", "smart-home", "media", "generic", "mail"];
+const CAT_ORDER = ["tasks", "issues", "docs", "dev", "calendar", "smart-home", "media", "place", "health", "mail", "generic"];
 const SECRET_HINT: Record<string, string> = {
   token: "Personal API token (paste once — stored encrypted)",
   apiKey: "API key (optional — leave blank for public endpoints)",

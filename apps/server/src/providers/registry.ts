@@ -459,3 +459,107 @@ reg({
     return formatNowPlaying(res.status, data);
   },
 });
+
+// ===================== v5.0 smart-life providers =====================
+
+// ---- Travel time / commute (keyless OSRM public router). origin+dest → ETA. ----
+export function formatTravelTime(raw: { routes?: { duration: number; distance: number }[] } | null): { durationMin: number; distanceKm: number; value: string } | null {
+  const r = raw?.routes?.[0];
+  if (!r) return null;
+  const durationMin = Math.round(r.duration / 60);
+  const distanceKm = Math.round(r.distance / 100) / 10;
+  return { durationMin, distanceKm, value: `${durationMin} min` };
+}
+reg({
+  id: "osrm", label: "Travel time (OSRM)", category: "place", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "osrm.route", label: "Driving / cycling / walking ETA", shape: "scalar" }],
+  async resolve(ctx) {
+    const fLat = Number(ctx.query.fromLat), fLon = Number(ctx.query.fromLon), tLat = Number(ctx.query.toLat), tLon = Number(ctx.query.toLon);
+    if (![fLat, fLon, tLat, tLon].every(Number.isFinite)) return null;
+    const profile = ["driving", "cycling", "walking"].includes(ctx.query.profile || "") ? ctx.query.profile : "driving";
+    const base = String(ctx.config.baseUrl || "").replace(/\/+$/, "") || "https://router.project-osrm.org";
+    // Coordinates are sanitized to numbers above, so they can't inject into the path.
+    const url = `${base}/route/v1/${profile}/${fLon},${fLat};${tLon},${tLat}?overview=false`;
+    return formatTravelTime((await getJSON(url)) as Parameters<typeof formatTravelTime>[0]);
+  },
+});
+
+// ---- Mail: Gmail + Outlook unread counts (read-only OAuth). ----
+export function gmailUnread(raw: { messagesUnread?: number } | null): { value: number } { return { value: Number(raw?.messagesUnread ?? 0) }; }
+reg({
+  id: "gmail", label: "Gmail (unread)", category: "mail", authKind: "oauth2",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    authParams: { access_type: "offline", prompt: "consent" },
+  },
+  resources: [{ id: "gmail.unread", label: "Unread count", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const label = encodeURIComponent(ctx.query.label || "INBOX");
+    const raw = (await getJSON(`https://gmail.googleapis.com/gmail/v1/users/me/labels/${label}`, { authorization: `Bearer ${ctx.secret}` })) as { messagesUnread?: number } | null;
+    return gmailUnread(raw);
+  },
+});
+
+export function outlookUnread(raw: { unreadItemCount?: number } | null): { value: number } { return { value: Number(raw?.unreadItemCount ?? 0) }; }
+reg({
+  id: "outlookmail", label: "Outlook mail (unread)", category: "mail", authKind: "oauth2",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    scopes: ["Mail.Read", "offline_access", "openid", "profile"],
+  },
+  resources: [{ id: "outlookmail.unread", label: "Unread count", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const folder = encodeURIComponent(ctx.query.folder || "inbox");
+    const raw = (await getJSON(`https://graph.microsoft.com/v1.0/me/mailFolders/${folder}`, { authorization: `Bearer ${ctx.secret}` })) as { unreadItemCount?: number } | null;
+    return outlookUnread(raw);
+  },
+});
+
+// ---- Health: Fitbit (OAuth) + Oura (personal token). steps / sleep. ----
+export function fitbitSteps(raw: { summary?: { steps?: number } } | null): { value: number } { return { value: Number(raw?.summary?.steps ?? 0) }; }
+reg({
+  id: "fitbit", label: "Fitbit", category: "health", authKind: "oauth2",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://www.fitbit.com/oauth2/authorize",
+    tokenUrl: "https://api.fitbit.com/oauth2/token",
+    scopes: ["activity", "sleep"],
+    tokenAuth: "basic",
+  },
+  resources: [{ id: "fitbit.steps", label: "Steps today", shape: "scalar" }, { id: "fitbit.sleep", label: "Sleep (last night)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "fitbit.sleep") {
+      const raw = (await getJSON("https://api.fitbit.com/1.2/user/-/sleep/date/today.json", h)) as { summary?: { totalMinutesAsleep?: number } } | null;
+      const mins = Number(raw?.summary?.totalMinutesAsleep ?? 0);
+      return { value: mins ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—" };
+    }
+    return fitbitSteps((await getJSON("https://api.fitbit.com/1/user/-/activities/date/today.json", h)) as Parameters<typeof fitbitSteps>[0]);
+  },
+});
+
+reg({
+  id: "oura", label: "Oura Ring", category: "health", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  resources: [{ id: "oura.activity", label: "Steps today", shape: "scalar" }, { id: "oura.sleep", label: "Sleep score", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { authorization: `Bearer ${ctx.secret}` };
+    const day = new Date().toISOString().slice(0, 10);
+    if (ctx.resource === "oura.sleep") {
+      const raw = (await getJSON(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${day}&end_date=${day}`, h)) as { data?: { score?: number }[] } | null;
+      return { value: Number(raw?.data?.[0]?.score ?? 0) };
+    }
+    const raw = (await getJSON(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${day}&end_date=${day}`, h)) as { data?: { steps?: number }[] } | null;
+    return { value: Number(raw?.data?.[0]?.steps ?? 0) };
+  },
+});
