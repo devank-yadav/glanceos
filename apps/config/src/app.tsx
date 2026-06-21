@@ -12,7 +12,7 @@ import { FleetPage } from "./pages/fleet";
 import { GroupsPage } from "./pages/groups";
 import { HubPage } from "./pages/hub";
 import { Onboarding } from "./pages/onboarding";
-import { DISMISS_KEY, needsOnboarding } from "./onboarding";
+import { DISMISS_KEY } from "./onboarding";
 import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
@@ -48,6 +48,7 @@ function Splash() {
 }
 
 const SIDEBAR_KEY = "glanceos.sidebar";
+const BOOTSTRAP_KEY = "glanceos.bootstrapped"; // per-session guard for the new-account → fresh-board jump
 
 export function App() {
   const route = useRoute();
@@ -73,14 +74,19 @@ export function App() {
     return () => window.clearTimeout(t);
   }, [status?.authed]);
 
-  // First-run: show the wizard on a fresh, undismissed account (no boards + no screens).
+  // First-run: drop a brand-new account straight into a fresh board in the Studio —
+  // "land in your work", not on an empty management page. (The step-by-step guide is
+  // still reachable from the ⌘K palette.) Guarded so it fires at most once per session.
   useEffect(() => {
     if (!status?.authed) return;
-    let dismissed = false;
-    try { dismissed = localStorage.getItem(DISMISS_KEY) === "1"; } catch { /* ignore */ }
-    if (dismissed) return;
-    Promise.all([api.get<unknown[]>("/api/devices"), api.get<unknown[]>("/api/layouts")])
-      .then(([d, l]) => setOnboard(needsOnboarding({ deviceCount: d.length, layoutCount: l.length, dismissed: false })))
+    let booted = false;
+    try { booted = sessionStorage.getItem(BOOTSTRAP_KEY) === "1"; } catch { /* ignore */ }
+    if (booted) return;
+    api.get<unknown[]>("/api/layouts")
+      .then((l) => {
+        try { sessionStorage.setItem(BOOTSTRAP_KEY, "1"); } catch { /* ignore */ }
+        if (l.length === 0) return api.post<{ id: number }>("/api/layouts", { name: "My first board" }).then((r) => navigate(`/edit/${r.id}`));
+      })
       .catch(() => {});
   }, [status?.authed]);
 
@@ -99,17 +105,20 @@ export function App() {
   const logout = () => api.post("/api/auth/logout").then(refreshAuth);
 
   const commands = useMemo<Command[]>(() => [
-    { id: "nav-screens", label: "Go to Screens", hint: "Page", icon: <Icon.grid />, run: () => navigate("/") },
-    { id: "nav-fleet", label: "Go to Fleet", hint: "Page", icon: <Icon.monitor />, run: () => navigate("/fleet") },
-    { id: "nav-groups", label: "Go to Groups", hint: "Page", icon: <Icon.layers />, run: () => navigate("/groups") },
-    { id: "nav-setups", label: "Go to Setups", hint: "Page", icon: <Icon.pencil />, run: () => navigate("/setups") },
-    { id: "nav-playlists", label: "Go to Playlists", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
-    { id: "nav-hub", label: "Go to Hub", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
-    { id: "nav-integrations", label: "Go to Integrations", hint: "Page", icon: <Icon.link />, run: () => navigate("/integrations") },
-    { id: "nav-account", label: "Go to Account", hint: "Page", icon: <Icon.settings />, run: () => navigate("/account") },
-    { id: "new-setup", label: "New setup", hint: "Action", icon: <Icon.plus />, run: async () => {
-        try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); } catch { navigate("/setups"); }
+    // primary destinations (the calm 3) + the most common action
+    { id: "new-board", label: "New board", hint: "Action", icon: <Icon.plus />, run: async () => {
+        try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled board" }); navigate(`/edit/${r.id}`); } catch { navigate("/boards"); }
       } },
+    { id: "nav-boards", label: "Go to Boards", hint: "Page", icon: <Icon.grid />, run: () => navigate("/boards") },
+    { id: "nav-screens", label: "Go to Screens", hint: "Page", icon: <Icon.monitor />, run: () => navigate("/screens") },
+    { id: "nav-settings", label: "Go to Settings", hint: "Page", icon: <Icon.settings />, run: () => navigate("/account") },
+    // transitional deep-links (these fold into Screens/Settings/Studio in later phases)
+    { id: "nav-templates", label: "Browse templates", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
+    { id: "nav-shared", label: "Shared with me", hint: "Page", icon: <Icon.copy />, run: () => navigate("/shared") },
+    { id: "nav-groups", label: "Screen groups", hint: "Page", icon: <Icon.layers />, run: () => navigate("/groups") },
+    { id: "nav-playlists", label: "Rotations", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
+    { id: "nav-automations", label: "Automations", hint: "Page", icon: <Icon.target />, run: () => navigate("/automations") },
+    { id: "nav-integrations", label: "Connections", hint: "Page", icon: <Icon.link />, run: () => navigate("/integrations") },
     { id: "help-onboard", label: "Show the setup guide", hint: "Help", icon: <Icon.help />, run: () => { try { localStorage.removeItem(DISMISS_KEY); } catch { /* ignore */ } setOnboard(true); } },
     { id: "theme", label: "Toggle theme", hint: "Appearance", icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, run: cycleTheme },
     { id: "logout", label: "Log out", hint: "Account", icon: <Icon.x />, run: logout },
@@ -149,10 +158,10 @@ export function App() {
         />
         {drawer && <div class="sidebar-scrim" onClick={() => setDrawer(false)} />}
         <main id="main" class="shell-main page-enter">
+          {page.name === "boards" && <SetupsPage />}
           {page.name === "screens" && <ScreensPage />}
           {page.name === "fleet" && <FleetPage />}
           {page.name === "groups" && <GroupsPage />}
-          {page.name === "setups" && <SetupsPage />}
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
           {page.name === "integrations" && <IntegrationsPage />}

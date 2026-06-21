@@ -8,18 +8,12 @@ import { NotificationsBell } from "./NotificationsBell";
 // Notion-style left navigation: brand, search (⌘K), the page links, and an
 // account menu (theme + log out) pinned to the bottom. Collapses to icons.
 
+// A calm three. Everything else (templates, groups, rotations, connections,
+// automations, sharing, remote) folds into these or into the Studio.
 const NAV = [
-  { name: "screens", href: "#/", label: "Screens", icon: <Icon.grid /> },
-  { name: "fleet", href: "#/fleet", label: "Fleet", icon: <Icon.monitor /> },
-  { name: "groups", href: "#/groups", label: "Groups", icon: <Icon.layers /> },
-  { name: "setups", href: "#/setups", label: "Setups", icon: <Icon.pencil /> },
-  { name: "playlists", href: "#/playlists", label: "Playlists", icon: <Icon.play /> },
-  { name: "hub", href: "#/hub", label: "Hub", icon: <Icon.convert /> },
-  { name: "integrations", href: "#/integrations", label: "Integrations", icon: <Icon.link /> },
-  { name: "inlets", href: "#/inlets", label: "Data inlets", icon: <Icon.download /> },
-  { name: "automations", href: "#/automations", label: "Automations", icon: <Icon.target /> },
-  { name: "shared", href: "#/shared", label: "Shared with me", icon: <Icon.copy /> },
-  { name: "remote", href: "#/remote", label: "Remote", icon: <Icon.phone /> },
+  { name: "boards", href: "#/boards", label: "Boards", icon: <Icon.grid /> },
+  { name: "screens", href: "#/screens", label: "Screens", icon: <Icon.monitor /> },
+  { name: "account", href: "#/account", label: "Settings", icon: <Icon.settings /> },
 ];
 
 const themeLabel = (t: Theme): string => (t === "dark" ? "Theme · Dark" : t === "light" ? "Theme · Light" : "Theme · System");

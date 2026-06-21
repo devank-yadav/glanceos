@@ -11,20 +11,27 @@ import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { navigate } from "../router";
 
+interface SharedLayout { id: number; name: string; access: "viewer" | "editor"; ownerName: string; widgetCount: number }
+
 export function SetupsPage() {
+  const [tab, setTab] = useState<"mine" | "shared">("mine");
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
+  const [shared, setShared] = useState<SharedLayout[] | null>(null);
   const [q, setQ] = useState("");
   const [importing, setImporting] = useState(false);
   const toast = useToast();
 
   const refresh = async () => {
     try { setSetups(await api.get<SetupSummary[]>("/api/layouts")); }
-    catch (e) { toast.error(`Couldn't load setups: ${e instanceof Error ? e.message : e}`); }
+    catch (e) { toast.error(`Couldn't load boards: ${e instanceof Error ? e.message : e}`); }
   };
   useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    if (tab === "shared" && shared === null) api.get<SharedLayout[]>("/api/shared/layouts").then(setShared).catch(() => setShared([]));
+  }, [tab]);
 
-  const newSetup = async () => {
-    try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled setup" }); navigate(`/edit/${r.id}`); }
+  const newBoard = async () => {
+    try { const r = await api.post<{ id: number }>("/api/layouts", { name: "Untitled board" }); navigate(`/edit/${r.id}`); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
@@ -35,42 +42,83 @@ export function SetupsPage() {
 
   const actions = (
     <>
-      <label class="search-field">
-        <Icon.search />
-        <input placeholder="Search setups…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search setups" />
-      </label>
+      {tab === "mine" && (
+        <label class="search-field">
+          <Icon.search />
+          <input placeholder="Search boards…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search boards" />
+        </label>
+      )}
+      <button class="ghost" onClick={() => navigate("/hub")}><Icon.convert /> Templates</button>
       <button class="ghost" onClick={() => setImporting(true)}><Icon.upload /> Import</button>
-      <button class="primary" onClick={newSetup}><Icon.plus /> New setup</button>
+      <button class="primary" onClick={newBoard}><Icon.plus /> New board</button>
     </>
   );
 
   return (
     <>
-      <PageHeader title="Setups" actions={actions} />
+      <PageHeader title="Boards" actions={actions} />
       <div class="shell-content">
-        <p class="muted page-intro">
-          A setup is a screen customization that lives independently of any screen — disconnect a screen and its setup survives;
-          attach one setup to many screens and they stay in step.
-        </p>
-        {setups === null ? (
-          <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={<Icon.pencil />}
-            title={q ? "No setups match" : "No setups yet"}
-            body={q ? "Try a different search." : "Create your first board, or import one you exported."}
-            action={q ? undefined : { label: "New setup", onClick: newSetup }}
-          />
+        <div class="tabs" role="tablist">
+          <button class={`tab ${tab === "mine" ? "on" : ""}`} role="tab" aria-selected={tab === "mine"} onClick={() => setTab("mine")}>My boards</button>
+          <button class={`tab ${tab === "shared" ? "on" : ""}`} role="tab" aria-selected={tab === "shared"} onClick={() => setTab("shared")}>Shared with me</button>
+        </div>
+
+        {tab === "mine" ? (
+          <>
+            <p class="muted page-intro">
+              A board is a dashboard you design once and show on any screen — disconnect a screen and its board survives;
+              show one board on many screens and they stay in step.
+            </p>
+            {setups === null ? (
+              <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                icon={<Icon.pencil />}
+                title={q ? "No boards match" : "No boards yet"}
+                body={q ? "Try a different search." : "Create your first board, or start from a template."}
+                action={q ? undefined : { label: "New board", onClick: newBoard }}
+              />
+            ) : (
+              <div class="cards">
+                {filtered.map((s) => <SetupCard key={s.id} setup={s} onChanged={refresh} />)}
+              </div>
+            )}
+            <Modal open={importing} onClose={() => setImporting(false)} title="Import a board">
+              <ImportForm onImported={async () => { setImporting(false); await refresh(); }} />
+            </Modal>
+          </>
         ) : (
-          <div class="cards">
-            {filtered.map((s) => <SetupCard key={s.id} setup={s} onChanged={refresh} />)}
-          </div>
+          <SharedBoards items={shared} />
         )}
-        <Modal open={importing} onClose={() => setImporting(false)} title="Import a setup">
-          <ImportForm onImported={async () => { setImporting(false); await refresh(); }} />
-        </Modal>
       </div>
     </>
+  );
+}
+
+// Boards other accounts have shared with me (was the separate "Shared with me" page).
+function SharedBoards({ items }: { items: SharedLayout[] | null }) {
+  if (items === null) return <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>;
+  if (items.length === 0) return <EmptyState icon={<Icon.copy />} title="Nothing shared yet" body="When someone shares a board with you, it shows up here." />;
+  return (
+    <div class="cards">
+      {items.map((s) => (
+        <div key={s.id} class="card setup-card">
+          <div class="row spread">
+            <h3 class="card-title">{s.name}</h3>
+            <span class={`chip ${s.access === "editor" ? "published" : "subtle"}`}>{s.access}</span>
+          </div>
+          <div class="chip-row">
+            <StatChip>{s.widgetCount} blocks</StatChip>
+            <StatChip title="Shared by">by {s.ownerName}</StatChip>
+          </div>
+          <div class="row wrap">
+            <button class="primary" onClick={() => navigate(`/edit/${s.id}`)}>
+              <Icon.pencil /> {s.access === "editor" ? "Open studio" : "Open (read-only)"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -107,13 +155,13 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
   const remove = async () => {
     const ok = await confirm({
       title: `Delete "${setup.name}"?`,
-      body: setup.usedBy > 0 ? `It is live on ${setup.usedBy} screen(s); they'll fall back to "pick a setup".` : "This can't be undone.",
+      body: setup.usedBy > 0 ? `It is live on ${setup.usedBy} screen(s); they'll fall back to "pick a board".` : "This can't be undone.",
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
     await api.del(`/api/layouts/${setup.id}`);
-    toast.success("Setup deleted");
+    toast.success("Board deleted");
     await onChanged();
   };
 
@@ -163,8 +211,8 @@ function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
   const importJson = async (raw: string) => {
     try {
       const parsed = JSON.parse(raw) as { name?: string };
-      await api.post("/api/layouts", { name: parsed?.name ?? "Imported setup", document: parsed });
-      toast.success("Setup imported");
+      await api.post("/api/layouts", { name: parsed?.name ?? "Imported board", document: parsed });
+      toast.success("Board imported");
       await onImported();
     } catch (e) {
       toast.error(e instanceof SyntaxError ? "That isn't valid JSON." : String(e instanceof Error ? e.message : e));
@@ -181,7 +229,7 @@ function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
       <p class="muted" style={{ marginTop: 0 }}>Paste exported JSON, or pick a <code>.glanceos.json</code> file.</p>
       <textarea rows={5} placeholder='{"schemaVersion":3, …}' value={text} onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)} />
       <div class="row spread">
-        <input type="file" accept=".json,application/json" onChange={onFile} aria-label="Choose a setup file" />
+        <input type="file" accept=".json,application/json" onChange={onFile} aria-label="Choose a board file" />
         <button class="primary" disabled={!text.trim()} onClick={() => importJson(text)}>Import</button>
       </div>
     </>

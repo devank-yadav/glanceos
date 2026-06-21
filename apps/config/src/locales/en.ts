@@ -3,6 +3,7 @@
 // (apps/screen stays English — i18n is config-only; see the v1.5 ADR.)
 const en: Record<string, string> = {
   // navigation
+  "nav.boards": "Boards",
   "nav.screens": "Screens",
   "nav.fleet": "Fleet",
   "nav.groups": "Groups",
@@ -14,7 +15,7 @@ const en: Record<string, string> = {
   "nav.automations": "Automations",
   "nav.shared": "Shared",
   "nav.remote": "Remote",
-  "nav.account": "Account",
+  "nav.account": "Settings",
   "nav.search": "Search…",
 
   // common buttons / actions

@@ -5,10 +5,10 @@ import { useEffect, useState } from "preact/hooks";
 export type Route =
   | { name: "login" }
   | { name: "register" }
+  | { name: "boards" }
   | { name: "screens" }
   | { name: "fleet" }
   | { name: "groups" }
-  | { name: "setups" }
   | { name: "playlists" }
   | { name: "hub" }
   | { name: "integrations" }
@@ -23,9 +23,10 @@ export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, "") || "/";
   if (path === "/login") return { name: "login" };
   if (path === "/register") return { name: "register" };
+  if (path === "/boards" || path === "/setups") return { name: "boards" }; // /setups = legacy alias
+  if (path === "/screens") return { name: "screens" };
   if (path === "/fleet") return { name: "fleet" };
   if (path === "/groups") return { name: "groups" };
-  if (path === "/setups") return { name: "setups" };
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };
   if (path === "/integrations") return { name: "integrations" };
@@ -36,28 +37,28 @@ export function parseRoute(hash: string): Route {
   if (path === "/account") return { name: "account" };
   const edit = /^\/edit\/(\d+)$/.exec(path);
   if (edit) return { name: "edit", layoutId: Number(edit[1]) };
-  return { name: "screens" };
+  return { name: "boards" }; // Boards is home
 }
 
 // Path + label for each top-level section, used for breadcrumbs and origin.
 export const SECTION: Record<string, { path: string; label: string }> = {
-  screens: { path: "#/", label: "Screens" },
+  boards: { path: "#/boards", label: "Boards" },
+  screens: { path: "#/screens", label: "Screens" },
   fleet: { path: "#/fleet", label: "Fleet" },
   groups: { path: "#/groups", label: "Groups" },
-  setups: { path: "#/setups", label: "Setups" },
-  playlists: { path: "#/playlists", label: "Playlists" },
-  hub: { path: "#/hub", label: "Hub" },
-  integrations: { path: "#/integrations", label: "Integrations" },
+  playlists: { path: "#/playlists", label: "Rotations" },
+  hub: { path: "#/hub", label: "Templates" },
+  integrations: { path: "#/integrations", label: "Connections" },
   inlets: { path: "#/inlets", label: "Data inlets" },
   automations: { path: "#/automations", label: "Automations" },
   shared: { path: "#/shared", label: "Shared with me" },
   remote: { path: "#/remote", label: "Remote" },
-  account: { path: "#/account", label: "Account" },
+  account: { path: "#/account", label: "Settings" },
 };
 
 // Remember the last section the user was on, so a full-screen page (the Studio)
 // can show a breadcrumb back to where they actually came from.
-let origin = SECTION.screens!;
+let origin = SECTION.boards!;
 export function editorOrigin(): { path: string; label: string } {
   return origin;
 }
