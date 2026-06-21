@@ -1039,21 +1039,33 @@ export function buildApp(): Hono<Env> {
     if (v && typeof v === "object") return Object.values(v as Record<string, unknown>).some((x) => tooDeep(x, d + 1));
     return false;
   };
+  // Optional board scope on an automation request: a valid owned layout id, null for
+  // a global rule, or false when the caller can't access the referenced board.
+  const boardScope = (body: unknown, userId: string): number | null | false => {
+    const raw = (body as { layoutId?: unknown } | null)?.layoutId;
+    if (raw == null) return null;
+    if (!Number.isInteger(raw)) return false;
+    return getOwnedLayout(raw as number, userId) ? (raw as number) : false;
+  };
   app.get("/api/automations", (c) => c.json(listAutomations(c.get("userId"))));
   app.post("/api/automations", async (c) => {
     const body = await c.req.json().catch(() => null);
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    const layoutId = boardScope(body, c.get("userId"));
+    if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
     if (countAutomations(c.get("userId")) >= MAX_AUTOMATIONS_PER_USER) return c.json({ error: `at most ${MAX_AUTOMATIONS_PER_USER} automations` }, 409);
-    return c.json(createAutomation(c.get("userId"), parsed.data), 201);
+    return c.json(createAutomation(c.get("userId"), parsed.data, layoutId), 201);
   });
   app.post("/api/automations/test", async (c) => {
     const body = await c.req.json().catch(() => null);
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    return c.json(dryRunAutomation(parsed.data, c.get("userId"))); // no side effects
+    const layoutId = boardScope(body, c.get("userId"));
+    if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
+    return c.json(dryRunAutomation(parsed.data, c.get("userId"), layoutId)); // no side effects
   });
   app.get("/api/automations/:id/runs", (c) =>
     getAutomation(c.req.param("id"), c.get("userId")) ? c.json(listRuns(c.req.param("id"), c.get("userId"))) : c.json({ error: "not found" }, 404));
@@ -1067,7 +1079,9 @@ export function buildApp(): Hono<Env> {
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    const updated = updateAutomation(c.req.param("id"), c.get("userId"), parsed.data);
+    const layoutId = boardScope(body, c.get("userId"));
+    if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
+    const updated = updateAutomation(c.req.param("id"), c.get("userId"), parsed.data, layoutId);
     return updated ? c.json(updated) : c.json({ error: "not found" }, 404);
   });
   app.delete("/api/automations/:id", (c) =>

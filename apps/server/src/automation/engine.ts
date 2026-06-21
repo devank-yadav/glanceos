@@ -1,6 +1,7 @@
-import type { ActionT, AutomationT, ComparatorT, ConditionT, TriggerT } from "@glanceos/schema";
+import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT } from "@glanceos/schema";
 import { getUser } from "../auth";
 import { listCustomData, setCustomData } from "../customdata";
+import { getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
 import { advanceQueue } from "../queues";
 import { devicesOwnedBy, getDevice, updateDevice } from "../devices";
@@ -17,11 +18,50 @@ import { allUserIds, enabledByTrigger, recordRun } from "../automations";
 // frozen context from local data only (no fetches). runActions() maps to existing
 // server seams; the only outbound action goes through the SSRF-guarded postJSON.
 
+// A named object on a board, as seen by automations. Keyed in ctx.objects by BOTH
+// the block's stable id (what conditions/actions reference — survives renames) and
+// its current name (for readability/debug). `settable` is false for live-data blocks.
+export interface ObjEntry { value: unknown; settable: boolean; kind: "data" | "static" | "live"; key?: string; prop?: string }
+
 export interface Ctx {
   data: Record<string, unknown>; // the user's custom-data store, keyed by key
   webhook: unknown; // inlet payload (webhook trigger)
   device: Record<string, unknown>; // the device that transitioned (online/offline triggers)
   time: { hour: number; minute: number; minuteOfDay: number; weekday: number; ts: number };
+  objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
+}
+
+// Server-side primary-text heuristic (the config app owns the authoritative per-type
+// map; object-set actions carry the exact prop, so this only powers *reads* + a
+// fallback). Covers the overwhelming majority of text-bearing blocks.
+const TEXT_PROPS = ["content", "text", "value", "title", "label", "message", "body", "heading", "name"];
+function primaryProp(props: Record<string, unknown>): string | undefined {
+  for (const p of TEXT_PROPS) if (p in props) return p;
+  return undefined;
+}
+
+/** A board's named objects → {value, settable} keyed by id AND name. Pure: object
+ *  values come from the doc (static) or the already-built custom-data store (bound);
+ *  live-data blocks are present but read-only (value undefined offline). */
+function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>): Record<string, ObjEntry> {
+  const out: Record<string, ObjEntry> = {};
+  for (const block of layout.rows.flatMap((r) => r.blocks)) {
+    if (!block.name) continue;
+    const props = block.props as Record<string, unknown>;
+    let entry: ObjEntry;
+    if (block.type === "customData") {
+      const key = String(props.key ?? "");
+      entry = { value: dataStore[key], settable: !!key, kind: "data", key };
+    } else if (block.source) {
+      entry = { value: undefined, settable: false, kind: "live" };
+    } else {
+      const prop = primaryProp(props);
+      entry = { value: prop ? props[prop] : undefined, settable: !!prop, kind: "static", prop };
+    }
+    out[block.id] = entry;
+    out[block.name] = entry; // same entry, also reachable by current name
+  }
+  return out;
 }
 
 const num = (x: unknown): number | null => { const n = Number(x); return Number.isFinite(n) ? n : null; };
@@ -87,7 +127,7 @@ function zonedTime(now: Date, tz: string): Ctx["time"] {
   }
 }
 
-export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date } = {}): Ctx {
+export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date; layout?: LayoutT } = {}): Ctx {
   const now = opts.now ?? new Date();
   const data: Record<string, unknown> = {};
   for (const e of listCustomData(userId)) data[e.key] = e.value;
@@ -96,6 +136,7 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
     webhook: opts.webhook ?? {},
     device: opts.device ?? {},
     time: zonedTime(now, getUser(userId)?.defaultTimezone || "UTC"),
+    objects: opts.layout ? buildLayoutObjects(opts.layout, data) : {},
   });
 }
 
@@ -113,7 +154,7 @@ async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>)
 
 /** Run an automation's actions. Each is isolated: one failing action is logged and
  *  the rest still run. The webhook action is the only egress — SSRF-guarded. */
-export async function runActions(actions: ActionT[], userId: string, ctx: Ctx): Promise<{ run: number; errors: string[] }> {
+export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, board?: { id: number; document: LayoutT }): Promise<{ run: number; errors: string[] }> {
   let run = 0; let touched = false; const errors: string[] = [];
   for (const a of actions) {
     try {
@@ -133,6 +174,32 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx): 
         // re-firing automations, so an automation that POSTs to its own /api/hooks
         // URL can't form an HTTP self-trigger loop.
         case "webhook": await postJSON(a.url, a.body ?? { context: ctx }, { "x-glanceos-automation": "1" }); break;
+        // Object writes target a block by its stable id. A custom-data-bound object
+        // writes its data key; a static object patches its prop on the board doc.
+        // Either way pushUserDevices() at the end re-renders every screen the user
+        // owns, so the change reaches whatever screen is showing this board.
+        case "setObjectText":
+        case "setObjectProp": {
+          if (!board) throw new Error("object actions only run on board-scoped automations");
+          const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
+          if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
+          const props = block.props as Record<string, unknown>;
+          const next = a.kind === "setObjectText" ? a.text : a.value;
+          if (block.type === "customData") {
+            const key = String(props.key ?? "");
+            if (!key) throw new Error("object has no data key");
+            setCustomData(userId, key, next);
+          } else if (block.source) {
+            throw new Error("object shows live data and can't be set");
+          } else {
+            const prop = a.kind === "setObjectText" ? (a.prop || primaryProp(props)) : a.prop;
+            if (!prop) throw new Error("object has no settable text");
+            props[prop] = next;
+            updateLayout(board.id, board.document);
+          }
+          touched = true;
+          break;
+        }
       }
       run++;
     } catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }
@@ -153,40 +220,65 @@ function timeMatches(trigger: Extract<TriggerT, { kind: "time" }>, ctx: Ctx, aut
   return true;
 }
 
-/** Fire every enabled automation of a user whose trigger matches `kind`. Actions
- *  never fire further automations, so there is no recursion. */
+// Per-context previous snapshot (for "changed") + per-device presence (for edges),
+// in-memory by design: a restart simply re-baselines (no spurious fires). The key
+// is the user (global rules) or `user:layoutId` (a board's objects).
+const prevCtx = new Map<string, Ctx>();
+const lastOnline = new Map<string, boolean>();
+const ctxKey = (userId: string, layoutId: number | null): string => (layoutId == null ? userId : `${userId}:${layoutId}`);
+const loadBoard = (userId: string, layoutId: number): { id: number; document: LayoutT } | undefined => {
+  const rec = getOwnedLayout(layoutId, userId);
+  return rec ? { id: rec.id, document: rec.document } : undefined;
+};
+
+/** Fire every enabled automation of a user whose trigger matches `kind`. A
+ *  board-scoped automation evaluates against its board's objects. Actions never
+ *  fire further automations, so there is no recursion. */
 export async function fireAutomations(
   userId: string,
   kind: TriggerT["kind"],
-  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx } = {},
+  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean } = {},
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
-  // Reuse the caller's context when given (the tick passes the very context it
-  // stores as `prev`, so "changed" compares against the exact prior snapshot).
-  const ctx = opts.ctx ?? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now });
+  const baseCtx = opts.ctx ?? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now });
+  // Build each referenced board's context once (its objects read from the doc + data).
+  const boardCtx = new Map<number, { board?: { id: number; document: LayoutT }; ctx: Ctx }>();
+  const ctxFor = (layoutId: number | null): { board?: { id: number; document: LayoutT }; ctx: Ctx } => {
+    if (layoutId == null) return { ctx: baseCtx };
+    let c = boardCtx.get(layoutId);
+    if (!c) {
+      const board = loadBoard(userId, layoutId);
+      const ctx = board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document }) : baseCtx;
+      c = { board, ctx };
+      boardCtx.set(layoutId, c);
+    }
+    return c;
+  };
   for (const a of autos) {
+    const { board, ctx } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
-    const matched = a.conditions ? evaluate(a.conditions, ctx, opts.prev) : true;
+    const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
+    const matched = a.conditions ? evaluate(a.conditions, ctx, prev) : true;
     let run = 0; let error: string | null = null;
-    if (matched) { const r = await runActions(a.actions, userId, ctx); run = r.run; error = r.errors.length ? r.errors.join("; ") : null; }
+    if (matched) { const r = await runActions(a.actions, userId, ctx, board); run = r.run; error = r.errors.length ? r.errors.join("; ") : null; }
     recordRun(a.id, userId, kind, matched, run, error);
   }
+  // The tick stashes every context it evaluated as next tick's "prev" (so "changed"
+  // compares against the exact prior snapshot — globally and per board).
+  if (opts.usePrev) {
+    prevCtx.set(userId, baseCtx);
+    for (const [lid, c] of boardCtx) prevCtx.set(ctxKey(userId, lid), c.ctx);
+  }
 }
-
-// Per-user previous context (for "changed") + per-device presence (for edges),
-// in-memory by design: a restart simply re-baselines (no spurious fires).
-const prevCtx = new Map<string, Ctx>();
-const lastOnline = new Map<string, boolean>();
 
 /** The ~60s tick: data-threshold ("tick"), time-of-day ("time"), and screen
  *  online↔offline edges. Wrapped by the caller so it never crashes the loop. */
 export async function runAutomationTick(now = new Date()): Promise<void> {
   for (const userId of allUserIds()) {
     const ctx = buildContext(userId, { now });
-    await fireAutomations(userId, "tick", { ctx, prev: prevCtx.get(userId) });
-    await fireAutomations(userId, "time", { ctx });
-    prevCtx.set(userId, ctx); // the exact context just evaluated becomes next tick's "prev"
+    await fireAutomations(userId, "tick", { ctx, now, usePrev: true });
+    await fireAutomations(userId, "time", { ctx, now });
     for (const d of devicesOwnedBy(userId)) {
       const online = isConnected(d.id);
       const was = lastOnline.get(d.id);
@@ -207,12 +299,16 @@ const describeAction = (a: ActionT): string => {
     case "notify": return `notify: ${a.message}`;
     case "alert": return `alert (${a.severity}): ${a.title}`;
     case "webhook": return `POST to ${a.url}`;
+    case "setObjectText": return `set “${a.objectName ?? a.objectId}” text`;
+    case "setObjectProp": return `set “${a.objectName ?? a.objectId}” ${a.prop}`;
   }
 };
 
-/** Preview an automation against the current context with NO side effects. */
-export function dryRunAutomation(a: AutomationT, userId: string): { matched: boolean; wouldRun: string[]; context: Ctx } {
-  const ctx = buildContext(userId, {});
-  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(userId)) : true; // "changed" reflects the last tick
+/** Preview an automation against the current context with NO side effects. A
+ *  board-scoped preview reads that board's objects. */
+export function dryRunAutomation(a: AutomationT, userId: string, layoutId?: number | null): { matched: boolean; wouldRun: string[]; context: Ctx } {
+  const board = layoutId != null ? loadBoard(userId, layoutId) : undefined;
+  const ctx = buildContext(userId, board ? { layout: board.document } : {});
+  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, layoutId ?? null))) : true; // "changed" reflects the last tick
   return { matched, wouldRun: matched ? a.actions.map(describeAction) : [], context: ctx };
 }

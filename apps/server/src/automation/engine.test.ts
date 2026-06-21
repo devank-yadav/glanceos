@@ -12,13 +12,14 @@ const { createUser } = await import("../auth");
 const { setCustomData, getCustomData } = await import("../customdata");
 const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns } = await import("../automations");
+const { createLayout, getLayout } = await import("../layouts");
 const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
 
 const ctx = (over: Partial<{ data: Record<string, unknown>; webhook: unknown; device: Record<string, unknown> }> = {}) =>
-  ({ data: { temp: 30, status: "open", tags: ["a", "b"] }, webhook: { value: 5 }, device: { online: true }, time: { hour: 9, minute: 0, minuteOfDay: 540, weekday: 1, ts: 1_700_000_000_000 }, ...over }) as Parameters<typeof evaluate>[1];
+  ({ data: { temp: 30, status: "open", tags: ["a", "b"] }, webhook: { value: 5 }, device: { online: true }, time: { hour: 9, minute: 0, minuteOfDay: 540, weekday: 1, ts: 1_700_000_000_000 }, objects: {}, ...over }) as Parameters<typeof evaluate>[1];
 
 const field = (f: string, op: ComparatorT, value?: unknown): ConditionT => ({ type: "field", field: f, op, value });
 
@@ -138,5 +139,55 @@ describe("fireAutomations + dryRun", () => {
     }, user.id);
     expect(preview.matched).toBe(true); // occupancy=12 set earlier
     expect(preview.wouldRun[0]).toMatch(/notify/);
+  });
+});
+
+describe("objects — board-scoped reads & writes (v4.0)", () => {
+  // A board with one static object (a heading) and one custom-data-bound object.
+  const board = createLayout("Lobby", {
+    schemaVersion: 3, name: "Lobby",
+    rows: [{ id: "r1", blocks: [
+      { id: "h1", name: "Sign", type: "heading", props: { content: "Open" } },
+      { id: "cd1", name: "Lobby Temp", type: "customData", props: { key: "lobbyTemp" } },
+    ] }],
+  } as Parameters<typeof createLayout>[1], { userId: user.id });
+  const ref = () => ({ id: board.id, document: getLayout(board.id)!.document });
+
+  it("exposes a board's named objects under objects.<id> AND objects.<name>", () => {
+    setCustomData(user.id, "lobbyTemp", 21);
+    const c = buildContext(user.id, { layout: ref().document });
+    expect((c.objects.h1 as { value: unknown }).value).toBe("Open");
+    expect((c.objects.Sign as { value: unknown }).value).toBe("Open"); // reachable by current name too
+    expect((c.objects["Lobby Temp"] as { value: unknown }).value).toBe(21);
+    expect((c.objects.h1 as { settable: boolean }).settable).toBe(true);
+  });
+
+  it("a condition can read an object's value (rename-safe, keyed by id)", () => {
+    const c = buildContext(user.id, { layout: ref().document });
+    expect(evaluate(field("objects.h1.value", "eq", "Open"), c)).toBe(true);
+    expect(evaluate(field("objects.cd1.value", "gt", 20), c)).toBe(true); // lobbyTemp=21
+    expect(evaluate(field("objects.ghost.value", "exists"), c)).toBe(false); // dangling ref → safe
+  });
+
+  it("setObjectText on a static object patches its prop on the board doc", async () => {
+    const r = await runActions([{ kind: "setObjectText", objectId: "h1", objectName: "Sign", text: "Closed" }], user.id, buildContext(user.id), ref());
+    expect(r.run).toBe(1);
+    const heading = getLayout(board.id)!.document.rows[0]!.blocks.find((b) => b.id === "h1")!;
+    expect((heading.props as { content: string }).content).toBe("Closed");
+  });
+
+  it("setObjectText on a custom-data-bound object writes its data key", async () => {
+    const r = await runActions([{ kind: "setObjectText", objectId: "cd1", objectName: "Lobby Temp", text: "26" }], user.id, buildContext(user.id), ref());
+    expect(r.run).toBe(1);
+    expect(getCustomData(user.id, "lobbyTemp")).toBe("26");
+  });
+
+  it("object actions are inert without a board, and a dangling id is a reported error", async () => {
+    const noBoard = await runActions([{ kind: "setObjectText", objectId: "h1", text: "x" }], user.id, buildContext(user.id));
+    expect(noBoard.run).toBe(0);
+    expect(noBoard.errors[0]).toMatch(/board/);
+    const ghost = await runActions([{ kind: "setObjectText", objectId: "ghost", objectName: "Ghost", text: "x" }], user.id, buildContext(user.id), ref());
+    expect(ghost.run).toBe(0);
+    expect(ghost.errors[0]).toMatch(/not found/);
   });
 });

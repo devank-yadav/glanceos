@@ -60,9 +60,15 @@ export const Action = z.discriminatedUnion("kind", [
     ttlSeconds: z.number().int().min(3).max(3600).optional(),
   }),
   z.object({ kind: z.literal("webhook"), url: z.url({ protocol: /^https?$/ }), body: z.unknown().optional() }), // outbound — SSRF-guarded at run time
+  // Object-targeting actions (v4.0, Shortcuts-style). They reference a block by its
+  // stable id (`objectId`), so a rename never breaks them; `objectName` is kept only
+  // for display + dangling-reference lint. A custom-data-bound object writes its data
+  // key; a static object patches `prop` on its block doc, then the board re-pushes.
+  z.object({ kind: z.literal("setObjectText"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().max(60).optional(), text: z.string().max(2000) }),
+  z.object({ kind: z.literal("setObjectProp"), objectId: z.string().min(1).max(64), objectName: z.string().max(60).optional(), prop: z.string().min(1).max(60), value: z.unknown() }),
 ]);
 export type ActionT = z.infer<typeof Action>;
-export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook"] as const;
+export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp"] as const;
 
 // ---- Automation ----
 export const MAX_CONDITION_DEPTH = 12; // the UI builder never needs more; bounds recursion
