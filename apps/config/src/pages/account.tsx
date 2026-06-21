@@ -3,6 +3,7 @@ import { api, type UserInfo } from "../api";
 import { AVAILABLE, getLocale, setLocale, t } from "../i18n";
 import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
+import { SettingsTabs } from "../components/SettingsTabs";
 import { TimezoneSelect } from "../components/TimezoneSelect";
 import { useToast } from "../components/Toast";
 
@@ -75,8 +76,9 @@ export function AccountPage() {
 
   return (
     <>
-      <PageHeader title="Account" />
+      <PageHeader title="Settings" />
       <div class="shell-content account-page">
+        <SettingsTabs active="account" />
         <section class="card account-section">
           <h2>Profile</h2>
           <label class="field grow"><span>Name</span><input value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} /></label>

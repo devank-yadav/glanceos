@@ -28,7 +28,7 @@ export function HubPage() {
   const importItem = async (item: HubItem) => {
     try {
       await api.post(`/api/hub/${item.id}/import`);
-      toast.success(`Imported "${item.name}" — it's in your Setups now.`);
+      toast.success(`Imported "${item.name}" — it's in your Boards now.`);
       await search(q);
     } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
@@ -42,15 +42,15 @@ export function HubPage() {
 
   return (
     <>
-      <PageHeader title="Template hub" actions={actions} />
+      <PageHeader title="Templates" actions={actions} />
       <div class="shell-content">
         <p class="muted page-intro">
-          Boards shared by everyone on this server. Import one for your own editable copy — publish your own from <a href="#/setups">Setups</a>.
+          Boards shared by everyone on this server. Import one for your own editable copy — publish your own from <a href="#/boards">Boards</a>.
         </p>
         {items === null ? (
           <div class="cards hub-cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
         ) : items.length === 0 ? (
-          <EmptyState icon={<Icon.search />} title="No templates found" body={q ? "Try different keywords." : "Be the first — publish a setup to the hub."} />
+          <EmptyState icon={<Icon.search />} title="No templates found" body={q ? "Try different keywords." : "Be the first — publish a board from your Boards."} />
         ) : (
           <div class="cards hub-cards">
             {items.map((item) => (

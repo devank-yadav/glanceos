@@ -4,6 +4,7 @@ import { api } from "../api";
 import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
+import { SettingsTabs } from "../components/SettingsTabs";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 
@@ -109,8 +110,9 @@ export function IntegrationsPage() {
 
   return (
     <>
-      <PageHeader title="Integrations" />
+      <PageHeader title="Settings" />
       <div class="shell-content">
+        <SettingsTabs active="connections" />
         <p class="muted page-intro">
           Connect an app, then point any chart, stat, list, or calendar at it from the Studio's ⟿ Data tab.
           Tokens and secret URLs are encrypted on the server and never leave it.
