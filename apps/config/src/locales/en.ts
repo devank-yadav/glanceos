@@ -13,6 +13,7 @@ const en: Record<string, string> = {
   "nav.inlets": "Inlets",
   "nav.automations": "Automations",
   "nav.shared": "Shared",
+  "nav.remote": "Remote",
   "nav.account": "Account",
   "nav.search": "Search…",
 

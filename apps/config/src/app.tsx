@@ -16,6 +16,7 @@ import { DISMISS_KEY, needsOnboarding } from "./onboarding";
 import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
+import { RemotePage } from "./pages/remote";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
@@ -158,6 +159,7 @@ export function App() {
           {page.name === "inlets" && <InletsPage />}
           {page.name === "automations" && <AutomationsPage />}
           {page.name === "shared" && <SharedPage />}
+          {page.name === "remote" && <RemotePage />}
           {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />

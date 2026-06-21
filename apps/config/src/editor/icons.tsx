@@ -50,4 +50,5 @@ export const Icon = {
   upload: svg([<path d="M12 21V9" />, <path d="m7 13 5-5 5 5" />, <path d="M5 3h14" />]),
   home: svg([<path d="M4 11 12 4l8 7" />, <path d="M6 10v9h12v-9" />, <path d="M10 19v-5h4v5" />]),
   target: svg([<circle cx="12" cy="12" r="8" />, <circle cx="12" cy="12" r="3.4" />, <path d="M12 1v3M12 20v3M1 12h3M20 12h3" />]),
+  phone: svg([<rect x="7" y="2" width="10" height="20" rx="2.5" />, <path d="M11 18h2" />]),
 };

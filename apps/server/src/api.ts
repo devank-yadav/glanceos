@@ -32,7 +32,7 @@ import { listNotifications, markAllRead, markRead, notifyClaimed, notifyContentC
 import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
 import { limiter } from "./ratelimit";
-import { isConnected, subscribe } from "./hub";
+import { emit, isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
   getLayoutByShareToken, getOwnedLayout, getShareInfo, importFromHub, listPublished, listSetups,
@@ -495,6 +495,19 @@ export function buildApp(): Hono<Env> {
       return c.json({ error: "device not found" }, 404);
     }
     return c.json({ ok: true });
+  });
+
+  // Send a live command to a single owned screen (Remote: reload / identify).
+  const DEVICE_COMMANDS = new Set(["reload", "identify"]);
+  app.post("/api/devices/:id/command", async (c) => {
+    const id = c.req.param("id");
+    const device = getDevice(id);
+    if (!device || device.user_id !== c.get("userId")) return c.json({ error: "device not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { command?: string; params?: Record<string, unknown> };
+    if (!body.command || !DEVICE_COMMANDS.has(body.command)) return c.json({ error: "unknown command" }, 400);
+    const delivered = isConnected(id) ? 1 : 0;
+    if (delivered) await emit(id, "command", { command: body.command, params: body.params ?? {} });
+    return c.json({ ok: true, delivered });
   });
 
   // Time-of-day schedules + the device timezone (owner-scoped).

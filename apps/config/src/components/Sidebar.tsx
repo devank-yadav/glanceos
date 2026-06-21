@@ -19,6 +19,7 @@ const NAV = [
   { name: "inlets", href: "#/inlets", label: "Data inlets", icon: <Icon.download /> },
   { name: "automations", href: "#/automations", label: "Automations", icon: <Icon.target /> },
   { name: "shared", href: "#/shared", label: "Shared with me", icon: <Icon.copy /> },
+  { name: "remote", href: "#/remote", label: "Remote", icon: <Icon.phone /> },
 ];
 
 const themeLabel = (t: Theme): string => (t === "dark" ? "Theme · Dark" : t === "light" ? "Theme · Light" : "Theme · System");

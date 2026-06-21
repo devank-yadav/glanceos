@@ -122,6 +122,14 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(claimed).toMatchObject({ claimed: true, layoutId: null, layoutName: null });
   });
 
+  it("Remote: per-device command is owner-scoped + validated (offline → delivered 0)", async () => {
+    const ok = await app.request(`/api/devices/${device.deviceId}/command`, { method: "POST", ...authed(cookieA, { command: "reload" }) });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ ok: true, delivered: 0 }); // claimed but not SSE-connected
+    expect((await app.request(`/api/devices/${device.deviceId}/command`, { method: "POST", ...authed(cookieA, { command: "wipe" }) })).status).toBe(400);
+    expect((await app.request(`/api/devices/nonexistent/command`, { method: "POST", ...authed(cookieA, { command: "reload" }) })).status).toBe(404);
+  });
+
   it("creates a setup, assigns it, and composes scoped device state", async () => {
     const created = await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Desk" }) });
     expect(created.status).toBe(201);

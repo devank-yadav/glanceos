@@ -2971,6 +2971,35 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .callout.subtle { opacity: 0.85; }
 .callout ul { margin: 6px 0 0; padding-left: 18px; }
 
+/* ---------- phone breakpoint: stack the wide list/editor rows ---------- */
+@media (max-width: 560px) {
+  /* inlets / automations / API-key / shared-grantee rows: stack label over actions
+     so the action buttons never squeeze the text */
+  .key-list li.row.spread,
+  .share-grantees li.row.spread { flex-direction: column; align-items: stretch; gap: 8px; }
+  .key-list li .row,
+  .share-grantees li .row { flex-wrap: wrap; }
+  /* automation editor + share invite: let dense rows wrap instead of overflowing */
+  .cond-row,
+  .action-row,
+  .share-invite,
+  .key-mint .row.wrap { flex-wrap: wrap; }
+  .cond-row .cond-field,
+  .cond-row .cond-val,
+  .action-row input.grow,
+  .action-row > select { flex: 1 1 100%; min-width: 0; }
+  .cards { grid-template-columns: 1fr; }
+  .page-intro { font-size: 13px; }
+}
+
+/* ---------- Remote (phone-first control) ---------- */
+.remote-screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.remote-card { display: flex; flex-direction: column; gap: 10px; }
+.remote-actions { gap: 8px; }
+.remote-actions button { flex: 1; justify-content: center; }
+.remote-feed { margin-top: 18px; max-width: none; }
+.remote-feed h2 { display: flex; align-items: center; gap: 8px; }
+
 /* ---------- per-device TV settings editor ---------- */
 .tv-editor { display: flex; flex-direction: column; gap: 12px; }
 .tv-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }

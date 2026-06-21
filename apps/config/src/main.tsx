@@ -13,3 +13,12 @@ render(
   </ToastProvider>,
   document.getElementById("app")!,
 );
+
+// PWA: register the SSE-safe service worker (installable + offline shell). Dev
+// (Vite) doesn't serve /sw.js, so this is a no-op there and only kicks in on the
+// built app served by the server.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {/* PWA is progressive — fine without it */});
+  });
+}
