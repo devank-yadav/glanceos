@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { StreamPayloadT } from "@glanceos/schema";
 
 // renderPayload captures #app at module load, so it must exist before importing.
 document.body.innerHTML = '<div id="app"></div>';
 const { renderPayload } = await import("./render");
+const { showAlert } = await import("./alert");
 
 const row = { id: "r1", h: 6, blocks: [{ id: "b1", type: "divider", width: 1, props: {} }] };
 const baseLayout = { schemaVersion: 3, name: "Z", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top" };
@@ -58,5 +59,30 @@ describe("customData renderer", () => {
     render({ num: { value: "<img src=x onerror=alert(1)>" }, json: { value: 1 }, unset: { value: 1 } });
     expect(document.querySelector("img")).toBeNull();
     expect((document.querySelector(".custom-value") as HTMLElement).textContent).toContain("<img");
+  });
+});
+
+describe("live alert banner", () => {
+  it("appends to <body> (outside #app), survives a state re-render, then auto-removes", () => {
+    vi.useFakeTimers();
+    try {
+      showAlert({ severity: "warn", title: "Lobby full", body: "occupancy > 50", ttl: 5 });
+      const el = document.getElementById("glance-alert")!;
+      expect(el.parentElement).toBe(document.body); // NOT inside #app
+      expect(el.className).toContain("sev-warn");
+      expect(el.querySelector(".ga-title")!.textContent).toBe("Lobby full");
+      // a state push wipes #app — the banner must persist
+      renderPayload(payload({ ...baseLayout, rows: [row] }));
+      expect(document.getElementById("glance-alert")).not.toBeNull();
+      vi.advanceTimersByTime(5000);
+      expect(document.getElementById("glance-alert")).toBeNull(); // gone after ttl
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("renders the title via textContent — never markup", () => {
+    showAlert({ title: "<img src=x onerror=alert(1)>" });
+    expect(document.querySelector("#glance-alert img")).toBeNull();
+    expect(document.querySelector("#glance-alert .ga-title")!.textContent).toContain("<img");
+    document.getElementById("glance-alert")?.remove();
   });
 });

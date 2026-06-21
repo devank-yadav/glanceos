@@ -1,4 +1,5 @@
 import type { StreamPayloadT } from "@glanceos/schema";
+import type { AlertPayload } from "./alert";
 
 export interface Identity {
   deviceId: string;
@@ -63,7 +64,7 @@ export interface FleetCommand { command: string; params?: Record<string, unknown
 
 export function openStream(
   id: Identity,
-  handlers: { onState: (payload: StreamPayloadT) => void; onDown: () => void; onCommand?: (cmd: FleetCommand) => void },
+  handlers: { onState: (payload: StreamPayloadT) => void; onDown: () => void; onCommand?: (cmd: FleetCommand) => void; onAlert?: (a: AlertPayload) => void },
 ): EventSource {
   const url = `/api/devices/me/stream?id=${encodeURIComponent(id.deviceId)}&secret=${encodeURIComponent(id.deviceSecret)}`;
   const es = new EventSource(url);
@@ -73,6 +74,11 @@ export function openStream(
   if (handlers.onCommand) {
     es.addEventListener("command", (e) => {
       try { handlers.onCommand!(JSON.parse((e as MessageEvent).data) as FleetCommand); } catch { /* ignore malformed */ }
+    });
+  }
+  if (handlers.onAlert) {
+    es.addEventListener("alert", (e) => {
+      try { handlers.onAlert!(JSON.parse((e as MessageEvent).data) as AlertPayload); } catch { /* ignore malformed */ }
     });
   }
   es.onerror = () => handlers.onDown();

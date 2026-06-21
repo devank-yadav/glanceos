@@ -771,6 +771,15 @@ body {
 .feed-line { font-size: calc(2.6vmin * var(--font-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .custom-value { font-size: calc(5.2vmin * var(--font-scale, 1)); font-weight: 600; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
 .custom-json { font-family: var(--mono, ui-monospace, monospace); font-size: calc(2vmin * var(--font-scale, 1)); white-space: pre-wrap; word-break: break-word; margin: 0; overflow: hidden; }
+
+/* ---------- live alert banner (appended to <body>, outside #app) ---------- */
+.glance-alert { position: fixed; left: 0; right: 0; top: 0; z-index: 9999; padding: 2.2vmin 3vmin; color: #fff; box-shadow: 0 0.4vmin 1.6vmin rgba(0, 0, 0, 0.35); animation: ga-in 220ms ease-out; }
+.glance-alert.sev-info { background: #1f2937; }
+.glance-alert.sev-warn { background: #b45309; }
+.glance-alert.sev-critical { background: #b91c1c; }
+.glance-alert .ga-title { font-size: calc(3.2vmin * var(--font-scale, 1)); font-weight: 700; line-height: 1.15; }
+.glance-alert .ga-body { font-size: calc(2.4vmin * var(--font-scale, 1)); margin-top: 0.4vmin; opacity: 0.92; }
+@keyframes ga-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 .otd-row { display: flex; gap: 1.4vmin; font-size: calc(2.3vmin * var(--font-scale, 1)); padding: 0.4vmin 0; }
 .otd-year { font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
 .otd-text { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
