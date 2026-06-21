@@ -24,8 +24,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/login") return { name: "login" };
   if (path === "/register") return { name: "register" };
   if (path === "/boards" || path === "/setups") return { name: "boards" }; // /setups = legacy alias
-  if (path === "/screens") return { name: "screens" };
-  if (path === "/fleet") return { name: "fleet" };
+  if (path === "/screens" || path === "/fleet" || path === "/remote") return { name: "screens" }; // fleet + remote folded into Screens
   if (path === "/groups") return { name: "groups" };
   if (path === "/playlists") return { name: "playlists" };
   if (path === "/hub") return { name: "hub" };

@@ -644,7 +644,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         )}
         <span class="spacer" />
         <button class={`ghost hide-narrow display-on-btn${displayOpen ? " on" : ""}`} title="Choose which screens show this board" onClick={() => { setDisplayOpen((v) => !v); if (!displayOpen) refreshDevices(); }}>
-          <Icon.monitor /> {liveOn > 0 ? `Live on ${liveOn}` : "Display on…"}
+          <Icon.monitor /> {liveOn > 0 ? `Live on ${liveOn}` : "Show on…"}
         </button>
         <select class="size-select" title="Screen size" value={sizeKey} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setSizeKey(v); localStorage.setItem(SIZE_KEY, v); }}>
           {SIZE_CATEGORIES.map((cat) => (

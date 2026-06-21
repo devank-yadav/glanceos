@@ -3,6 +3,7 @@ import { api, type DisplayGroup, type SetupSummary } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { ScreensTabs } from "../components/ScreensTabs";
 import { TimezoneSelect } from "../components/TimezoneSelect";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
@@ -39,7 +40,8 @@ export function GroupsPage() {
         </span>
       } />
       <div class="shell-content">
-        <p class="muted page-intro" style={{ marginTop: 0 }}>A group gives many screens one default board. Assign a screen to a group from its card on <a href="#/">Screens</a>.</p>
+        <ScreensTabs active="groups" />
+        <p class="muted page-intro" style={{ marginTop: 0 }}>A group gives many screens one default board. Assign a screen to a group from its card on <a href="#/screens">Screens</a>.</p>
         {groups === null ? <p class="muted">Loading…</p>
           : groups.length === 0 ? <EmptyState icon={<Icon.layers />} title="No groups yet" body="Create a group to manage several screens together — a lobby, a floor, a whole building." />
             : <div class="group-list">{groups.map((g) => <GroupCard key={g.id} group={g} setups={setups} onChanged={refresh} confirm={confirm} toast={toast} />)}</div>}

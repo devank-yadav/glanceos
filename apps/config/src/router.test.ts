@@ -7,7 +7,8 @@ describe("router", () => {
     expect(parseRoute("#/boards").name).toBe("boards");
     expect(parseRoute("#/setups").name).toBe("boards"); // legacy alias
     expect(parseRoute("#/screens").name).toBe("screens");
-    expect(parseRoute("#/fleet").name).toBe("fleet");
+    expect(parseRoute("#/fleet").name).toBe("screens"); // fleet folded into Screens
+    expect(parseRoute("#/remote").name).toBe("screens"); // remote folded into Screens
     expect(parseRoute("#/integrations").name).toBe("integrations");
     expect(parseRoute("#/account").name).toBe("account");
     expect(parseRoute("#/edit/42")).toEqual({ name: "edit", layoutId: 42 });

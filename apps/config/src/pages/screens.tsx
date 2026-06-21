@@ -11,6 +11,7 @@ import { TimezoneSelect } from "../components/TimezoneSelect";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
+import { ScreensTabs } from "../components/ScreensTabs";
 import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
@@ -46,6 +47,7 @@ export function ScreensPage() {
     <>
       <PageHeader title="Screens" actions={devices && devices.length > 0 ? actions : undefined} />
       <div class="shell-content">
+        <ScreensTabs active="screens" />
         {devices === null ? (
           <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
         ) : devices.length === 0 ? (
@@ -121,6 +123,13 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
     toast.success("Screen disconnected");
     await onChanged();
   };
+  // Live control (folded in from the old Remote page): nudge the screen now.
+  const command = async (cmd: "reload" | "identify") => {
+    try {
+      const r = await api.post<{ delivered: number }>(`/api/devices/${device.id}/command`, { command: cmd });
+      toast.success(r.delivered ? (cmd === "identify" ? "Pinged the screen" : "Reloading the screen") : "Screen is offline");
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
   const ro = device.renderOpts ?? {};
@@ -143,6 +152,8 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
         <Menu
           trigger={<Icon.list />}
           items={[
+            { label: "Reload now", icon: <Icon.convert />, onClick: () => command("reload") },
+            { label: "Identify (flash)", icon: <Icon.target />, onClick: () => command("identify") },
             { label: "Location & time…", icon: <Icon.settings />, onClick: () => setSettingsOpen(true) },
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
             { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
@@ -156,9 +167,9 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       <DevicePreview device={device} playlists={playlists} />
 
       <p class="muted setup-line">
-        {playlist ? <>Playing <strong>{playlist.name}</strong> · {playlist.items.length} setups</>
+        {playlist ? <>Rotating <strong>{playlist.name}</strong> · {playlist.items.length} boards</>
           : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
-            : <>No setup yet — choose one</>}
+            : <>No board yet — choose one</>}
       </p>
 
       <div class="chip-row">
@@ -295,7 +306,7 @@ function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: stri
   };
 
   if (rules === null) return <div class="skeleton skeleton-line" />;
-  if (setups.length === 0) return <p class="muted">Create a setup first, then schedule it here.</p>;
+  if (setups.length === 0) return <p class="muted">Create a board first, then schedule it here.</p>;
 
   return (
     <div class="sched-editor">
@@ -431,26 +442,26 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
       await onDone();
       onClose();
       if (thenEdit) navigate(`/edit/${layoutId}`);
-      else toast.success("Setup attached");
+      else toast.success("Board attached");
     } finally { setBusy(false); }
   };
   const assignPlaylist = async (playlistId: number) => {
     setBusy(true);
-    try { await api.patch(`/api/devices/${deviceId}`, { playlistId }); await onDone(); onClose(); toast.success("Playlist attached"); }
+    try { await api.patch(`/api/devices/${deviceId}`, { playlistId }); await onDone(); onClose(); toast.success("Rotation attached"); }
     finally { setBusy(false); }
   };
   const createBlank = async () => {
     setBusy(true);
-    try { const layout = await api.post<{ id: number }>("/api/layouts", { name: "New setup" }); await assign(layout.id, true); }
+    try { const layout = await api.post<{ id: number }>("/api/layouts", { name: "New board" }); await assign(layout.id, true); }
     finally { setBusy(false); }
   };
 
   return (
-    <Modal open onClose={onClose} title="Choose a setup for this screen">
+    <Modal open onClose={onClose} title="Choose a board for this screen">
       <button class="primary wide" disabled={busy} onClick={createBlank}>Start blank — open the studio</button>
       {setups.length > 0 && (
         <>
-          <p class="muted">…or attach an existing setup (screens can share one):</p>
+          <p class="muted">…or attach an existing board (screens can share one):</p>
           <ul class="picker-list">
             {setups.map((s) => (
               <li key={s.id} class="row spread">
@@ -463,18 +474,18 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
       )}
       {playlists.length > 0 && (
         <>
-          <p class="muted">…or play a rotating <a href="#/playlists" onClick={onClose}>playlist</a>:</p>
+          <p class="muted">…or play a <a href="#/playlists" onClick={onClose}>rotation</a> that cycles boards:</p>
           <ul class="picker-list">
             {playlists.map((p) => (
               <li key={p.id} class="row spread">
-                <span><strong>{p.name}</strong> <span class="muted">{p.items.length} setups · every {fmtDuration(p.intervalSeconds)}</span></span>
+                <span><strong>{p.name}</strong> <span class="muted">{p.items.length} boards · every {fmtDuration(p.intervalSeconds)}</span></span>
                 <button disabled={busy || p.items.length === 0} onClick={() => assignPlaylist(p.id)}>Play</button>
               </li>
             ))}
           </ul>
         </>
       )}
-      <p class="muted">Want a starting point? <a href="#/hub" onClick={onClose}>Import from the hub</a>, then attach it here.</p>
+      <p class="muted">Want a starting point? <a href="#/hub" onClick={onClose}>Start from a template</a>, then attach it here.</p>
     </Modal>
   );
 }

@@ -4,10 +4,11 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { ScreensTabs } from "../components/ScreensTabs";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 
-// Playlists make a screen rotate through several setups on a schedule.
+// Rotations (formerly "playlists") make a screen cycle through several boards.
 export function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<Playlist[] | null>(null);
   const [setups, setSetups] = useState<SetupSummary[]>([]);
@@ -22,25 +23,26 @@ export function PlaylistsPage() {
   useEffect(() => { refresh(); }, []);
 
   const create = async () => {
-    await api.post("/api/playlists", { name: "New playlist", intervalSeconds: 300 });
-    toast.success("Playlist created");
+    await api.post("/api/playlists", { name: "New rotation", intervalSeconds: 300 });
+    toast.success("Rotation created");
     await refresh();
   };
 
-  const actions = <button class="primary" onClick={create}><Icon.plus /> New playlist</button>;
+  const actions = <button class="primary" onClick={create}><Icon.plus /> New rotation</button>;
 
   return (
     <>
-      <PageHeader title="Playlists" actions={actions} />
+      <PageHeader title="Rotations" actions={actions} />
       <div class="shell-content">
+        <ScreensTabs active="playlists" />
         <p class="muted page-intro">
-          A playlist rotates a screen through several setups. Assign it to a screen on the <a href="#/">Screens</a> page.
+          A rotation cycles a screen through several boards. Assign it to a screen on the <a href="#/screens">Screens</a> page.
           Browser screens advance live; e-ink devices get the current one each poll.
         </p>
         {playlists === null ? (
           <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
         ) : playlists.length === 0 ? (
-          <EmptyState icon={<Icon.play />} title="No playlists yet" body="Create one and add a few setups to rotate." action={{ label: "New playlist", onClick: create }} />
+          <EmptyState icon={<Icon.play />} title="No rotations yet" body="Create one and add a few boards to cycle." action={{ label: "New rotation", onClick: create }} />
         ) : (
           <div class="cards">
             {playlists.map((p) => <PlaylistCard key={p.id} playlist={p} setups={setups} onChanged={refresh} />)}
@@ -70,14 +72,14 @@ function PlaylistCard({ playlist, setups, onChanged }: { playlist: Playlist; set
   const save = async () => {
     await api.patch(`/api/playlists/${playlist.id}`, { name, intervalSeconds: interval, layoutIds: chosen });
     setDirty(false);
-    toast.success("Playlist saved");
+    toast.success("Rotation saved");
     await onChanged();
   };
 
   const remove = async () => {
     if (!(await confirm({ title: `Delete "${name}"?`, confirmLabel: "Delete", danger: true }))) return;
     await api.del(`/api/playlists/${playlist.id}`);
-    toast.success("Playlist deleted");
+    toast.success("Rotation deleted");
     await onChanged();
   };
 
@@ -91,14 +93,14 @@ function PlaylistCard({ playlist, setups, onChanged }: { playlist: Playlist; set
           <span>Name</span>
           <input value={name} onInput={(e) => change(() => setName((e.currentTarget as HTMLInputElement).value))} />
         </label>
-        <IconButton icon={<Icon.trash />} label="Delete playlist" class="danger-ghost" onClick={remove} />
+        <IconButton icon={<Icon.trash />} label="Delete rotation" class="danger-ghost" onClick={remove} />
       </div>
       <label class="field" style={{ marginTop: "10px" }}>
-        <span>Each setup shows for (seconds)</span>
+        <span>Each board shows for (seconds)</span>
         <input type="number" value={interval} onInput={(e) => change(() => setInterval(Number((e.currentTarget as HTMLInputElement).value) || 5))} />
       </label>
-      <h4>In this playlist ({ordered.length})</h4>
-      {ordered.length === 0 && <p class="muted">Add setups below.</p>}
+      <h4>In this rotation ({ordered.length})</h4>
+      {ordered.length === 0 && <p class="muted">Add boards below.</p>}
       <ol class="playlist-items">
         {ordered.map((s, i) => (
           <li key={s.id} class="row spread" aria-label={`${i + 1}. ${s.name}`}>
@@ -113,7 +115,7 @@ function PlaylistCard({ playlist, setups, onChanged }: { playlist: Playlist; set
       </ol>
       {unchosen.length > 0 && (
         <>
-          <h4>Available setups</h4>
+          <h4>Available boards</h4>
           <div class="row wrap">
             {unchosen.map((s) => (
               <button key={s.id} class="ghost chip-btn" onClick={() => toggle(s.id)}><Icon.plus /> {s.name}</button>
@@ -123,7 +125,7 @@ function PlaylistCard({ playlist, setups, onChanged }: { playlist: Playlist; set
       )}
       <div class="row spread" style={{ marginTop: "12px" }}>
         <span class="muted">{dirty ? "Unsaved changes" : "Saved"}</span>
-        <button class="primary" disabled={!dirty} onClick={save}>Save playlist</button>
+        <button class="primary" disabled={!dirty} onClick={save}>Save rotation</button>
       </div>
     </div>
   );

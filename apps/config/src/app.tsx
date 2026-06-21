@@ -8,7 +8,6 @@ import { Sidebar } from "./components/Sidebar";
 import { Icon } from "./editor/icons";
 import { useTheme } from "./hooks/useTheme";
 import { AccountPage } from "./pages/account";
-import { FleetPage } from "./pages/fleet";
 import { GroupsPage } from "./pages/groups";
 import { HubPage } from "./pages/hub";
 import { Onboarding } from "./pages/onboarding";
@@ -16,7 +15,6 @@ import { DISMISS_KEY } from "./onboarding";
 import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
-import { RemotePage } from "./pages/remote";
 import { Landing } from "./pages/landing";
 import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
@@ -160,7 +158,6 @@ export function App() {
         <main id="main" class="shell-main page-enter">
           {page.name === "boards" && <SetupsPage />}
           {page.name === "screens" && <ScreensPage />}
-          {page.name === "fleet" && <FleetPage />}
           {page.name === "groups" && <GroupsPage />}
           {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
@@ -168,7 +165,6 @@ export function App() {
           {page.name === "inlets" && <InletsPage />}
           {page.name === "automations" && <AutomationsPage />}
           {page.name === "shared" && <SharedPage />}
-          {page.name === "remote" && <RemotePage />}
           {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
