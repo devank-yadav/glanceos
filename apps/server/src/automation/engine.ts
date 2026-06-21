@@ -11,6 +11,9 @@ import { pushDevice, pushUserDevices } from "../state";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
+import { weatherData } from "../fetchers/weather";
+import { precipData } from "../fetchers/openmeteo";
+import { sunTimes, tzMinuteOfDay } from "../astro";
 import { allUserIds, enabledByTrigger, getAutomation, recordRun } from "../automations";
 
 // The automation engine. evaluate() and the comparators are PURE and TOTAL (never
@@ -28,8 +31,17 @@ export interface Ctx {
   webhook: unknown; // inlet payload (webhook trigger)
   device: Record<string, unknown>; // the device that transitioned (online/offline triggers)
   time: { hour: number; minute: number; minuteOfDay: number; weekday: number; ts: number };
+  // v5.0 substrate — today's sun, in the user's location/timezone (undefined if no
+  // screen has a location set). Lets boards react to daylight: `sun.isDaytime`,
+  // `sun.minsToSunset`, etc. Also powers the "sun" trigger.
+  sun?: { isDaytime: boolean; sunriseMin: number; sunsetMin: number; minsToSunrise: number; minsToSunset: number };
+  // v5.0 substrate — current weather at the user's location (undefined if no
+  // location / offline). Lets boards react: `weather.isRaining`, `weather.tempC`,
+  // `weather.precipProbPct`. Resolved only when an automation references `weather.*`.
+  weather?: { tempC: number; summary: string; high?: number; low?: number; precipProbPct: number; isRaining: boolean };
   objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
 }
+export interface LiveCtx { weather?: Ctx["weather"] }
 
 // Server-side primary-text heuristic (the config app owns the authoritative per-type
 // map; object-set actions carry the exact prop, so this only powers *reads* + a
@@ -141,17 +153,70 @@ function zonedTime(now: Date, tz: string): Ctx["time"] {
   }
 }
 
-export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date; layout?: LayoutT } = {}): Ctx {
+// The user's "home" location for sun math: the first screen that has a location set
+// (most setups have one). Undefined → no sun context / sun trigger no-ops gracefully.
+function userGeo(userId: string): { lat: number; lon: number } | null {
+  for (const d of devicesOwnedBy(userId)) {
+    if (typeof d.latitude === "number" && typeof d.longitude === "number") return { lat: d.latitude, lon: d.longitude };
+  }
+  return null;
+}
+
+function sunContext(userId: string, now: Date, tz: string, nowMin: number): Ctx["sun"] {
+  const geo = userGeo(userId);
+  if (!geo) return undefined;
+  const t = sunTimes(now, geo.lat, geo.lon);
+  if (!t) return undefined; // polar day/night
+  const sunriseMin = tzMinuteOfDay(t.sunrise, tz);
+  const sunsetMin = tzMinuteOfDay(t.sunset, tz);
+  return {
+    isDaytime: nowMin >= sunriseMin && nowMin < sunsetMin,
+    sunriseMin, sunsetMin,
+    minsToSunrise: sunriseMin - nowMin,
+    minsToSunset: sunsetMin - nowMin,
+  };
+}
+
+export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date; layout?: LayoutT; live?: LiveCtx } = {}): Ctx {
   const now = opts.now ?? new Date();
   const data: Record<string, unknown> = {};
   for (const e of listCustomData(userId)) data[e.key] = e.value;
+  const tz = getUser(userId)?.defaultTimezone || "UTC";
+  const time = zonedTime(now, tz);
   return Object.freeze({
     data,
     webhook: opts.webhook ?? {},
     device: opts.device ?? {},
-    time: zonedTime(now, getUser(userId)?.defaultTimezone || "UTC"),
+    time,
+    sun: sunContext(userId, now, tz, time.minuteOfDay),
+    weather: opts.live?.weather,
     objects: opts.layout ? buildLayoutObjects(opts.layout, data) : {},
   });
+}
+
+// Resolve the user's current weather (cached, keyless) for automation context —
+// only called when an automation actually references `weather.*`.
+async function resolveUserWeather(userId: string): Promise<Ctx["weather"]> {
+  const geo = userGeo(userId);
+  if (!geo) return undefined;
+  const p = { latitude: geo.lat, longitude: geo.lon };
+  const [w, pr] = await Promise.all([weatherData(p), precipData(p).catch(() => null)]);
+  if (!w) return undefined;
+  return {
+    tempC: w.temperatureC, summary: w.summary, high: w.high, low: w.low,
+    precipProbPct: pr?.probability ?? 0,
+    isRaining: /rain|drizzle|shower|thunder/i.test(w.summary),
+  };
+}
+
+// Does any of these automations read `weather.*` in its conditions? (cheap guard so
+// the tick only fetches weather when a rule actually needs it).
+function refsField(cond: ConditionT | null | undefined, prefix: string): boolean {
+  if (!cond) return false;
+  if (cond.type === "field") return cond.field.startsWith(prefix);
+  if (cond.type === "all" || cond.type === "any") return cond.conditions.some((c) => refsField(c, prefix));
+  if (cond.type === "not") return refsField(cond.condition, prefix);
+  return false;
 }
 
 const dayOf = (ctx: Ctx): number => Math.floor(ctx.time.ts / 86_400_000);
@@ -265,6 +330,19 @@ function timeMatches(trigger: Extract<TriggerT, { kind: "time" }>, ctx: Ctx, aut
   return true;
 }
 
+// "sun" trigger — fires the minute the sun event (± offset) lands, deduped per minute.
+function sunMatches(trigger: Extract<TriggerT, { kind: "sun" }>, ctx: Ctx, autoId: string): boolean {
+  if (!ctx.sun) return false;
+  if (((trigger.daysMask >> ctx.time.weekday) & 1) === 0) return false;
+  const base = trigger.event === "sunrise" ? ctx.sun.sunriseMin : ctx.sun.sunsetMin;
+  const target = (((base + trigger.offsetMin) % 1440) + 1440) % 1440;
+  if (ctx.time.minuteOfDay !== target) return false;
+  const stamp = Math.floor(ctx.time.ts / 60_000);
+  if (lastTimeFire.get(autoId) === stamp) return false;
+  lastTimeFire.set(autoId, stamp);
+  return true;
+}
+
 // Per-context previous snapshot (for "changed") + per-device presence (for edges),
 // in-memory by design: a restart simply re-baselines (no spurious fires). The key
 // is the user (global rules) or `user:layoutId` (a board's objects).
@@ -282,11 +360,14 @@ const loadBoard = (userId: string, layoutId: number): { id: number; document: La
 export async function fireAutomations(
   userId: string,
   kind: TriggerT["kind"],
-  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean } = {},
+  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx } = {},
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
-  const baseCtx = opts.ctx ?? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now });
+  // Resolve live data (weather) once, only if a rule references it — keeps the tick cheap.
+  const live: LiveCtx = opts.live ?? (autos.some((a) => refsField(a.conditions, "weather")) ? { weather: await resolveUserWeather(userId) } : {});
+  const hasLive = live.weather !== undefined;
+  const baseCtx = !hasLive && opts.ctx ? opts.ctx : buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, live });
   // Build each referenced board's context once (its objects read from the doc + data).
   const boardCtx = new Map<number, { board?: { id: number; document: LayoutT }; ctx: Ctx }>();
   const ctxFor = (layoutId: number | null): { board?: { id: number; document: LayoutT }; ctx: Ctx } => {
@@ -294,7 +375,7 @@ export async function fireAutomations(
     let c = boardCtx.get(layoutId);
     if (!c) {
       const board = loadBoard(userId, layoutId);
-      const ctx = board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document }) : baseCtx;
+      const ctx = board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live }) : baseCtx;
       c = { board, ctx };
       boardCtx.set(layoutId, c);
     }
@@ -303,6 +384,7 @@ export async function fireAutomations(
   for (const a of autos) {
     const { board, ctx } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
+    if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
     const matched = a.conditions ? evaluate(a.conditions, ctx, prev) : true;
     let run = 0; let error: string | null = null;
@@ -324,6 +406,7 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
     const ctx = buildContext(userId, { now });
     await fireAutomations(userId, "tick", { ctx, now, usePrev: true });
     await fireAutomations(userId, "time", { ctx, now });
+    await fireAutomations(userId, "sun", { ctx, now });
     for (const d of devicesOwnedBy(userId)) {
       const online = isConnected(d.id);
       const was = lastOnline.get(d.id);

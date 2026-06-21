@@ -23,7 +23,7 @@ type Cond =
   | { type: "not"; condition: Cond }
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
-interface Trigger { kind: string; atMinute?: number; daysMask?: number }
+interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
@@ -39,6 +39,7 @@ const TRIGGERS: { id: string; label: string }[] = [
   { id: "deviceOffline", label: "A screen goes offline" },
   { id: "tick", label: "Every minute (check data)" },
   { id: "time", label: "At a time of day" },
+  { id: "sun", label: "At sunrise / sunset" },
 ];
 const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "setData", label: "Set custom data" },
@@ -321,7 +322,13 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
       </label>
 
       <label class="field"><span>When…</span>
-        <select value={a.trigger.kind} onChange={(e) => set({ trigger: { kind: (e.currentTarget as HTMLSelectElement).value } })}>
+        <select value={a.trigger.kind} onChange={(e) => {
+          const kind = (e.currentTarget as HTMLSelectElement).value;
+          const seeded: Trigger = kind === "time" ? { kind, atMinute: 540, daysMask: 127 }
+            : kind === "sun" ? { kind, event: "sunset", offsetMin: 0, daysMask: 127 }
+              : { kind };
+          set({ trigger: seeded });
+        }}>
           {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
       </label>
@@ -340,6 +347,20 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
               })}
             </div>
           </div>
+        </div>
+      )}
+      {a.trigger.kind === "sun" && (
+        <div class="row wrap">
+          <label class="field"><span>Event</span>
+            <select value={a.trigger.event ?? "sunset"} onChange={(e) => set({ trigger: { ...a.trigger, event: (e.currentTarget as HTMLSelectElement).value } })}>
+              <option value="sunrise">Sunrise</option>
+              <option value="sunset">Sunset</option>
+            </select>
+          </label>
+          <label class="field"><span>Offset (min, ± before/after)</span>
+            <input type="number" min={-180} max={180} value={a.trigger.offsetMin ?? 0} onInput={(e) => set({ trigger: { ...a.trigger, offsetMin: Number((e.currentTarget as HTMLInputElement).value) || 0 } })} />
+          </label>
+          <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Uses the location set on your screen. e.g. Sunset with −30 fires 30 min before sunset.</p>
         </div>
       )}
 

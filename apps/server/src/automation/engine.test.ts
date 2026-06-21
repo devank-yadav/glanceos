@@ -13,6 +13,7 @@ const { setCustomData, getCustomData } = await import("../customdata");
 const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
+const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
 const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById } = await import("./engine");
 
 migrate();
@@ -47,6 +48,32 @@ describe("evaluate — comparators (pure & total)", () => {
   it("changed compares against the previous context", () => {
     expect(evaluate(field("data.temp", "changed"), ctx({ data: { temp: 30 } }), ctx({ data: { temp: 25 } }))).toBe(true);
     expect(evaluate(field("data.temp", "changed"), ctx({ data: { temp: 30 } }), ctx({ data: { temp: 30 } }))).toBe(false);
+  });
+});
+
+describe("v5.0 substrate — sun + weather in context", () => {
+  it("conditions can read weather.* and sun.*", () => {
+    const c = {
+      data: {}, webhook: {}, device: {},
+      time: { hour: 20, minute: 0, minuteOfDay: 1200, weekday: 1, ts: 1 },
+      objects: {},
+      weather: { tempC: 4, summary: "rain", precipProbPct: 80, isRaining: true },
+      sun: { isDaytime: false, sunriseMin: 360, sunsetMin: 1080, minsToSunrise: -840, minsToSunset: -120 },
+    } as Parameters<typeof evaluate>[1];
+    expect(evaluate(field("weather.isRaining", "eq", true), c)).toBe(true);
+    expect(evaluate(field("weather.precipProbPct", "gt", 50), c)).toBe(true);
+    expect(evaluate(field("weather.tempC", "lt", 5), c)).toBe(true);
+    expect(evaluate(field("sun.isDaytime", "eq", false), c)).toBe(true);
+  });
+  it("buildContext computes sun once a screen has a location", () => {
+    const reg = registerDevice({ name: "Hall" });
+    claimDevice(reg.claimCode, "Hall", user.id);
+    // London (~0° lon) so its sun events line up with the test user's UTC clock.
+    setDeviceLocation(reg.deviceId, { name: "London", latitude: 51.5074, longitude: -0.1278 }, user.id);
+    const c = buildContext(user.id, { now: new Date("2026-06-22T12:00:00Z") });
+    expect(c.sun).toBeDefined();
+    expect(c.sun!.sunsetMin).toBeGreaterThan(c.sun!.sunriseMin); // London midsummer: sunrise ~04:43, sunset ~21:21 UTC
+    expect(c.sun!.isDaytime).toBe(true); // noon UTC is daytime in London
   });
 });
 
