@@ -419,9 +419,8 @@ function ImageUpload({ onUploaded }: { onUploaded: (url: string) => void }) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/uploads", { method: "POST", body: fd, credentials: "same-origin" });
-      const r = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !r.url) throw new Error(r.error || `HTTP ${res.status}`);
+      const r = await api.upload<{ url?: string; error?: string }>("/api/uploads", fd);
+      if (!r.url) throw new Error(r.error || "upload failed");
       onUploaded(r.url);
       setStatus("Uploaded ✓");
     } catch (err) {

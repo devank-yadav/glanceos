@@ -122,6 +122,18 @@ function csrfToken(): string {
   return m ? decodeURIComponent(m[1]!) : "";
 }
 
+async function errorDetail(res: Response): Promise<string> {
+  let detail = `HTTP ${res.status}`;
+  try {
+    const j = (await res.json()) as { error?: string; issues?: Array<{ path: Array<string | number>; message: string }> };
+    if (j.error) detail = j.error;
+    if (j.issues) detail += ` — ${j.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`;
+  } catch {
+    // non-JSON error body; keep the status text
+  }
+  return detail;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["content-type"] = "application/json";
@@ -131,17 +143,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const j = (await res.json()) as { error?: string; issues?: Array<{ path: Array<string | number>; message: string }> };
-      if (j.error) detail = j.error;
-      if (j.issues) detail += ` — ${j.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`;
-    } catch {
-      // non-JSON error body; keep the status text
-    }
-    throw new Error(detail);
-  }
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()) as T;
+}
+
+// Multipart upload (e.g. images): the browser must set content-type + boundary,
+// so this can't go through request(). It still carries the CSRF token — the same
+// double-submit header every mutating call needs, or the guard returns 403
+// "bad or missing csrf token".
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken() },
+    body: form,
+    credentials: "same-origin",
+  });
+  if (!res.ok) throw new Error(await errorDetail(res));
   return (await res.json()) as T;
 }
 
@@ -151,4 +168,5 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   del: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
+  upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 };
