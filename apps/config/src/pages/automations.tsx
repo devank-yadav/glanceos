@@ -124,6 +124,20 @@ const TEMPLATES: { id: string; label: string; show: (c: TCtx) => boolean; build:
     id: "changed-notify", label: "Notify when data changes", show: () => true,
     build: (c) => tmpl(c, "Notify on data change", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field: "data.status", op: "changed" }] }, [{ kind: "notify", message: "Data changed" }]),
   },
+  // v5.0 smart recipes — the new sun / presence / weather senses. Swap the alert for
+  // a "Switch a screen to board" action to flip boards by daylight / presence / rain.
+  {
+    id: "sun-evening", label: "At sunset — an evening cue", show: () => true,
+    build: (c) => tmpl(c, "Evening at sunset", { kind: "sun", event: "sunset", offsetMin: 0, daysMask: 127 }, undefined, [{ kind: "alert", severity: "info", title: "Good evening", body: "The sun has set — easing into night.", target: "all" }]),
+  },
+  {
+    id: "arrive-home", label: "Welcome when you arrive home", show: () => true,
+    build: (c) => tmpl(c, "Welcome home", { kind: "presence", event: "enter" }, undefined, [{ kind: "alert", severity: "info", title: "Welcome home", target: "all" }]),
+  },
+  {
+    id: "rain-umbrella", label: "Umbrella reminder when it's raining", show: () => true,
+    build: (c) => tmpl(c, "Umbrella reminder", { kind: "tick" }, { type: "all", conditions: [{ type: "field", field: "weather.isRaining", op: "eq", value: true }] }, [{ kind: "alert", severity: "warn", title: "Take an umbrella", body: "Rain is expected today.", target: "all" }]),
+  },
 ];
 
 export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: number; objects?: ObjOption[]; embedded?: boolean } = {}) {
