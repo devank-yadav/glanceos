@@ -2600,15 +2600,20 @@ textarea:focus-visible,
 
 /* ---------- dropdown menu (Menu.tsx) ---------- */
 .menu-wrap { position: relative; display: inline-flex; }
+/* Portaled to <body> with fixed coords measured from the trigger (see Menu.tsx),
+   so it can't be clipped by a card/grid overflow, and a SOLID surface (no
+   backdrop-filter) so it never goes transparent or glitches inside the cards'
+   hover transform. */
 .menu-pop {
-  position: absolute;
-  top: calc(100% + 4px);
-  min-width: 184px;
+  position: fixed;
+  min-width: 188px;
+  max-width: calc(100vw - 16px);
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--shadow-lg, var(--shadow-md));
 }
-.menu-pop.menu-right { right: 0; }
-.menu-pop.menu-left { left: 0; }
 .sidebar-foot .menu-wrap { display: block; }
-.sidebar-foot .menu-pop { bottom: calc(100% + 6px); top: auto; left: 0; right: 0; }
 
 /* ---------- modal head/body (Modal.tsx, reuses .sheet) ---------- */
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -2705,7 +2710,9 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .device-card-body { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px 15px; }
 .device-card-body .chip-row, .device-card-body .setup-line { margin: 0; }
 
-/* Template / hub tiles: same hero treatment. */
+/* Template / hub tiles: same hero treatment, on a slightly larger grid so the
+   (often dark) full-screen designs are legible at a glance. */
+.cards.hub-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .hub-card { padding: 0; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
 .hub-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .hub-card .board-preview { border: 0; border-bottom: 1px solid var(--rule); border-radius: var(--r-md) var(--r-md) 0 0; }

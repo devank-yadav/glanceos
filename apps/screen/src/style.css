@@ -705,11 +705,15 @@ body {
 .barchart { width: 100%; flex: 1; min-height: 0; }
 .barchart-svg { width: 100%; height: 100%; }
 .barchart-svg rect { fill: var(--fg); }
-.ring { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; height: 100%; }
+.ring { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5%; position: relative; height: 100%; }
 .ring-svg { width: 78%; max-height: 70%; }
 .ring-track { fill: none; stroke: var(--rule); stroke-width: 6; }
 .ring-fill { fill: none; stroke: var(--fg); stroke-width: 6; stroke-linecap: round; }
-.ring-value { position: absolute; font-size: calc(3.6vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* progressRing: a square graphic wrapper so the % centres on the ring, not on the
+   whole column (which also holds the label). gaugeMini still uses .ring-svg direct. */
+.ring-graphic { position: relative; display: grid; place-items: center; width: min(78%, 70vmin); aspect-ratio: 1; }
+.ring-graphic .ring-svg { width: 100%; height: 100%; max-height: none; }
+.ring-value { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(3.6vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ring-label { font-size: calc(2.2vmin * var(--font-scale, 1)); color: var(--muted); }
 .dotprog { display: flex; flex-wrap: wrap; gap: 1vmin; }
 .dp-dot { width: 2.4vmin; height: 2.4vmin; border-radius: 50%; border: 1.5px solid var(--fg); }

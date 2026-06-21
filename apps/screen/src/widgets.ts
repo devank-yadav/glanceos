@@ -757,8 +757,12 @@ const barChart: Render = (el, w, data) => {
 const progressRing: Render = (el, w) => {
   if (w.type !== "progressRing") return;
   const wrap = div("ring");
-  wrap.innerHTML = ringSvg(w.props.value);
-  wrap.appendChild(div("ring-value", `${Math.round(w.props.value)}%`));
+  // The % sits in a square graphic wrapper so it centres on the ring, not on the
+  // whole column (which also holds the label below).
+  const g = div("ring-graphic");
+  g.innerHTML = ringSvg(w.props.value);
+  g.appendChild(div("ring-value", `${Math.round(w.props.value)}%`));
+  wrap.appendChild(g);
   if (w.props.label) wrap.appendChild(div("ring-label", w.props.label));
   el.appendChild(wrap);
 };
