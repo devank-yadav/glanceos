@@ -67,6 +67,7 @@ const FIELD_CATALOG: FieldDef[] = [
   { field: "calendar.isBusyNow", label: "In an event right now", group: "Calendar", control: "bool" },
   { field: "calendar.minutesUntilNext", label: "Minutes until next event", group: "Calendar", control: "number" },
   { field: "calendar.nextTitle", label: "Next event title", group: "Calendar", control: "text" },
+  { field: "calendar.freeUntil", label: "Free until (time)", group: "Calendar", control: "text" },
   // Screen / device
   { field: "device.online", label: "Screen is online", group: "Screen", control: "bool" },
   // Webhook
@@ -115,8 +116,15 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   { id: "cold", group: "Weather", label: "When it's cold (below 5°C)", trigger: { kind: "tick" }, conditions: fcond("weather.tempC", "lt", 5) },
   { id: "rain-likely", group: "Weather", label: "When rain is likely (≥60%)", trigger: { kind: "tick" }, conditions: fcond("weather.precipProbPct", "gte", 60) },
   // Presence
-  { id: "arrive", group: "Presence", label: "When someone gets home", trigger: { kind: "presence", event: "enter" } },
-  { id: "leave", group: "Presence", label: "When everyone leaves", trigger: { kind: "presence", event: "leave" } },
+  { id: "arrive", group: "Presence", label: "When I arrive home", trigger: { kind: "presence", event: "enter" } },
+  { id: "leave", group: "Presence", label: "When I leave home", trigger: { kind: "presence", event: "leave" } },
+  // Calendar (from your first calendar connection) — the context-aware bits
+  { id: "meeting-soon", group: "Calendar", label: "My next meeting is within 15 min", trigger: { kind: "tick" }, conditions: fcond("calendar.minutesUntilNext", "lte", 15) },
+  { id: "in-meeting", group: "Calendar", label: "While I'm in a meeting", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", true) },
+  { id: "free-now", group: "Calendar", label: "When I'm free (no event now)", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", false) },
+  // Trend — react to a direction, not just a level (uses the trend ring-buffer)
+  { id: "rising", group: "Trend", label: "When a value has been rising", trigger: { kind: "tick" }, conditions: fcond("data.value", "rising", "") },
+  { id: "falling", group: "Trend", label: "When a value has been falling", trigger: { kind: "tick" }, conditions: fcond("data.value", "falling", "") },
   // Screen health
   { id: "offline", group: "Screen", label: "When a screen goes offline", trigger: { kind: "deviceOffline" } },
   { id: "online", group: "Screen", label: "When a screen comes online", trigger: { kind: "deviceOnline" } },
