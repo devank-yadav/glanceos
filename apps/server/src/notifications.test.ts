@@ -13,7 +13,7 @@ const dev = (over: Partial<DeviceRow>): DeviceRow => ({
   id: "d1", secret: "s", name: "Lobby TV", claim_code: null, claimed_at: NOW, layout_id: null, user_id: "u1",
   profile: "{}", created_at: NOW, refresh_seconds: 300, playlist_id: null, battery: null, rssi: null,
   firmware: null, last_seen: NOW, timezone: null, render_opts: "{}", group_id: null,
-  location_name: null, latitude: null, longitude: null, prev_battery: null, prev_battery_at: null, ...over,
+  location_name: null, latitude: null, longitude: null, prev_battery: null, prev_battery_at: null, battery_at: null, ...over,
 });
 
 describe("checkDeviceForAlerts", () => {

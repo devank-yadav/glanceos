@@ -43,17 +43,26 @@ describe("batteryForecast (v6.1)", () => {
     expect(batteryForecast(battRow({ battery: null }))).toBeNull();
   });
   it("collecting — only one reading so far", () => {
-    expect(batteryForecast(battRow({ battery: 80, prev_battery: null, prev_battery_at: null, last_seen: 1_000 }))?.basis).toBe("collecting");
+    expect(batteryForecast(battRow({ battery: 80, prev_battery: null, prev_battery_at: null, battery_at: 1_000 }))?.basis).toBe("collecting");
   });
   it("ok — projects days from a two-point drain", () => {
     // 90% → 80% over 2 days = 5%/day; 80% left → 16 days.
-    const f = batteryForecast(battRow({ battery: 80, prev_battery: 90, prev_battery_at: 0, last_seen: 2 * DAY }));
+    const f = batteryForecast(battRow({ battery: 80, prev_battery: 90, prev_battery_at: 0, battery_at: 2 * DAY }));
     expect(f?.basis).toBe("ok");
     expect(f?.daysRemaining).toBe(16);
   });
   it("charging — level rose, so no drain estimate", () => {
-    const f = batteryForecast(battRow({ battery: 95, prev_battery: 80, prev_battery_at: 0, last_seen: DAY }));
+    const f = batteryForecast(battRow({ battery: 95, prev_battery: 80, prev_battery_at: 0, battery_at: DAY }));
     expect(f?.basis).toBe("charging");
     expect(f?.daysRemaining).toBeNull();
+  });
+  it("stable across flat polls — last_seen advancing does not stretch the window (v6.1.1)", () => {
+    // The drain window is frozen at battery_at; a device sitting at the same level and
+    // polling for days (last_seen way past battery_at) must report the SAME estimate.
+    const base = { battery: 80, prev_battery: 90, prev_battery_at: 0, battery_at: 2 * DAY };
+    const fresh = batteryForecast(battRow({ ...base, last_seen: 2 * DAY }));
+    const stale = batteryForecast(battRow({ ...base, last_seen: 9 * DAY })); // many flat polls later
+    expect(fresh?.daysRemaining).toBe(16);
+    expect(stale?.daysRemaining).toBe(16); // unchanged — last_seen no longer feeds the forecast
   });
 });

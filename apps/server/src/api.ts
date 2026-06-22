@@ -141,7 +141,7 @@ function deviceSummary(d: DeviceRow) {
     latitude: d.latitude,
     longitude: d.longitude,
     renderOpts: safeJsonObj(d.render_opts),
-    tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake },
+    tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake, quietHours: profile.quietHours },
     platform: profile.platform ?? null,
     nativeVersion: profile.nativeVersion ?? null,
     groupId: d.group_id,
@@ -476,7 +476,7 @@ export function buildApp(): Hono<Env> {
     const prior = getDevice(id);
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
-      tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null };
+      tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null; quietHours?: DeviceProfile["quietHours"] | null };
       groupId?: number | null;
       timezone?: string | null;
       location?: { name: string; latitude: number; longitude: number } | null;
@@ -957,7 +957,11 @@ export function buildApp(): Hono<Env> {
     const payload = { claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } } as unknown as Parameters<typeof renderImage>[1];
     try {
       const { buf, contentType } = await renderImage(baseUrl(), payload, 1200, 630, "png", `pub:${token}:${record.version}`);
-      return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": "public, max-age=300" } });
+      // A protected board's snapshot is gated by the unlock cookie — keep it out of shared
+      // (proxy/CDN) caches that could replay it to a client without the cookie. Only an
+      // unprotected board's image is safe to mark `public`.
+      const cache = found.pwHash ? "private, max-age=300" : "public, max-age=300";
+      return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": cache } });
     } catch (e) {
       return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);
     }

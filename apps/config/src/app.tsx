@@ -11,7 +11,7 @@ import { AccountPage } from "./pages/account";
 import { GroupsPage } from "./pages/groups";
 import { HubPage } from "./pages/hub";
 import { Onboarding } from "./pages/onboarding";
-import { DISMISS_KEY } from "./onboarding";
+import { DISMISS_KEY, needsOnboarding } from "./onboarding";
 import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
@@ -77,17 +77,22 @@ export function App() {
     return () => window.clearTimeout(t);
   }, [status?.authed]);
 
-  // First-run: drop a brand-new account straight into a fresh board in the Studio —
-  // "land in your work", not on an empty management page. (The step-by-step guide is
-  // still reachable from the ⌘K palette.) Guarded so it fires at most once per session.
+  // First-run: a brand-new account (no boards, no screens, not previously dismissed)
+  // meets the pick-a-vibe onboarding — "what's this screen for?" hands back a finished,
+  // pre-themed board. Someone who already dismissed it but still has no board lands
+  // straight in a fresh board instead (never stuck on an empty page). The guide is also
+  // reachable from ⌘K. Guarded so it fires at most once per session.
   useEffect(() => {
     if (!status?.authed) return;
     let booted = false;
     try { booted = sessionStorage.getItem(BOOTSTRAP_KEY) === "1"; } catch { /* ignore */ }
     if (booted) return;
-    api.get<unknown[]>("/api/layouts")
-      .then((l) => {
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(DISMISS_KEY) === "1"; } catch { /* ignore */ }
+    Promise.all([api.get<unknown[]>("/api/layouts"), api.get<unknown[]>("/api/devices")])
+      .then(([l, d]) => {
         try { sessionStorage.setItem(BOOTSTRAP_KEY, "1"); } catch { /* ignore */ }
+        if (needsOnboarding({ deviceCount: d.length, layoutCount: l.length, dismissed })) { setOnboard(true); return; }
         if (l.length === 0) return api.post<{ id: number }>("/api/layouts", { name: "My first board" }).then((r) => navigate(`/edit/${r.id}`));
       })
       .catch(() => {});

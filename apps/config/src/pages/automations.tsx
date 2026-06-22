@@ -551,7 +551,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
       {a.trigger.kind === "interval" && (
         <div class="row wrap">
           <label class="field"><span>Every</span>
-            <input type="number" min={1} max={1440} value={a.trigger.everyMinutes ?? 15} onInput={(e) => set({ trigger: { ...a.trigger, everyMinutes: Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 15)) } })} />
+            <input type="number" min={1} max={1440} step={1} value={a.trigger.everyMinutes ?? 15} onInput={(e) => set({ trigger: { ...a.trigger, everyMinutes: Math.round(Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 15))) } })} />
           </label>
           <span class="muted" style={{ alignSelf: "flex-end", paddingBottom: "10px" }}>minutes</span>
           <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Runs on a fixed cadence, aligned to the clock (e.g. 15 → :00 :15 :30 :45). Pair with an <strong>Only if</strong> to act only when something is true.</p>
@@ -579,7 +579,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
 
       <label class="field"><span>Run at most once every <span class="muted">(optional)</span></span>
         <span class="row" style={{ alignItems: "center", gap: "6px" }}>
-          <input type="number" min="0" max="1440" style={{ width: "5.5rem" }} value={a.cooldownMinutes ?? 0} onInput={(e) => set({ cooldownMinutes: Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0)) })} />
+          <input type="number" min="0" max="1440" step="1" style={{ width: "5.5rem" }} value={a.cooldownMinutes ?? 0} onInput={(e) => set({ cooldownMinutes: Math.round(Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0))) })} />
           <span class="muted">minutes — 0 means every time it matches. Keeps a long-held condition (rain, low battery) from re-firing each tick.</span>
         </span>
       </label>

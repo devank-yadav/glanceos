@@ -237,7 +237,11 @@ async function resolveUserCalendar(userId: string): Promise<Ctx["calendar"]> {
   const conn = listConnections(userId).find((c) => c.provider === "ical" || c.provider === "google");
   if (!conn) return undefined;
   const kind = conn.provider === "google" ? "google.calendar" : "ical.events";
-  const raw = await resolveSource({ kind, connectionId: conn.id, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupFor(userId)).catch(() => null);
+  // NB: pass an explicit `query: {}` — this object skips the schema (cast), so the
+  // `.prefault({})` default never runs and resolveSource's stableHash(src.query) would
+  // throw on undefined (swallowed by .catch → calendar silently dead). The ical/google
+  // providers tolerate an empty query (ical falls back to the connection's .ics URL).
+  const raw = await resolveSource({ kind, connectionId: conn.id, query: {}, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupFor(userId)).catch(() => null);
   const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { events?: unknown[] }).events) ? (raw as { events: unknown[] }).events : [];
   const now = Date.now();
   const evs = list
@@ -472,7 +476,11 @@ export async function fireAutomations(
       const tkey = ctxKey(userId, layoutId);
       const trend: Resolved["trend"] = {};
       for (const f of trendNeeded) {
-        if (opts.usePrev) { const v = num(resolvePath(ctx, f)); if (v !== null) recordTrend(`${tkey}:${f}`, v, Math.floor(ctx.time.ts / 60_000)); }
+        // Sample on every pass (not just the usePrev tick): a rising/falling/steady rule
+        // can ride an interval/time/sun trigger too. recordTrend dedups within a clock
+        // minute (minuteStamp replace), so repeated passes in one minute are harmless.
+        const v = num(resolvePath(ctx, f));
+        if (v !== null) recordTrend(`${tkey}:${f}`, v, Math.floor(ctx.time.ts / 60_000));
         trend[f] = trendDirection(trendSamples.get(`${tkey}:${f}`));
       }
       c = { board, ctx, trend };

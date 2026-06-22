@@ -209,7 +209,7 @@ export function DataPanel({
           {!isSeries && !isList && (
             <label class="field">
               <span>Transform</span>
-              <select value={transform} onChange={(e) => setTransform((e.currentTarget as HTMLSelectElement).value)}>
+              <select value={transform} onChange={(e) => { setTransform((e.currentTarget as HTMLSelectElement).value); setTransformArg(""); }}>
                 {TRANSFORMS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>

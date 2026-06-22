@@ -213,6 +213,8 @@ function renderClaim(code: string): void {
 // clock — confirms the panel is alive without burning a static board overnight.
 function renderAsleep(): void {
   document.body.classList.add("dark");
+  document.body.classList.remove("quiet-dim"); // don't carry a board's quiet dim into the asleep clock
+  delete document.body.dataset.look; // nor its Look font preset
   const wrap = el("tv-asleep");
   const clock = el("tv-asleep-clock");
   const paint = () => {
@@ -228,6 +230,10 @@ function renderAsleep(): void {
 
 export function renderMessage(title: string, body: string): void {
   reset();
+  // A neutral system message ("Claimed and ready") — shed the prior board's quiet dim
+  // and Look font preset so they don't bleed onto it (both are board-path-only classes).
+  document.body.classList.remove("quiet-dim");
+  delete document.body.dataset.look;
   const wrap = el("message");
   wrap.appendChild(el("message-title", title));
   wrap.appendChild(el("message-body", body));

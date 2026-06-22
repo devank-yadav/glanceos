@@ -14,6 +14,7 @@ const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
+const { createConnection } = await import("../connections");
 const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById } = await import("./engine");
 
 migrate();
@@ -239,6 +240,23 @@ describe("cooldown (v6.1)", () => {
     await fireAutomations(user.id, "tick", { now: at(2), usePrev: true }); // still within → skip
     expect(getCustomData(user.id, "cdCount")).toBe(1);
     expect(listRuns(a.id, user.id).length).toBe(1); // skipped ticks aren't logged
+  });
+});
+
+describe("calendar context (v6.1.1)", () => {
+  it("populates ctx.calendar when a rule references calendar.* (would be dead if the source query were dropped)", async () => {
+    // An iCal connection whose URL is loopback → the SSRF guard rejects the fetch →
+    // resolveSource rejects → resolveUserCalendar returns an EMPTY agenda (isBusyNow false),
+    // not undefined. With the v6.1.0 bug (missing query → stableHash threw → swallowed),
+    // ctx.calendar was always undefined and `calendar.isBusyNow eq false` never matched.
+    createConnection(user.id, { provider: "ical", secret: "http://127.0.0.1/none.ics", name: "Cal" } as Parameters<typeof createConnection>[1]);
+    createAutomation(user.id, {
+      name: "Free now", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "all", conditions: [{ type: "field", field: "calendar.isBusyNow", op: "eq", value: false }] },
+      actions: [{ kind: "setData", key: "calHit", value: "free" }],
+    });
+    await fireAutomations(user.id, "tick", { now: new Date(Date.UTC(2026, 4, 1, 0, 0)), usePrev: true });
+    expect(getCustomData(user.id, "calHit")).toBe("free"); // calendar context was resolved (not dead)
   });
 });
 

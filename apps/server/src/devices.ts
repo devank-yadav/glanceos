@@ -27,6 +27,7 @@ export interface DeviceRow {
   longitude: number | null;
   prev_battery: number | null;
   prev_battery_at: number | null;
+  battery_at: number | null; // when the CURRENT battery level was first reached (frozen until it steps)
 }
 
 export interface DeviceProfile {
@@ -123,13 +124,21 @@ export function recordTelemetry(
   t: { battery?: number; rssi?: number; firmware?: string },
 ): void {
   const b = cleanBattery(t.battery);
-  // v6.1 forecast: when the level actually steps, snapshot the prior reading + its
-  // time so the two points span real drain (not two identical back-to-back polls).
+  // v6.1 forecast: anchor each distinct battery level to WHEN IT WAS FIRST REACHED
+  // (battery_at), frozen across flat polls. When the level steps, the prior level's
+  // (value, first-seen) rolls into prev_*, and the new level's anchor is stamped now.
+  // The forecast then spans first-reached(prev) → first-reached(cur) — a real drain
+  // window that doesn't stretch every time an unchanged battery checks in (the v6.1.0
+  // bug, where the denominator used the ever-advancing last_seen).
   if (b != null) {
-    const cur = db.prepare("SELECT battery, last_seen FROM devices WHERE id = ?").get(id) as { battery: number | null; last_seen: number | null } | undefined;
-    if (cur && cur.battery != null && cur.battery !== b) {
-      db.prepare("UPDATE devices SET prev_battery = ?, prev_battery_at = ? WHERE id = ?").run(cur.battery, cur.last_seen ?? Date.now(), id);
-    }
+    const cur = db.prepare("SELECT battery, battery_at, last_seen FROM devices WHERE id = ?").get(id) as { battery: number | null; battery_at: number | null; last_seen: number | null } | undefined;
+    const now = Date.now();
+    if (!cur || cur.battery == null) {
+      db.prepare("UPDATE devices SET battery_at = ? WHERE id = ?").run(now, id); // first-ever reading → start the clock
+    } else if (cur.battery !== b) {
+      db.prepare("UPDATE devices SET prev_battery = ?, prev_battery_at = ?, battery_at = ? WHERE id = ?")
+        .run(cur.battery, cur.battery_at ?? cur.last_seen ?? now, now, id);
+    } // flat poll → leave battery_at frozen
   }
   db.prepare(
     "UPDATE devices SET last_seen = ?, battery = COALESCE(?, battery), rssi = COALESCE(?, rssi), firmware = COALESCE(?, firmware) WHERE id = ?",
@@ -150,11 +159,11 @@ export interface BatteryForecast {
 /** Days-to-empty from the two-point drain on the device row. Pure (reads the row). */
 export function batteryForecast(d: DeviceRow): BatteryForecast | null {
   if (d.battery == null) return null;
-  if (d.prev_battery == null || d.prev_battery_at == null || d.last_seen == null) {
+  if (d.prev_battery == null || d.prev_battery_at == null || d.battery_at == null) {
     return { battery: d.battery, daysRemaining: null, basis: "collecting" };
   }
   const dropPct = d.prev_battery - d.battery; // positive = discharging
-  const dMs = d.last_seen - d.prev_battery_at;
+  const dMs = d.battery_at - d.prev_battery_at; // first-reached(prev) → first-reached(cur); frozen across flat polls
   if (dMs <= 0) return { battery: d.battery, daysRemaining: null, basis: "collecting" };
   if (dropPct <= 0) return { battery: d.battery, daysRemaining: null, basis: "charging" }; // flat or charging → no drain
   const msLeft = (d.battery / dropPct) * dMs; // remaining %  ÷  (% per ms)
