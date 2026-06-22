@@ -25,6 +25,8 @@ export interface DeviceRow {
   location_name: string | null;
   latitude: number | null;
   longitude: number | null;
+  prev_battery: number | null;
+  prev_battery_at: number | null;
 }
 
 export interface DeviceProfile {
@@ -120,15 +122,43 @@ export function recordTelemetry(
   id: string,
   t: { battery?: number; rssi?: number; firmware?: string },
 ): void {
+  const b = cleanBattery(t.battery);
+  // v6.1 forecast: when the level actually steps, snapshot the prior reading + its
+  // time so the two points span real drain (not two identical back-to-back polls).
+  if (b != null) {
+    const cur = db.prepare("SELECT battery, last_seen FROM devices WHERE id = ?").get(id) as { battery: number | null; last_seen: number | null } | undefined;
+    if (cur && cur.battery != null && cur.battery !== b) {
+      db.prepare("UPDATE devices SET prev_battery = ?, prev_battery_at = ? WHERE id = ?").run(cur.battery, cur.last_seen ?? Date.now(), id);
+    }
+  }
   db.prepare(
     "UPDATE devices SET last_seen = ?, battery = COALESCE(?, battery), rssi = COALESCE(?, rssi), firmware = COALESCE(?, firmware) WHERE id = ?",
   ).run(
     Date.now(),
-    cleanBattery(t.battery),
+    b,
     cleanRssi(t.rssi),
     cleanFirmware(t.firmware),
     id,
   );
+}
+
+export interface BatteryForecast {
+  battery: number;
+  daysRemaining: number | null; // null when we can't estimate yet (collecting / charging)
+  basis: "ok" | "charging" | "collecting";
+}
+/** Days-to-empty from the two-point drain on the device row. Pure (reads the row). */
+export function batteryForecast(d: DeviceRow): BatteryForecast | null {
+  if (d.battery == null) return null;
+  if (d.prev_battery == null || d.prev_battery_at == null || d.last_seen == null) {
+    return { battery: d.battery, daysRemaining: null, basis: "collecting" };
+  }
+  const dropPct = d.prev_battery - d.battery; // positive = discharging
+  const dMs = d.last_seen - d.prev_battery_at;
+  if (dMs <= 0) return { battery: d.battery, daysRemaining: null, basis: "collecting" };
+  if (dropPct <= 0) return { battery: d.battery, daysRemaining: null, basis: "charging" }; // flat or charging → no drain
+  const msLeft = (d.battery / dropPct) * dMs; // remaining %  ÷  (% per ms)
+  return { battery: d.battery, daysRemaining: Math.max(0, Math.round((msLeft / 86_400_000) * 10) / 10), basis: "ok" };
 }
 
 export function setRefresh(id: string, seconds: number, userId: string): DeviceRow | null {

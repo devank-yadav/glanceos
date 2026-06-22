@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +23,7 @@ import { playLogCsv, playLogForGroup, recordPlayLog, type PlayLogEntry } from ".
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
-  authDevice, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
+  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
   registerDevice, setDeviceLocation, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
@@ -74,6 +75,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const baseUrl = (): string => `http://127.0.0.1:${process.env.PORT ?? 8080}`;
 
+// Per-device display ETag + consecutive-unchanged-poll counter (in-memory, rebuilt
+// on restart) — backs the /display endpoint's 304 + adaptive-refresh behavior.
+const displayEtags = new Map<string, { etag: string; unchanged: number }>();
+const ESCAPE_HTML: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (ch) => ESCAPE_HTML[ch]!);
+
+// Order-independent JSON so the display ETag is stable across composeState rebuilds.
+function safeStableJson(v: unknown): string {
+  try {
+    return JSON.stringify(v, (_k, val) =>
+      val && typeof val === "object" && !Array.isArray(val)
+        ? Object.fromEntries(Object.entries(val as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1)))
+        : val);
+  } catch { return ""; }
+}
+
 // Public origin for OAuth redirect URIs — behind a reverse proxy the request
 // origin is wrong, so GLANCEOS_PUBLIC_URL overrides it. Must match the redirect
 // URI registered in the provider's OAuth app.
@@ -114,6 +131,7 @@ function deviceSummary(d: DeviceRow) {
     online: isConnected(d.id),
     refreshSeconds: d.refresh_seconds,
     battery: d.battery,
+    batteryForecast: batteryForecast(d),
     rssi: d.rssi,
     firmware: d.firmware,
     lastSeen: d.last_seen,
@@ -364,16 +382,31 @@ export function buildApp(): Hono<Env> {
 
   // A battery e-paper device calls this each wake: it reports telemetry (via
   // headers), and gets back where to fetch its image and how long to sleep.
-  app.get("/api/devices/me/display", (c) => {
+  app.get("/api/devices/me/display", async (c) => {
     const device = authDevice(c.req.header("id") ?? c.req.query("id"), c.req.header("access-token") ?? c.req.query("secret"));
     if (!device) return c.json({ error: "unauthorized" }, 401);
     recordTelemetry(device.id, telemetryFromHeaders(c));
-    const refresh = device.refresh_seconds;
     if (!device.claimed_at) {
       return c.json({ status: 0, claimed: false, claim_code: device.claim_code, refresh_rate: 300 });
     }
     const layoutId = currentLayoutId(device);
     const version = layoutId ? getLayout(layoutId)?.version ?? 0 : 0;
+    // v6.1 e-ink efficiency: an ETag over (layout version + resolved data) lets a
+    // panel skip a wake's render+transfer when nothing changed, and we stretch its
+    // sleep after several unchanged polls. Opt-in + backward-compatible: a firmware
+    // that doesn't send If-None-Match gets the old always-200 + base refresh.
+    const payload = await composeState(device);
+    const dataJson = payload.claimed ? safeStableJson(payload.state.data) : "";
+    const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).digest("hex").slice(0, 16)}"`;
+    const ifNone = c.req.header("if-none-match");
+    const conditional = ifNone !== undefined;
+    const prev = displayEtags.get(device.id);
+    const unchanged = prev && prev.etag === etag ? prev.unchanged + 1 : 0;
+    displayEtags.set(device.id, { etag, unchanged });
+    const refresh = conditional && unchanged >= 3 ? Math.min(device.refresh_seconds * 4, 6 * 3600) : device.refresh_seconds;
+    if (conditional && ifNone === etag) {
+      return new Response(null, { status: 304, headers: { etag, "cache-control": "no-cache", "x-refresh-rate": String(refresh) } });
+    }
     return c.json({
       status: 0,
       claimed: true,
@@ -381,7 +414,7 @@ export function buildApp(): Hono<Env> {
       filename: `glanceos-${layoutId ?? "blank"}-${version}.bmp`,
       refresh_rate: refresh,
       reset_firmware: false,
-    });
+    }, 200, { etag, "cache-control": "no-cache" });
   });
 
   app.get("/api/devices/me/render.bmp", async (c) => {
@@ -903,6 +936,62 @@ export function buildApp(): Hono<Env> {
     const { record, ownerId } = found;
     const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
     return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });
+  });
+
+  // A monochrome, dithered snapshot of a shared board — the social-unfurl image for
+  // /s/:token. Reuses the device Chromium+dither pipeline. Password-protected boards
+  // 404 unless the caller holds the unlock cookie (so a crawler never leaks content).
+  app.get("/api/public/board/:token/preview.png", async (c) => {
+    const token = c.req.param("token");
+    const found = getLayoutByShareToken(token);
+    if (!found || shareExpired(found.expiresAt)) return c.json({ error: "not found" }, 404);
+    if (found.pwHash) {
+      const cookie = getCookie(c, shareCookie(token));
+      if (!cookie || !hmacVerify(`share-unlock:${token}`, cookie)) return c.json({ error: "not found" }, 404);
+    }
+    if (!(await renderAvailable())) return c.json({ error: "render support not installed" }, 503);
+    const { record, ownerId } = found;
+    const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
+    const payload = { claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } } as unknown as Parameters<typeof renderImage>[1];
+    try {
+      const { buf, contentType } = await renderImage(baseUrl(), payload, 1200, 630, "png", `pub:${token}:${record.version}`);
+      return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": "public, max-age=300" } });
+    } catch (e) {
+      return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);
+    }
+  });
+
+  // Human-friendly share landing: server-rendered per-token OpenGraph meta (so the
+  // link unfurls with the board's preview image) + an instant redirect to the viewer.
+  app.get("/s/:token", (c) => {
+    const token = c.req.param("token");
+    const found = getLayoutByShareToken(token);
+    const origin = publicBase(c);
+    const viewer = `${origin}/screen/?share=${encodeURIComponent(token)}`;
+    if (!found || shareExpired(found.expiresAt)) {
+      return c.html(`<!doctype html><meta charset="utf-8"><title>GlanceOS</title><p>This shared board link is no longer available.</p>`, 404);
+    }
+    const locked = !!found.pwHash;
+    const title = locked ? "Protected board · GlanceOS" : `${escapeHtml(found.record.name || "Untitled board")} · GlanceOS`;
+    const img = locked ? "" : `${origin}/api/public/board/${encodeURIComponent(token)}/preview.png`;
+    const og = img
+      ? `<meta property="og:image" content="${img}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${img}">`
+      : `<meta name="twitter:card" content="summary">`;
+    return c.html(`<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="A live board shared from GlanceOS — a calm, glanceable dashboard for any screen.">
+${og}
+<meta http-equiv="refresh" content="0; url=${escapeHtml(viewer)}">
+<link rel="canonical" href="${escapeHtml(viewer)}">
+</head><body style="font:16px/1.5 system-ui,sans-serif;color:#444;margin:3rem auto;max-width:32rem;padding:0 1rem">
+<p>Opening <strong>${title}</strong>… <a href="${escapeHtml(viewer)}">Continue</a> if you're not redirected.</p>
+<script>location.replace(${JSON.stringify(viewer)});</script>
+</body></html>`);
   });
 
   // ---- template hub ----
