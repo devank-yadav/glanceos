@@ -60,12 +60,15 @@ Open <http://localhost:5173> on anything with a browser — it registers itself 
 
 **Upgrading a v0.1 install:** your old password becomes the `admin@local` account — log in with that email and your existing password; screens and setups carry over. (Self-hosting publicly? `GLANCEOS_REGISTRATION=closed` stops strangers registering; the first account is always allowed.)
 
-Production-style instead: `pnpm build && pnpm --filter @glanceos/server start` serves everything from one process — config app at `/`, screens point at `/screen`. Or as a container:
+### Run it (one command)
+
+Self-host the whole thing — one container, one SQLite file, no cloud, no account with anyone:
 
 ```sh
-docker build -t glanceos .
-docker run -d -p 8080:8080 -v glanceos-data:/data glanceos
+docker compose up -d        # pulls ghcr.io/devank-yadav/glanceos
 ```
+
+Then open <http://localhost:8080>, create your account, and claim any screen. (Prefer plain Docker? `docker run -d -p 8080:8080 -v glanceos-data:/data ghcr.io/devank-yadav/glanceos`.) Images are published multi-arch (amd64 + arm64), so the **same image runs on a Raspberry Pi**. Building from source instead: `pnpm build && pnpm --filter @glanceos/server start` serves everything from one process — config app at `/`, screens point at `/screen` — or `docker build -t glanceos .`.
 
 ## Honest comparison
 

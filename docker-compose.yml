@@ -1,0 +1,30 @@
+# GlanceOS — one command to a private dashboard wall:  docker compose up -d
+# Then open http://localhost:8080, create your account, and claim any screen.
+# The whole thing is one container + one SQLite file on the `glanceos-data` volume.
+# No cloud, no account with anyone, no telemetry.
+
+services:
+  glanceos:
+    image: ghcr.io/devank-yadav/glanceos:latest
+    container_name: glanceos
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - glanceos-data:/data        # SQLite DB + uploads + the auto-generated secret.key
+    environment:
+      # All optional — sensible defaults work out of the box. Uncomment to tune:
+      # - GLANCEOS_PUBLIC_URL=https://glance.example   # required behind a reverse proxy (OAuth redirects, share/QR links)
+      # - GLANCEOS_SECRET_KEY=                          # 32-byte base64; auto-generated to /data/secret.key if unset
+      # - GLANCEOS_REGISTRATION=closed                 # stop strangers signing up (the first account is always allowed)
+      # - GLANCEOS_TRUSTED_PROXIES=*                   # trust X-Forwarded-For from your reverse proxy
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  glanceos-data:
