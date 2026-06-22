@@ -849,7 +849,9 @@ export function buildApp(): Hono<Env> {
   });
 
   // ---- public read-only share links ----
-  const shareLink = (c: Context, token: string) => `${publicBase(c)}/screen/?share=${token}`;
+  // The shareable link points at the /s/:token landing (server-rendered OG meta so
+  // it unfurls), which instantly redirects humans to the /screen viewer.
+  const shareLink = (c: Context, token: string) => `${publicBase(c)}/s/${token}`;
 
   const shareResponse = (c: Context, info: ReturnType<typeof getShareInfo>) =>
     info ? { token: info.token, url: shareLink(c, info.token), expiresAt: info.expiresAt, hasPassword: info.hasPassword } : { token: null };

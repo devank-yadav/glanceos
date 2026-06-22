@@ -21,7 +21,13 @@ const URL_KINDS = [
   { id: "ical.events", label: "Calendar (iCal URL)" },
   { id: "rss.feed", label: "RSS / Atom feed" },
 ];
-const TRANSFORMS = ["first", "last", "sum", "count", "percent", "join", "none"];
+const TRANSFORMS = ["first", "last", "sum", "count", "percent", "join", "round", "currency", "duration", "rangeToWords", "none"];
+// Transforms that take an argument, with the placeholder hint for the arg field.
+const TRANSFORM_ARGS: Record<string, string> = {
+  round: "decimals, e.g. 1",
+  currency: "symbol, e.g. $",
+  rangeToWords: "thresholds:labels, e.g. 33,67:Low,OK,High",
+};
 
 const parseParams = (s: string): Record<string, string> =>
   Object.fromEntries(
@@ -58,6 +64,7 @@ export function DataPanel({
   const [items, setItems] = useState(existing?.map?.items ?? "");
   const [field, setField] = useState(existing?.map?.fields?.value ?? existing?.map?.fields?.text ?? existing?.map?.path ?? "");
   const [transform, setTransform] = useState<string>(existing?.map?.transform ?? "first");
+  const [transformArg, setTransformArg] = useState<string>(existing?.map?.transformArg ?? "");
   const [preview, setPreview] = useState("");
   const [busy, setBusy] = useState(false);
   const [nf, setNf] = useState<NotionFilterRow[]>([]);
@@ -90,7 +97,7 @@ export function DataPanel({
         ? { path: "", items: items || undefined, fields: field ? { value: field } : undefined, transform: "series" as const }
         : isList
           ? { path: "", items: items || undefined, fields: field ? { text: field } : undefined, transform: "join" as const }
-          : { path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"] };
+          : { path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"], transformArg: (transform in TRANSFORM_ARGS && transformArg) ? transformArg : undefined };
     return { connectionId: connId || undefined, kind, query, map } as BlockSourceT;
   };
 
@@ -205,6 +212,12 @@ export function DataPanel({
               <select value={transform} onChange={(e) => setTransform((e.currentTarget as HTMLSelectElement).value)}>
                 {TRANSFORMS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
+            </label>
+          )}
+          {!isSeries && !isList && transform in TRANSFORM_ARGS && (
+            <label class="field">
+              <span>Format</span>
+              <input value={transformArg} placeholder={TRANSFORM_ARGS[transform]} onInput={(e) => setTransformArg((e.currentTarget as HTMLInputElement).value)} />
             </label>
           )}
         </>

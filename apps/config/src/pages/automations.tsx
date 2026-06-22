@@ -25,16 +25,16 @@ type Cond =
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number }
-interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number }
+interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
 export interface ObjOption { id: string; name: string; label: string; type?: string; settable: boolean; prop?: string }
 
 const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
-const NO_VALUE_OPS = new Set(["exists", "changed"]); // these ops take no comparison value
-const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed" };
-const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed"];
+const NO_VALUE_OPS = new Set(["exists", "changed", "rising", "falling", "steady"]); // these ops take no comparison value
+const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed", rising: "is rising", falling: "is falling", steady: "is steady" };
+const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed", "rising", "falling", "steady"];
 const TEXT_OPS = ["eq", "ne", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
 const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -63,6 +63,10 @@ const FIELD_CATALOG: FieldDef[] = [
   // Presence
   { field: "presence.home", label: "Someone is home", group: "Presence", control: "bool" },
   { field: "presence.state", label: "Presence", group: "Presence", control: "select", options: [{ value: "home", label: "Home" }, { value: "away", label: "Away" }] },
+  // Calendar (resolved from your first calendar connection)
+  { field: "calendar.isBusyNow", label: "In an event right now", group: "Calendar", control: "bool" },
+  { field: "calendar.minutesUntilNext", label: "Minutes until next event", group: "Calendar", control: "number" },
+  { field: "calendar.nextTitle", label: "Next event title", group: "Calendar", control: "text" },
   // Screen / device
   { field: "device.online", label: "Screen is online", group: "Screen", control: "bool" },
   // Webhook
@@ -572,6 +576,13 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
           <button class="ghost" onClick={() => set({ conditions: { type: "all", conditions: [] } })}>+ Add a condition</button>
         )}
       </div>
+
+      <label class="field"><span>Run at most once every <span class="muted">(optional)</span></span>
+        <span class="row" style={{ alignItems: "center", gap: "6px" }}>
+          <input type="number" min="0" max="1440" style={{ width: "5.5rem" }} value={a.cooldownMinutes ?? 0} onInput={(e) => set({ cooldownMinutes: Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0)) })} />
+          <span class="muted">minutes — 0 means every time it matches. Keeps a long-held condition (rain, low battery) from re-firing each tick.</span>
+        </span>
+      </label>
 
       <div class="field"><span>Then do</span>
         {a.actions.map((act, i) => (

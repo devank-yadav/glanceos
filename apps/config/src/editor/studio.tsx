@@ -645,7 +645,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (!shareUrl) return;
     setCastMsg("");
     try {
-      const token = new URL(shareUrl).searchParams.get("share");
+      // Share link is now /s/:token (was /screen/?share=token) — accept either form.
+      const u = new URL(shareUrl);
+      const token = u.searchParams.get("share") || u.pathname.split("/").filter(Boolean).pop() || null;
       if (token) await castBoard(token);
     } catch (e) { setCastMsg(String(e instanceof Error ? e.message : e)); }
   };

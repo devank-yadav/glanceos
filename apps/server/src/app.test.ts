@@ -335,7 +335,16 @@ describe("multi-user auth, pairing, setups, hub", () => {
     // A creates a public link
     const share = await (await app.request(`/api/layouts/${layout.id}/share`, { method: "POST", ...authed(cookieA, {}) })).json();
     expect(share.token).toBeTruthy();
-    expect(share.url).toContain(`share=${share.token}`);
+    expect(share.url).toContain(`/s/${share.token}`); // v6.1: unfurl-friendly /s/:token landing
+
+    // the /s/:token landing serves per-token OpenGraph meta + redirects to the viewer
+    const land = await app.request(`/s/${share.token}`);
+    expect(land.status).toBe(200);
+    const landHtml = await land.text();
+    expect(landHtml).toContain('property="og:image"');
+    expect(landHtml).toContain(`/api/public/board/${share.token}/preview.png`);
+    expect(landHtml).toContain(`/screen/?share=${share.token}`);
+    expect((await app.request("/s/nonexistent-token")).status).toBe(404);
 
     // the public endpoint serves the board with NO auth, resolving live data under the owner
     const pub = await app.request(`/api/public/board/${share.token}`);

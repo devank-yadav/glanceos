@@ -27,6 +27,7 @@ export interface DeviceSummary {
   online: boolean;
   refreshSeconds: number;
   battery: number | null;
+  batteryForecast?: { battery: number; daysRemaining: number | null; basis: "ok" | "charging" | "collecting" } | null;
   rssi: number | null;
   firmware: string | null;
   lastSeen: number | null;
@@ -41,6 +42,7 @@ export interface DeviceSummary {
     safeArea?: { top: number; right: number; bottom: number; left: number };
     burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
     wake?: { startMin: number; endMin: number; daysMask: number };
+    quietHours?: { startMin: number; endMin: number; daysMask: number };
   };
   platform: string | null;
   nativeVersion: string | null;

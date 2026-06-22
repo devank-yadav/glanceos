@@ -172,7 +172,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       </p>
       <div class="device-meta muted">
         {device.online ? "Online" : "Offline"} · {device.resolution}
-        {device.battery !== null ? ` · ${device.battery}%` : ""}
+        {device.battery !== null ? ` · ${device.battery}%${batteryHint(device.batteryForecast)}` : ""}
         {device.lastSeen ? ` · seen ${fmtAgo(device.lastSeen)}` : ""}
       </div>
 
@@ -368,6 +368,14 @@ function fmtAgo(ms: number): string {
   return `${Math.round(d / 86_400_000)}d ago`;
 }
 
+// A compact battery-life hint from the forecast (v6.1): "~12d left", "<1d left", "charging".
+function batteryHint(f: DeviceSummary["batteryForecast"]): string {
+  if (!f) return "";
+  if (f.basis === "charging") return " · charging";
+  if (f.daysRemaining == null) return "";
+  return f.daysRemaining >= 1 ? ` · ~${Math.round(f.daysRemaining)}d left` : " · <1d left";
+}
+
 const minToHHMM = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const hhmmToMin = (s: string): number => { const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 
@@ -380,6 +388,9 @@ function TvEditor({ device, onClose, onSaved }: { device: DeviceSummary; onClose
   const [sleep, setSleep] = useState(!!t.wake);
   const [wakeStart, setWakeStart] = useState(minToHHMM(t.wake?.startMin ?? 420));
   const [wakeEnd, setWakeEnd] = useState(minToHHMM(t.wake?.endMin ?? 1380));
+  const [quiet, setQuiet] = useState(!!t.quietHours);
+  const [quietStart, setQuietStart] = useState(minToHHMM(t.quietHours?.startMin ?? 1320)); // 22:00
+  const [quietEnd, setQuietEnd] = useState(minToHHMM(t.quietHours?.endMin ?? 420)); // 07:00
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const toast = useToast();
@@ -394,6 +405,7 @@ function TvEditor({ device, onClose, onSaved }: { device: DeviceSummary; onClose
           safeArea: { top: overscan, right: overscan, bottom: overscan, left: overscan },
           burnIn: { pixelShift, dim: false, screensaverAfterMin: 0 },
           wake: sleep ? { startMin: hhmmToMin(wakeStart), endMin: hhmmToMin(wakeEnd), daysMask: 127 } : null,
+          quietHours: quiet ? { startMin: hhmmToMin(quietStart), endMin: hhmmToMin(quietEnd), daysMask: 127 } : null,
         },
       });
       toast.success("TV settings saved");
@@ -415,6 +427,13 @@ function TvEditor({ device, onClose, onSaved }: { device: DeviceSummary; onClose
         <div class="row tv-wake">
           <label class="field"><span>Wake</span><input type="time" value={wakeStart} onInput={(e) => setWakeStart((e.currentTarget as HTMLInputElement).value)} /></label>
           <label class="field"><span>Sleep</span><input type="time" value={wakeEnd} onInput={(e) => setWakeEnd((e.currentTarget as HTMLInputElement).value)} /></label>
+        </div>
+      )}
+      <label class="tv-check"><input type="checkbox" checked={quiet} onChange={(e) => setQuiet((e.currentTarget as HTMLInputElement).checked)} /> <span>Quiet hours — gently dim the board (still on, just calmer at night)</span></label>
+      {quiet && (
+        <div class="row tv-wake">
+          <label class="field"><span>Dim from</span><input type="time" value={quietStart} onInput={(e) => setQuietStart((e.currentTarget as HTMLInputElement).value)} /></label>
+          <label class="field"><span>Until</span><input type="time" value={quietEnd} onInput={(e) => setQuietEnd((e.currentTarget as HTMLInputElement).value)} /></label>
         </div>
       )}
       <div class="tv-launch">

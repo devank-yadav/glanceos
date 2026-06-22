@@ -529,10 +529,24 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
           <span>Theme</span>
           <select
             value={doc.theme.mode}
-            onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, mode: (e.currentTarget as HTMLSelectElement).value as "light" | "dark" } })}
+            onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, mode: (e.currentTarget as HTMLSelectElement).value as "light" | "dark" | "auto" } })}
           >
             <option value="light">light</option>
             <option value="dark">dark</option>
+            <option value="auto">auto (sun)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Look</span>
+          <select
+            value={doc.theme.look ?? ""}
+            onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; const theme = { ...doc.theme }; if (v) theme.look = v as "editorial" | "terminal" | "grotesk" | "stencil"; else delete theme.look; commitDoc({ ...structuredClone(doc), theme }); }}
+          >
+            <option value="">default</option>
+            <option value="editorial">editorial</option>
+            <option value="terminal">terminal</option>
+            <option value="grotesk">grotesk</option>
+            <option value="stencil">stencil</option>
           </select>
         </label>
         <label class="field">

@@ -3035,6 +3035,22 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .onboard-step-body .primary, .onboard-step-body .ghost { align-self: flex-start; margin-top: 4px; }
 .onboard-skip { margin-top: 20px; }
 
+/* Pick-a-vibe onboarding (v6.1) */
+.onboard-vibe-card { max-width: 640px; }
+.onboard-sub { margin: 0 0 18px; font-size: 14px; }
+.onboard-vibes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 560px) { .onboard-vibes { grid-template-columns: repeat(2, 1fr); } }
+.vibe-tile { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; padding: 14px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--card-bg); cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s; }
+.vibe-tile:hover:not(:disabled) { border-color: var(--accent, var(--fg)); background: var(--hover-bg, var(--card-bg)); }
+.vibe-tile:active:not(:disabled) { transform: translateY(1px); }
+.vibe-tile:disabled { opacity: 0.55; cursor: default; }
+.vibe-tile strong { font-size: 14px; }
+.vibe-tile .muted { font-size: 12px; }
+.onboard-secondary { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.onboard-claim { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.onboard-claim summary { cursor: pointer; font-size: 13px; }
+.onboard-claim p { font-size: 13px; margin: 8px 0; }
+
 /* ---------- Notion filter builder (Data tab) ---------- */
 .notion-filter { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .notion-filter .field-label { font-size: 12px; font-weight: 500; }
