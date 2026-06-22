@@ -176,6 +176,10 @@ export function Overlay({
     if (e.target === rootRef.current) dispatch({ type: "select", id: null });
   };
 
+  // Resize seams appear ONLY on the selected block's row — so the cursor doesn't flicker
+  // to a resize arrow near every object as you move the mouse around (Notion/Canva-clean).
+  const activeRow = geometry.blocks.find((b) => selectedIds.includes(b.id))?.rowIndex ?? -1;
+
   return (
     <div
       ref={rootRef}
@@ -229,9 +233,9 @@ export function Overlay({
         );
       })}
 
-      {/* column gutters (vertical seams) */}
+      {/* column gutters (vertical seams) — only on the selected block's row */}
       {geometry.blocks
-        .filter((b) => b.blockIndex < doc.rows[b.rowIndex]!.blocks.length - 1)
+        .filter((b) => b.rowIndex === activeRow && b.blockIndex < doc.rows[b.rowIndex]!.blocks.length - 1)
         .map((b) => (
           <div
             key={`cg-${b.id}`}
@@ -245,8 +249,8 @@ export function Overlay({
           />
         ))}
 
-      {/* row gutters (horizontal seams) */}
-      {geometry.rows.map((r) => (
+      {/* row gutters (horizontal seams) — only on the selected block's row */}
+      {geometry.rows.filter((r) => r.index === activeRow).map((r) => (
         <div
           key={`rg-${r.index}`}
           class="gutter gutter-row"

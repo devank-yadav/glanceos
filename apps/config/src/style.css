@@ -1593,13 +1593,13 @@ ul.tasks li:last-child {
   opacity: 1;
 }
 
-/* the ⠿ handle — top-centre, clear of every resize seam */
+/* the ⠿ handle — in the LEFT MARGIN, clear of the text (Notion-style), so it never
+   covers the editable text or flips the cursor to grab while you're typing. */
 .drag-handle {
   position: absolute;
-  top: -11px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 32px;
+  top: 2px;
+  left: -26px;
+  width: 22px;
   height: 19px;
   display: grid;
   place-items: center;
@@ -1625,13 +1625,13 @@ ul.tasks li:last-child {
 }
 
 .drag-handle:hover {
-  transform: translateX(-50%) scale(1.12);
+  transform: scale(1.12);
   color: var(--fg);
 }
 
 .drag-handle:active {
   cursor: grabbing;
-  transform: translateX(-50%) scale(0.95);
+  transform: scale(0.95);
 }
 
 .drag-handle svg {

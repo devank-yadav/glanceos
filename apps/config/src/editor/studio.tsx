@@ -815,7 +815,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 onClose={() => setEditing(null)}
               />
             )}
-            {editBox && editing && editingBlock && LIST_EDIT.has(editingBlock.type) && (
+            {editBox && editing && editingBlock && LIST_EDIT.has(editingBlock.type) && !INPLACE_EDIT.has(editingBlock.type) && (
               <ListEditor
                 box={editBox}
                 scale={scale}

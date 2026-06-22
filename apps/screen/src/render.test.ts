@@ -96,6 +96,34 @@ describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
     renderPayload(pay(mkLayout("AFTER")));
     expect((document.querySelector(".heading") as HTMLElement).textContent).toBe("AFTER"); // unlocked → repaints normally
   });
+
+  it("makes list items editable per-item and serializes the list on commit", async () => {
+    const posted: Array<Record<string, unknown>> = [];
+    const mkList = (items: string) => ({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [{ id: "lst", type: "bulletList", width: 1, props: { items } }] }] });
+    let doc = mkList("Milk\nEggs");
+    renderPayload(pay(doc));
+    const layer = createEditLayer({ post: (m) => posted.push(m as Record<string, unknown>), getDoc: () => doc as never });
+    layer.refresh();
+
+    const items = document.querySelectorAll<HTMLElement>(".li-text");
+    expect(items.length).toBe(2);
+    expect(items[0]!.getAttribute("contenteditable")).toBeTruthy(); // each item is editable in place
+
+    items[0]!.dispatchEvent(new FocusEvent("focus"));
+    expect(posted.some((m) => m.type === "glanceos:focus" && m.id === "lst")).toBe(true);
+    items[0]!.textContent = "Bread";
+    items[0]!.dispatchEvent(new InputEvent("input"));
+    expect(posted.some((m) => m.type === "glanceos:edit")).toBe(false); // debounced — no per-keystroke churn
+
+    // locked while editing → a re-render doesn't wipe the items the user is editing
+    doc = mkList("XXX\nYYY");
+    renderPayload(pay(doc));
+    expect(document.querySelectorAll<HTMLElement>(".li-text")[0]!.textContent).toBe("Bread");
+
+    items[0]!.dispatchEvent(new FocusEvent("blur"));
+    await new Promise((r) => setTimeout(r, 0)); // list blur commits on a 0ms tick (after focus-out check)
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "lst", patch: { items: "Bread\nEggs" }, phase: "commit" });
+  });
 });
 
 describe("renderPayload zones", () => {
