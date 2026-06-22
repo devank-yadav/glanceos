@@ -96,6 +96,22 @@ function setCaret(node: HTMLElement, offset: number): void {
   sel.addRange(r);
 }
 
+// Click anywhere in a block → drop the caret at the clicked point (Notion: the whole
+// block is one text field). Falls back to end-of-text if the point isn't over the text
+// (e.g. the cell's padding) or the browser lacks caretRangeFromPoint.
+function placeCaretFromPoint(node: HTMLElement, x: number, y: number): void {
+  node.focus();
+  const doc = node.ownerDocument as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null };
+  const sel = doc.getSelection();
+  const range = doc.caretRangeFromPoint ? doc.caretRangeFromPoint(x, y) : null;
+  if (sel && range && node.contains(range.startContainer)) {
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    setCaret(node, (node.textContent ?? "").length);
+  }
+}
+
 export interface EditLayer { refresh(): void }
 
 export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () => LayoutT | null }): EditLayer {
@@ -104,9 +120,11 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   setEditingLock(editing);
 
   // The Studio overlay is click-through, so a click on empty board area lands here —
-  // tell the Studio to deselect. Clicks on editable text keep their own selection.
+  // tell the Studio to deselect. A click ANYWHERE inside an editable block keeps its
+  // selection (the cell focus handler drops the caret into the text), so we only
+  // deselect when the click misses every editable cell.
   document.addEventListener("pointerdown", (e) => {
-    if (!(e.target as HTMLElement)?.closest?.(".glance-editable")) opts.post({ type: "glanceos:focus", id: null });
+    if (!(e.target as HTMLElement)?.closest?.(".glance-editcell")) opts.post({ type: "glanceos:focus", id: null });
   });
 
   const blocksById = (): Map<string, Block> => {
@@ -214,6 +232,7 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     items().forEach(wireItem);
     // Checklist: tapping the box toggles done (so a to-do actually works in place).
     if (cfg.check) {
+      cw.querySelectorAll<HTMLElement>("." + cfg.marker).forEach((m) => { m.style.cursor = "pointer"; });
       cw.addEventListener("pointerdown", (e) => {
         const marker = (e.target as HTMLElement)?.closest?.("." + cfg.marker);
         if (!marker) return;
@@ -227,19 +246,57 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     }
   };
 
+  // Make the WHOLE cell behave like one text field (Notion): I-beam everywhere on the
+  // block, and a click anywhere inside drops the caret into its text — even when you hit
+  // the padding around the words. This is what kills the cursor flicker: instead of the
+  // caret living only on a tiny text node (I-beam over the word, arrow over the gap), the
+  // entire block owns a single, stable text cursor, here INSIDE the iframe where the text
+  // actually lives — not fought over by an overlay in the parent document.
+  const wireCellFocus = (id: string, cellEl: HTMLElement, type: string): void => {
+    const c = cellEl as HTMLElement & { _glcf?: boolean };
+    cellEl.style.cursor = "text";
+    cellEl.classList.add("glance-editcell");
+    if (c._glcf) return; c._glcf = true;
+    cellEl.addEventListener("pointerdown", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest(".glance-editable")) return; // hit the text itself → native caret placement
+      const cfg = LIST_CFG[type];
+      if (cfg && t.closest("." + cfg.marker)) return; // checkbox toggle owns its click
+      let node: HTMLElement | null = null;
+      if (cfg) {
+        // focus the list item nearest the click's vertical position
+        const its = [...cellEl.querySelectorAll<HTMLElement>("." + cfg.text)];
+        node = its.reduce<HTMLElement | null>((best, it) => {
+          if (!best) return it;
+          const a = it.getBoundingClientRect(), b = best.getBoundingClientRect();
+          return Math.abs(a.top + a.height / 2 - e.clientY) < Math.abs(b.top + b.height / 2 - e.clientY) ? it : best;
+        }, null);
+      } else {
+        const map = SINGLE[type];
+        node = map ? cellEl.querySelector<HTMLElement>(map.sel) : null;
+      }
+      if (!node) return;
+      e.preventDefault();
+      placeCaretFromPoint(node, e.clientX, e.clientY);
+    });
+  };
+
   // After each render, (re)attach editing to every editable, unbound block. Cells locked
   // for editing are never repainted, so their wired nodes persist (caret stays put).
   const refresh = (): void => {
     const byId = blocksById();
     for (const [id, cell] of getCells()) {
+      const cellEl = cell.el as HTMLElement;
       const block = byId.get(id);
-      if (!block || block.source) continue; // bound to live data → editing the prop is overwritten
-      if (LIST_CFG[block.type]) { wireList(id, cell.el as HTMLElement, block.type); continue; }
-      const map = SINGLE[block.type];
-      if (!map) continue;
-      if (block.type === "text" && (block.props as { format?: string }).format === "markdown") continue;
-      const node = (cell.el as HTMLElement).querySelector<HTMLElement>(map.sel);
-      if (node) wireText(id, node, map.prop, SINGLE_LINE.has(block.type), map.strip);
+      const editable =
+        !!block && !block.source &&
+        (!!LIST_CFG[block.type] || (!!SINGLE[block.type] && !(block.type === "text" && (block.props as { format?: string }).format === "markdown")));
+      if (!editable) { cellEl.style.cursor = ""; cellEl.classList.remove("glance-editcell"); continue; }
+      wireCellFocus(id, cellEl, block!.type);
+      if (LIST_CFG[block!.type]) { wireList(id, cellEl, block!.type); continue; }
+      const map = SINGLE[block!.type]!;
+      const node = cellEl.querySelector<HTMLElement>(map.sel);
+      if (node) wireText(id, node, map.prop, SINGLE_LINE.has(block!.type), map.strip);
     }
   };
 
