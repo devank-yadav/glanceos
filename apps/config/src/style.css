@@ -1933,7 +1933,7 @@ ul.tasks li:last-child {
   padding: 8px 9px;
   font-size: 11px;
   line-height: 1.4;
-  background: rgba(17, 17, 17, 0.05);
+  background: var(--soft); /* token so the preview box has contrast in dark too (was a fixed light grey) */
   border-radius: 7px;
   max-height: 96px;
   overflow: auto;
@@ -2711,7 +2711,7 @@ ul.tasks li:last-child {
 .empty-state.in-card { margin: 0; max-width: none; text-align: center; padding: 40px 20px; }
 
 /* ---------- danger-solid button (confirm dialogs) ---------- */
-button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(--bad)); border-color: var(--bad); }
+button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c0392b); border-color: #c0392b; color: #fff; } /* fixed red + white text regardless of theme (dark flips --bad pink + --solid-fg to #111) */
 
 /* ---------- card skeletons ---------- */
 @keyframes shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
@@ -3227,7 +3227,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 /* "Make it live" affordance in the block properties panel (Track C). */
 .make-live { margin-top: 4px; }
 .make-live-row { gap: 8px; align-items: center; flex-wrap: wrap; }
-.make-live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--fg); }
+.make-live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 14%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 38%, var(--rule)); color: var(--fg); }
 .make-live-btn { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- studio: objects (layers) panel ---------- */

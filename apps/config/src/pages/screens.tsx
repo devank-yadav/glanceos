@@ -160,7 +160,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           {editing ? (
             <input ref={inputRef} class="rename-input" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(device.name ?? ""); setEditing(false); } }} onBlur={rename} />
           ) : (
-            <h3 class="card-title device-name" tabIndex={0} title="Click to rename" onClick={() => setEditing(true)} onKeyDown={(e) => e.key === "Enter" && setEditing(true)}>{device.name ?? "Unnamed screen"}</h3>
+            <h3 class="card-title device-name" role="button" tabIndex={0} aria-label={`Rename ${device.name ?? "screen"}`} title="Click to rename" onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditing(true); } }}>{device.name ?? "Unnamed screen"}</h3>
           )}
         </div>
         <Menu

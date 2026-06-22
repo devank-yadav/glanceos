@@ -337,6 +337,7 @@ export function BlockFields({
         <input
           value={block.name ?? ""}
           placeholder={blockFor(block.type).label}
+          maxLength={60}
           onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)}
           onBlur={resolveName}
           onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
@@ -518,11 +519,11 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
       <p class="muted">Select a block to edit it — or tune the board.</p>
       <div class="row wrap">
         <label class="field">
-          <span>Gap</span>
+          <span>Gap <span class="muted">(0–8)</span></span>
           <input
-            type="number"
+            type="number" min={0} max={8} step={1}
             value={doc.gap}
-            onInput={(e) => commitDoc({ ...structuredClone(doc), gap: Math.max(0, Math.min(8, Number((e.currentTarget as HTMLInputElement).value) || 0)) })}
+            onInput={(e) => commitDoc({ ...structuredClone(doc), gap: Math.round(Math.max(0, Math.min(8, Number((e.currentTarget as HTMLInputElement).value) || 0))) })}
           />
         </label>
         <label class="field">
@@ -531,9 +532,9 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
             value={doc.theme.mode}
             onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, mode: (e.currentTarget as HTMLSelectElement).value as "light" | "dark" | "auto" } })}
           >
-            <option value="light">light</option>
-            <option value="dark">dark</option>
-            <option value="auto">auto (sun)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="auto">Auto (follows the sun)</option>
           </select>
         </label>
         <label class="field">
@@ -542,11 +543,11 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
             value={doc.theme.look ?? ""}
             onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; const theme = { ...doc.theme }; if (v) theme.look = v as "editorial" | "terminal" | "grotesk" | "stencil"; else delete theme.look; commitDoc({ ...structuredClone(doc), theme }); }}
           >
-            <option value="">default</option>
-            <option value="editorial">editorial</option>
-            <option value="terminal">terminal</option>
-            <option value="grotesk">grotesk</option>
-            <option value="stencil">stencil</option>
+            <option value="">Default</option>
+            <option value="editorial">Editorial</option>
+            <option value="terminal">Terminal</option>
+            <option value="grotesk">Grotesk</option>
+            <option value="stencil">Stencil</option>
           </select>
         </label>
         <label class="field">
@@ -555,9 +556,9 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
             value={doc.theme.fontScale ?? "m"}
             onChange={(e) => commitDoc({ ...structuredClone(doc), theme: { ...doc.theme, fontScale: (e.currentTarget as HTMLSelectElement).value as "s" | "m" | "l" } })}
           >
-            <option value="s">small</option>
-            <option value="m">medium</option>
-            <option value="l">large</option>
+            <option value="s">Small</option>
+            <option value="m">Medium</option>
+            <option value="l">Large</option>
           </select>
         </label>
         <label class="field">
@@ -566,9 +567,9 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
             value={doc.align ?? "top"}
             onChange={(e) => commitDoc({ ...structuredClone(doc), align: (e.currentTarget as HTMLSelectElement).value as "top" | "center" | "bottom" })}
           >
-            <option value="top">top</option>
-            <option value="center">center</option>
-            <option value="bottom">bottom</option>
+            <option value="top">Top</option>
+            <option value="center">Center</option>
+            <option value="bottom">Bottom</option>
           </select>
         </label>
       </div>
@@ -671,7 +672,7 @@ export function ObjectsPanel({ doc, stageEdit, onSelect, selectedIds }: {
       {blocks.map((b, i) => (
         <li key={b.id} class={`object-row${selectedIds.includes(b.id) ? " on" : ""}${b.hidden ? " is-hidden" : ""}`}>
           <button class="object-pick" title={`Select ${blockFor(b.type).label} on the board`} onClick={() => onSelect(b.id)}><BlockIcon type={b.type} /></button>
-          <input class="object-name-input" value={b.name ?? ""} aria-label="Object name"
+          <input class="object-name-input" value={b.name ?? ""} aria-label="Object name" maxLength={60}
             onInput={(e) => setName(b.id, (e.currentTarget as HTMLInputElement).value)}
             onBlur={() => resolveName(b.id)}
             onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} />

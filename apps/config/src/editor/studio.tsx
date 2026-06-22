@@ -683,13 +683,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <select value={String(zoom)} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setZoom(v === "null" ? null : Number(v)); }} title="Zoom">
           {ZOOMS.map((z) => <option key={z.label} value={String(z.value)}>{z.label}</option>)}
         </select>
-        <button class="ghost icon-btn" disabled={state.past.length === 0} title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}><Icon.undo /></button>
-        <button class="ghost icon-btn" disabled={state.future.length === 0} title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
-        <button class="ghost icon-btn" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
-        <button class="ghost icon-btn" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
-        <button class={`ghost icon-btn${autoOpen ? " on" : ""}`} title="Automations — make this board react" onClick={() => setAutoOpen(true)}><Icon.command /></button>
-        <button class={`ghost icon-btn${shareOpen ? " on" : ""}`} title="Share" onClick={() => (shareOpen ? setShareOpen(false) : openShare())}><Icon.link /></button>
-        <button class={`ghost icon-btn${sideShown ? " on" : ""}`} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
+        <button class="ghost icon-btn" disabled={state.past.length === 0} aria-label="Undo" title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}><Icon.undo /></button>
+        <button class="ghost icon-btn" disabled={state.future.length === 0} aria-label="Redo" title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
+        <button class="ghost icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
+        <button class="ghost icon-btn" aria-label="Present" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
+        <button class={`ghost icon-btn${autoOpen ? " on" : ""}`} aria-label="Automations" title="Automations — make this board react" onClick={() => setAutoOpen(true)}><Icon.command /></button>
+        <button class={`ghost icon-btn${shareOpen ? " on" : ""}`} aria-label="Share" title="Share" onClick={() => (shareOpen ? setShareOpen(false) : openShare())}><Icon.link /></button>
+        <button class={`ghost icon-btn${sideShown ? " on" : ""}`} aria-label={sideShown ? "Hide blocks panel" : "Show blocks panel"} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
       </header>
       {autoOpen && (
         <Modal open={autoOpen} onClose={() => setAutoOpen(false)} title="Automations" width={680}>
