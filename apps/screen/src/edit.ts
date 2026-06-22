@@ -119,6 +119,14 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   const editing = new Set<string>();
   setEditingLock(editing);
 
+  // Real screens are wall displays, so the runtime hides the mouse pointer globally
+  // (`body { cursor: none }`). In the Studio that made the pointer VANISH over every gap
+  // and non-editable block and only flash back as an I-beam over text — the "it hides /
+  // glitches near text" the user felt. In edit mode we restore a normal pointer: a plain
+  // arrow everywhere, and (via .glance-editcell) a steady I-beam over editable text. The
+  // inline style beats the stylesheet rule, so this wins without touching real screens.
+  document.body.style.cursor = "default";
+
   // The Studio overlay is click-through, so a click on empty board area lands here —
   // tell the Studio to deselect. A click ANYWHERE inside an editable block keeps its
   // selection (the cell focus handler drops the caret into the text), so we only

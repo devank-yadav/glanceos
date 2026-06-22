@@ -241,7 +241,7 @@ export function Overlay({
             key={`cg-${b.id}`}
             class="gutter gutter-col"
             title="Drag to resize columns"
-            style={{ left: `${sx(b.x + b.w + geometry.gap / 2 - 5)}px`, top: `${sx(b.y)}px`, width: `${sx(10)}px`, height: `${sx(b.h)}px` }}
+            style={{ left: `${sx(b.x + b.w)}px`, top: `${sx(b.y)}px`, width: `${sx(geometry.gap)}px`, height: `${sx(b.h)}px` }}
             onPointerDown={(e) => onGutterDown(e as unknown as PointerEvent, b.rowIndex, b.blockIndex)}
             onPointerMove={(e) => onGutterMove(e as unknown as PointerEvent)}
             onPointerUp={() => endGesture(true)}
@@ -255,7 +255,7 @@ export function Overlay({
           key={`rg-${r.index}`}
           class="gutter gutter-row"
           title="Drag to resize height"
-          style={{ left: `${sx(r.x)}px`, top: `${sx(r.y + r.h + geometry.gap / 2 - 5)}px`, width: `${sx(r.w)}px`, height: `${sx(10)}px` }}
+          style={{ left: `${sx(r.x)}px`, top: `${sx(r.y + r.h)}px`, width: `${sx(r.w)}px`, height: `${sx(geometry.gap)}px` }}
           onPointerDown={(e) => onRowDown(e as unknown as PointerEvent, r.index)}
           onPointerMove={(e) => onRowMove(e as unknown as PointerEvent)}
           onPointerUp={() => endGesture(true)}
