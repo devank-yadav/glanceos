@@ -127,14 +127,26 @@ function compare(op: ComparatorT, actual: unknown, expected: unknown): boolean {
 
 /** Evaluate a condition tree against a context (and an optional previous context
  *  for the "changed" operator). Pure + total. */
-export function evaluate(cond: ConditionT, ctx: Ctx, prev?: Ctx, depth = 0, trend?: Record<string, "rising" | "falling" | "steady" | null>): boolean {
+export function evaluate(
+  cond: ConditionT,
+  ctx: Ctx,
+  prev?: Ctx,
+  depth = 0,
+  trend?: Record<string, "rising" | "falling" | "steady" | null>,
+  staleMs?: Record<string, number>,
+  sustained?: Record<string, boolean>,
+): boolean {
   if (depth > MAX_EVAL_DEPTH) return false; // never recurse a hostile/pathological tree off the stack
   switch (cond.type) {
-    case "all": return cond.conditions.every((c) => evaluate(c, ctx, prev, depth + 1, trend));
-    case "any": return cond.conditions.length > 0 && cond.conditions.some((c) => evaluate(c, ctx, prev, depth + 1, trend));
-    case "not": return !evaluate(cond.condition, ctx, prev, depth + 1, trend);
+    case "all": return cond.conditions.every((c) => evaluate(c, ctx, prev, depth + 1, trend, staleMs, sustained));
+    case "any": return cond.conditions.length > 0 && cond.conditions.some((c) => evaluate(c, ctx, prev, depth + 1, trend, staleMs, sustained));
+    case "not": return !evaluate(cond.condition, ctx, prev, depth + 1, trend, staleMs, sustained);
+    // The "held for N minutes" verdict is precomputed in the tick layer (resolveSustained)
+    // and threaded in by content key, so evaluate stays pure/total — like trend.
+    case "sustained": return sustained?.[sustainedKey(cond)] ?? false;
     case "field": {
       if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") return (trend?.[cond.field] ?? null) === cond.op;
+      if (cond.op === "stale") { const ms = staleMs?.[cond.field]; const min = num(cond.value) ?? 0; return ms != null && ms >= min * 60_000; }
       const actual = resolvePath(ctx, cond.field);
       if (cond.op === "exists") return actual !== undefined && actual !== null;
       if (cond.op === "changed") return safeStringify(actual) !== safeStringify(prev ? resolvePath(prev, cond.field) : undefined);
@@ -143,6 +155,11 @@ export function evaluate(cond: ConditionT, ctx: Ctx, prev?: Ctx, depth = 0, tren
     }
   }
 }
+
+// A sustained node's stable identity within one automation: its window + the inner
+// condition's shape. Two identical sustained nodes share history (identical truth →
+// identical first-true), which is correct, so a content key needs no positional path.
+const sustainedKey = (cond: Extract<ConditionT, { type: "sustained" }>): string => `${cond.minutes}:${safeStringify(cond.condition)}`;
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // Wall-clock parts in the user's timezone — the "time" trigger means *their* 09:00,
@@ -265,7 +282,7 @@ function refsField(cond: ConditionT | null | undefined, prefix: string): boolean
   if (!cond) return false;
   if (cond.type === "field") return cond.field.startsWith(prefix);
   if (cond.type === "all" || cond.type === "any") return cond.conditions.some((c) => refsField(c, prefix));
-  if (cond.type === "not") return refsField(cond.condition, prefix);
+  if (cond.type === "not" || cond.type === "sustained") return refsField(cond.condition, prefix);
   return false;
 }
 
@@ -293,8 +310,51 @@ function trendDirection(buf: TrendSample[] | undefined): "rising" | "falling" | 
 function collectTrendFields(cond: ConditionT | null | undefined, out: Set<string>): void {
   if (!cond) return;
   if (cond.type === "field") { if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") out.add(cond.field); return; }
-  if (cond.type === "not") return collectTrendFields(cond.condition, out);
+  if (cond.type === "not" || cond.type === "sustained") return collectTrendFields(cond.condition, out);
   if (cond.type === "all" || cond.type === "any") cond.conditions.forEach((c) => collectTrendFields(c, out));
+}
+
+// v7.0 stale sense — a per-(user[:board]):field record of WHEN a field last changed
+// value, so a condition can react to "hasn't updated in N minutes". Re-baselines on
+// restart (a field is treated as fresh the first time the tick sees it), like trend.
+const lastChange = new Map<string, { sig: string; ts: number }>();
+// Field paths a tree references with the `stale` comparator (the tick stamps only those).
+function collectStaleFields(cond: ConditionT | null | undefined, out: Set<string>): void {
+  if (!cond) return;
+  if (cond.type === "field") { if (cond.op === "stale") out.add(cond.field); return; }
+  if (cond.type === "not" || cond.type === "sustained") return collectStaleFields(cond.condition, out);
+  if (cond.type === "all" || cond.type === "any") cond.conditions.forEach((c) => collectStaleFields(c, out));
+}
+
+// v7.0 sustained sense — per-(user[:board]):node first-true timestamp. resolveSustained
+// walks an automation's tree once per tick (innermost first), drives this map from each
+// sustained node's current inner truth, and returns a content-keyed verdict map that
+// evaluate() reads. Re-baselines on restart, like prevCtx/trend.
+const sustainedSince = new Map<string, number>();
+function resolveSustained(
+  cond: ConditionT | null | undefined,
+  autoKey: string,
+  ctx: Ctx,
+  prev: Ctx | undefined,
+  trend: Record<string, "rising" | "falling" | "steady" | null>,
+  staleMs: Record<string, number>,
+  nowMs: number,
+  out: Record<string, boolean> = {},
+): Record<string, boolean> {
+  if (!cond) return out;
+  if (cond.type === "all" || cond.type === "any") { for (const c of cond.conditions) resolveSustained(c, autoKey, ctx, prev, trend, staleMs, nowMs, out); return out; }
+  if (cond.type === "not") { resolveSustained(cond.condition, autoKey, ctx, prev, trend, staleMs, nowMs, out); return out; }
+  if (cond.type === "sustained") {
+    resolveSustained(cond.condition, autoKey, ctx, prev, trend, staleMs, nowMs, out); // nested first → inner verdicts ready
+    const innerTrue = evaluate(cond.condition, ctx, prev, 0, trend, staleMs, out);
+    const localKey = sustainedKey(cond);
+    const masterKey = `${autoKey}:${localKey}`;
+    if (innerTrue) {
+      if (!sustainedSince.has(masterKey)) sustainedSince.set(masterKey, nowMs);
+      out[localKey] = nowMs - (sustainedSince.get(masterKey) as number) >= cond.minutes * 60_000;
+    } else { sustainedSince.delete(masterKey); out[localKey] = false; }
+  }
+  return out;
 }
 
 const dayOf = (ctx: Ctx): number => Math.floor(ctx.time.ts / 86_400_000);
@@ -309,91 +369,128 @@ async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>)
   for (const d of devicesOwnedBy(userId)) if (isConnected(d.id)) await emit(d.id, "alert", payload);
 }
 
-/** Run an automation's actions. Each is isolated: one failing action is logged and
- *  the rest still run. The webhook action is the only egress — SSRF-guarded. */
+/** Execute ONE action's effect (the raw switch). Returns whether it touched user data
+ *  (so the caller can re-push the user's screens once). Throws on failure; the caller
+ *  isolates it. No enable/defer logic here — runActions + drainDeferred own that. */
+async function execAction(a: ActionT, userId: string, ctx: Ctx, board?: { id: number; document: LayoutT }): Promise<boolean> {
+  let touched = false;
+  switch (a.kind) {
+    case "setData": setCustomData(userId, a.key, a.value); touched = true; break;
+    case "addTask": addTask(userId, a.listId || "default", a.text); touched = true; break;
+    case "advanceQueue": advanceQueue(userId, a.queueId, a.delta ?? 1); touched = true; break;
+    case "switchBoard": {
+      if (!getWritableLayout(a.layoutId, userId)) throw new Error("no access to that board");
+      if (!updateDevice(a.deviceId, { layoutId: a.layoutId }, userId)) throw new Error("screen not found or not yours");
+      await pushDevice(a.deviceId);
+      break;
+    }
+    case "notify": createIfAbsent(userId, null, "automation", a.message, `auto:${a.message}:${dayOf(ctx)}`); break;
+    case "alert": await emitAlert(userId, a); break;
+    // assertSafeUrl inside; the marker header lets our own inlet handler skip
+    // re-firing automations, so an automation that POSTs to its own /api/hooks
+    // URL can't form an HTTP self-trigger loop.
+    case "webhook": await postJSON(a.url, a.body ?? { context: ctx }, { "x-glanceos-automation": "1" }); break;
+    // Object writes target a block by its stable id. A custom-data-bound object
+    // writes its data key; a static object patches its prop on the board doc.
+    // Either way pushUserDevices() at the end re-renders every screen the user
+    // owns, so the change reaches whatever screen is showing this board.
+    case "setObjectText":
+    case "setObjectProp": {
+      if (!board) throw new Error("object actions only run on board-scoped automations");
+      const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
+      if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
+      const props = block.props as Record<string, unknown>;
+      const next = a.kind === "setObjectText" ? a.text : a.value;
+      if (block.type === "customData") {
+        const key = String(props.key ?? "");
+        if (!key) throw new Error("object has no data key");
+        setCustomData(userId, key, next);
+      } else if (block.source) {
+        throw new Error("object shows live data and can't be set");
+      } else {
+        const prop = a.kind === "setObjectText" ? (a.prop || primaryProp(props)) : a.prop;
+        if (!prop) throw new Error("object has no settable text");
+        const original = props[prop];
+        props[prop] = next;
+        // Keep the in-memory doc consistent with persistence: if the save fails,
+        // roll the mutation back so sibling automations in this pass don't read it.
+        try { updateLayout(board.id, board.document); }
+        catch (e) { props[prop] = original; throw e; }
+      }
+      touched = true;
+      break;
+    }
+    case "showObject":
+    case "hideObject": {
+      if (!board) throw new Error("object actions only run on board-scoped automations");
+      const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
+      if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
+      const wasHidden = block.hidden;
+      block.hidden = a.kind === "hideObject";
+      try { updateLayout(board.id, board.document); }
+      catch (e) { block.hidden = wasHidden; throw e; }
+      touched = true;
+      break;
+    }
+    case "incrementData": {
+      const cur = num(getCustomData(userId, a.key)) ?? 0; // start from 0 if unset/non-numeric
+      setCustomData(userId, a.key, cur + (a.delta ?? 1));
+      touched = true;
+      break;
+    }
+    case "toggleData": {
+      const cur = getCustomData(userId, a.key);
+      const on = cur === true || cur === "true" || cur === 1 || cur === "1";
+      setCustomData(userId, a.key, !on);
+      touched = true;
+      break;
+    }
+    case "delay": { await new Promise((r) => setTimeout(r, Math.min(5_000, Math.max(0, a.ms)))); break; } // bounded: the tick is shared across users
+  }
+  return touched;
+}
+
+/** Run an automation's actions. Each is isolated: one failing action is logged and the
+ *  rest still run. An action carrying `afterMinutes` is queued (drainDeferred runs it that
+ *  many minutes later), not run inline. The webhook action is the only egress — SSRF-guarded. */
 export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, board?: { id: number; document: LayoutT }): Promise<{ run: number; errors: string[] }> {
   let run = 0; let touched = false; const errors: string[] = [];
   for (const a of actions) {
     if (a.enabled === false) continue; // a step toggled off in the builder
-    try {
-      switch (a.kind) {
-        case "setData": setCustomData(userId, a.key, a.value); touched = true; break;
-        case "addTask": addTask(userId, a.listId || "default", a.text); touched = true; break;
-        case "advanceQueue": advanceQueue(userId, a.queueId, a.delta ?? 1); touched = true; break;
-        case "switchBoard": {
-          if (!getWritableLayout(a.layoutId, userId)) throw new Error("no access to that board");
-          if (!updateDevice(a.deviceId, { layoutId: a.layoutId }, userId)) throw new Error("screen not found or not yours");
-          await pushDevice(a.deviceId);
-          break;
-        }
-        case "notify": createIfAbsent(userId, null, "automation", a.message, `auto:${a.message}:${dayOf(ctx)}`); break;
-        case "alert": await emitAlert(userId, a); break;
-        // assertSafeUrl inside; the marker header lets our own inlet handler skip
-        // re-firing automations, so an automation that POSTs to its own /api/hooks
-        // URL can't form an HTTP self-trigger loop.
-        case "webhook": await postJSON(a.url, a.body ?? { context: ctx }, { "x-glanceos-automation": "1" }); break;
-        // Object writes target a block by its stable id. A custom-data-bound object
-        // writes its data key; a static object patches its prop on the board doc.
-        // Either way pushUserDevices() at the end re-renders every screen the user
-        // owns, so the change reaches whatever screen is showing this board.
-        case "setObjectText":
-        case "setObjectProp": {
-          if (!board) throw new Error("object actions only run on board-scoped automations");
-          const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
-          if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
-          const props = block.props as Record<string, unknown>;
-          const next = a.kind === "setObjectText" ? a.text : a.value;
-          if (block.type === "customData") {
-            const key = String(props.key ?? "");
-            if (!key) throw new Error("object has no data key");
-            setCustomData(userId, key, next);
-          } else if (block.source) {
-            throw new Error("object shows live data and can't be set");
-          } else {
-            const prop = a.kind === "setObjectText" ? (a.prop || primaryProp(props)) : a.prop;
-            if (!prop) throw new Error("object has no settable text");
-            const original = props[prop];
-            props[prop] = next;
-            // Keep the in-memory doc consistent with persistence: if the save fails,
-            // roll the mutation back so sibling automations in this pass don't read it.
-            try { updateLayout(board.id, board.document); }
-            catch (e) { props[prop] = original; throw e; }
-          }
-          touched = true;
-          break;
-        }
-        case "showObject":
-        case "hideObject": {
-          if (!board) throw new Error("object actions only run on board-scoped automations");
-          const block = board.document.rows.flatMap((r) => r.blocks).find((b) => b.id === a.objectId);
-          if (!block) throw new Error(`object not found: ${a.objectName ?? a.objectId}`);
-          const wasHidden = block.hidden;
-          block.hidden = a.kind === "hideObject";
-          try { updateLayout(board.id, board.document); }
-          catch (e) { block.hidden = wasHidden; throw e; }
-          touched = true;
-          break;
-        }
-        case "incrementData": {
-          const cur = num(getCustomData(userId, a.key)) ?? 0; // start from 0 if unset/non-numeric
-          setCustomData(userId, a.key, cur + (a.delta ?? 1));
-          touched = true;
-          break;
-        }
-        case "toggleData": {
-          const cur = getCustomData(userId, a.key);
-          const on = cur === true || cur === "true" || cur === 1 || cur === "1";
-          setCustomData(userId, a.key, !on);
-          touched = true;
-          break;
-        }
-        case "delay": { await new Promise((r) => setTimeout(r, Math.min(5_000, Math.max(0, a.ms)))); break; } // bounded: the tick is shared across users
-      }
-      run++;
-    } catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }
+    if (a.afterMinutes && a.afterMinutes > 0) { enqueueDeferred(userId, a, ctx, board, a.afterMinutes); run++; continue; } // run later
+    try { if (await execAction(a, userId, ctx, board)) touched = true; run++; }
+    catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }
   }
   if (touched) await pushUserDevices(userId);
   return { run, errors };
+}
+
+// v7.0 deferred actions — "then, N minutes later, do X". Queued in memory (re-baselines on
+// restart, like the rest of the engine's history) and drained by the ~60s tick. A board
+// action re-loads the live doc at drain time so a late write can't clobber edits made in
+// between. Bounded so a runaway rule can't grow the queue without limit.
+interface Deferred { dueMs: number; userId: string; action: ActionT; ctx: Ctx; layoutId: number | null }
+const MAX_DEFERRED = 1000;
+const deferredQueue: Deferred[] = [];
+function enqueueDeferred(userId: string, action: ActionT, ctx: Ctx, board: { id: number; document: LayoutT } | undefined, afterMinutes: number): void {
+  if (deferredQueue.length >= MAX_DEFERRED) return; // backstop: drop rather than grow unbounded
+  deferredQueue.push({ dueMs: ctx.time.ts + afterMinutes * 60_000, userId, action, ctx, layoutId: board?.id ?? null });
+}
+/** Run every deferred action now due. Called once per ~60s tick. One failure never
+ *  blocks the others; screens re-push once per affected user. */
+export async function drainDeferred(now = new Date()): Promise<void> {
+  const nowMs = now.getTime();
+  if (!deferredQueue.some((d) => d.dueMs <= nowMs)) return;
+  const due: Deferred[] = []; const keep: Deferred[] = [];
+  for (const d of deferredQueue) (d.dueMs <= nowMs ? due : keep).push(d);
+  deferredQueue.length = 0; deferredQueue.push(...keep);
+  const touchedUsers = new Set<string>();
+  for (const d of due) {
+    const board = d.layoutId != null ? loadBoard(d.userId, d.layoutId) : undefined; // re-load the live doc
+    try { if (await execAction(d.action, d.userId, d.ctx, board)) touchedUsers.add(d.userId); }
+    catch { /* a deferred action's failure is isolated; there's no run row to attach it to */ }
+  }
+  for (const u of touchedUsers) await pushUserDevices(u);
 }
 
 // "time" trigger dedupe — fire at most once per matched minute (the tick may run
@@ -461,12 +558,14 @@ export async function fireAutomations(
   };
   const hasLive = live.weather !== undefined || live.calendar !== undefined;
   const baseCtx = !hasLive && opts.ctx ? opts.ctx : buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, live });
-  // Numeric fields any rule reads with a trend comparator — the tick samples just these.
+  // Numeric fields any rule reads with a trend comparator + paths any rule watches for
+  // staleness — the tick samples/stamps just these.
   const trendNeeded = new Set<string>();
-  for (const a of autos) collectTrendFields(a.conditions, trendNeeded);
-  type Resolved = { board?: { id: number; document: LayoutT }; ctx: Ctx; trend: Record<string, "rising" | "falling" | "steady" | null> };
+  const staleNeeded = new Set<string>();
+  for (const a of autos) { collectTrendFields(a.conditions, trendNeeded); collectStaleFields(a.conditions, staleNeeded); }
+  type Resolved = { board?: { id: number; document: LayoutT }; ctx: Ctx; trend: Record<string, "rising" | "falling" | "steady" | null>; staleMs: Record<string, number> };
   // Build each referenced context once (board objects read from the doc + data),
-  // record this tick's trend samples for it, and snapshot the resulting directions.
+  // record this tick's trend samples + change-stamps for it, and snapshot the results.
   const ctxCache = new Map<number | null, Resolved>();
   const ctxFor = (layoutId: number | null): Resolved => {
     let c = ctxCache.get(layoutId);
@@ -483,19 +582,30 @@ export async function fireAutomations(
         if (v !== null) recordTrend(`${tkey}:${f}`, v, Math.floor(ctx.time.ts / 60_000));
         trend[f] = trendDirection(trendSamples.get(`${tkey}:${f}`));
       }
-      c = { board, ctx, trend };
+      const staleMs: Record<string, number> = {};
+      for (const f of staleNeeded) {
+        const skey = `${tkey}:${f}`;
+        const sig = safeStringify(resolvePath(ctx, f));
+        const seen = lastChange.get(skey);
+        if (!seen || seen.sig !== sig) lastChange.set(skey, { sig, ts: ctx.time.ts });
+        staleMs[f] = ctx.time.ts - (lastChange.get(skey) as { sig: string; ts: number }).ts;
+      }
+      c = { board, ctx, trend, staleMs };
       ctxCache.set(layoutId, c);
     }
     return c;
   };
   for (const a of autos) {
-    const { board, ctx, trend } = ctxFor(a.layoutId);
+    const { board, ctx, trend, staleMs } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "interval" && !intervalMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "presence" && a.trigger.event !== opts.presenceEvent) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
-    const matched = a.conditions ? evaluate(a.conditions, ctx, prev, 0, trend) : true;
+    // "held for N minutes" verdicts are driven once here (mutating sustainedSince), then
+    // read purely inside evaluate. Only walks the tree when the rule uses `sustained`.
+    const sustainedMap = a.conditions ? resolveSustained(a.conditions, ctxKey(userId, a.layoutId), ctx, prev, trend, staleMs, ctx.time.ts) : {};
+    const matched = a.conditions ? evaluate(a.conditions, ctx, prev, 0, trend, staleMs, sustainedMap) : true;
     if (matched) {
       // Cooldown: stay quiet for N minutes after a run so a long-held condition
       // (rain, low battery) doesn't re-fire every tick. lastRun is the persisted
@@ -518,6 +628,7 @@ export async function fireAutomations(
 /** The ~60s tick: data-threshold ("tick"), time-of-day ("time"), and screen
  *  online↔offline edges. Wrapped by the caller so it never crashes the loop. */
 export async function runAutomationTick(now = new Date()): Promise<void> {
+  await drainDeferred(now); // run any "N minutes later" actions that have come due
   for (const userId of allUserIds()) {
     const ctx = buildContext(userId, { now });
     await fireAutomations(userId, "tick", { ctx, now, usePrev: true });
@@ -543,6 +654,7 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
 }
 
 const describeAction = (a: ActionT): string => {
+  if (a.afterMinutes && a.afterMinutes > 0) return `after ${a.afterMinutes} min: ${describeAction({ ...a, afterMinutes: undefined } as ActionT)}`;
   switch (a.kind) {
     case "setData": return `set data "${a.key}"`;
     case "addTask": return `add task "${a.text}"`;

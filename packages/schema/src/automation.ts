@@ -7,7 +7,9 @@ import { z } from "zod";
 
 // v6.1 trend comparators read a small in-memory history of a numeric field (engine
 // ring-buffer) — direction over a window, not a level. They take no comparison value.
-export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches", "rising", "falling", "steady"] as const;
+// v7.0 `stale` reads the same in-memory change-history as the trend buffer: true when a
+// field hasn't changed for `value` minutes (dead-sensor / "no update in a while" detection).
+export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches", "rising", "falling", "steady", "stale"] as const;
 export const Comparator = z.enum(COMPARATORS);
 export type ComparatorT = (typeof COMPARATORS)[number];
 
@@ -16,7 +18,10 @@ export type ConditionT =
   | { type: "field"; field: string; op: ComparatorT; value?: unknown; value2?: unknown }
   | { type: "all"; conditions: ConditionT[] }
   | { type: "any"; conditions: ConditionT[] }
-  | { type: "not"; condition: ConditionT };
+  | { type: "not"; condition: ConditionT }
+  // v7.0 — true only once the inner condition has held continuously for `minutes`
+  // ("I've been gone 30 min", "CPU > 90% for 5 min"). Debounces twitchy signals.
+  | { type: "sustained"; minutes: number; condition: ConditionT };
 
 const FieldCondition = z.object({
   type: z.literal("field"),
@@ -32,6 +37,7 @@ export const Condition: z.ZodType<ConditionT> = z.lazy(() =>
     z.object({ type: z.literal("all"), conditions: z.array(Condition).max(25) }),
     z.object({ type: z.literal("any"), conditions: z.array(Condition).max(25) }),
     z.object({ type: z.literal("not"), condition: Condition }),
+    z.object({ type: z.literal("sustained"), minutes: z.number().int().min(1).max(1440), condition: Condition }),
   ]),
 ) as z.ZodType<ConditionT>;
 
@@ -56,7 +62,10 @@ export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick"
 // ---- Action ----
 // Every action carries an optional `enabled` flag (default = on); runActions skips a
 // step when it's explicitly false, so you can disable one step without deleting it.
-const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional() });
+// `afterMinutes` (v7.0): when set, the step is not run inline — it's queued and the
+// engine tick runs it that many minutes later ("then, 10 min later, switch the board").
+// No recursion: any action can be deferred by this one optional field. Bounded queue.
+const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional(), afterMinutes: z.number().int().min(1).max(1440).optional() });
 export const Action = z.discriminatedUnion("kind", [
   act({ kind: z.literal("setData"), key: z.string().min(1).max(100), value: z.unknown() }),
   act({ kind: z.literal("addTask"), listId: z.string().max(60).default("default"), text: z.string().min(1).max(500) }),
@@ -95,7 +104,7 @@ export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard"
 export const MAX_CONDITION_DEPTH = 12; // the UI builder never needs more; bounds recursion
 function conditionDepth(c: ConditionT): number {
   if (c.type === "all" || c.type === "any") return 1 + (c.conditions.length ? Math.max(...c.conditions.map(conditionDepth)) : 0);
-  if (c.type === "not") return 1 + conditionDepth(c.condition);
+  if (c.type === "not" || c.type === "sustained") return 1 + conditionDepth(c.condition);
   return 1;
 }
 

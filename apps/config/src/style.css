@@ -3195,6 +3195,8 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .action-row .toggle-pair { flex: 0 0 auto; }
 .action-row > span.muted { flex: 0 0 auto; }
 .action-row .icon-btn { padding: 4px 9px; flex: none; } /* scoped: don't override the 30×30 grid box of every card kebab / modal close app-wide */
+.action-after { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; font-size: 12px; color: var(--muted); white-space: nowrap; } /* per-action "+N min later" deferral */
+.action-after input { width: 3.4rem; }
 .day-toggle { border: 1px solid var(--rule); background: var(--card-bg); color: var(--text-muted); border-radius: 6px; padding: 5px 7px; font-size: 12px; cursor: pointer; }
 .day-toggle.on { background: var(--accent); color: var(--accent-contrast, #fff); border-color: var(--accent); }
 /* "When…" ready-made scenario picker */

@@ -22,6 +22,7 @@ type Cond =
   | { type: "all"; conditions: Cond[] }
   | { type: "any"; conditions: Cond[] }
   | { type: "not"; condition: Cond }
+  | { type: "sustained"; minutes: number; condition: Cond } // v7.0 — engine-supported; preserved on round-trip
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number }
@@ -31,11 +32,11 @@ interface Automation { id?: string; name: string; enabled: boolean; trigger: Tri
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
 export interface ObjOption { id: string; name: string; label: string; type?: string; settable: boolean; prop?: string }
 
-const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
+const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed", "stale"];
 const NO_VALUE_OPS = new Set(["exists", "changed", "rising", "falling", "steady"]); // these ops take no comparison value
-const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed", rising: "is rising", falling: "is falling", steady: "is steady" };
-const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed", "rising", "falling", "steady"];
-const TEXT_OPS = ["eq", "ne", "contains", "startsWith", "endsWith", "matches", "exists", "changed"];
+const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed", rising: "is rising", falling: "is falling", steady: "is steady", stale: "hasn't changed in (min)" };
+const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed", "rising", "falling", "steady", "stale"];
+const TEXT_OPS = ["eq", "ne", "contains", "startsWith", "endsWith", "matches", "exists", "changed", "stale"];
 const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Plain-English catalog of the fields the engine's substrate exposes (buildContext:
@@ -133,6 +134,7 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   { id: "flag-on", group: "Data", label: "When a flag turns on", trigger: { kind: "tick" }, conditions: fcond("data.flag", "eq", true) },
   { id: "counter-cross", group: "Data", label: "When a counter crosses a number", trigger: { kind: "tick" }, conditions: fcond("data.count", "gte", 10) },
   { id: "value-changed", group: "Data", label: "When a value changes", trigger: { kind: "tick" }, conditions: fcond("data.value", "changed", "") },
+  { id: "value-stale", group: "Data", label: "When a value goes stale (no update)", trigger: { kind: "tick" }, conditions: fcond("data.value", "stale", 30) },
 ];
 const WHEN_GROUPS = [...new Set(WHEN_SCENARIOS.map((s) => s.group))];
 const ACTION_KINDS: { id: string; label: string }[] = [
@@ -460,6 +462,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     const norm = (c: Cond): Cond => {
       if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value), value2: coerce(c.value2) };
       if (c.type === "not") return { type: "not", condition: norm(c.condition) };
+      if (c.type === "sustained") return { type: "sustained", minutes: c.minutes, condition: norm(c.condition) }; // preserve engine sustained nodes
       return c.type === "all" ? { type: "all", conditions: c.conditions.map(norm) } : { type: "any", conditions: c.conditions.map(norm) };
     };
     const root = a.conditions;
@@ -604,6 +607,11 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
               {actionKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
             <ActionFields action={act} objects={objects} devices={devices} boards={boards} loaded={picksLoaded} onChange={(p) => setAction(i, p)} />
+            <label class="action-after" title="Run this step this many minutes later (0 = right away)">+<input type="number" min="0" max="1440" step="1" value={Number(act.afterMinutes ?? 0)} onInput={(e) => {
+              const n = Math.round(Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0)));
+              const { afterMinutes: _drop, ...rest } = act as Action & { afterMinutes?: number };
+              setAction(i, n > 0 ? { ...rest, afterMinutes: n } : (rest as Action));
+            }} />m later</label>
             {a.actions.length > 1 && <button class="ghost danger icon-btn" onClick={() => set({ actions: a.actions.filter((_, j) => j !== i) })}>×</button>}
           </div>
         ))}
@@ -687,6 +695,7 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, blankField()]))}>+ condition</button>
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "all", conditions: [] }]))}>+ group</button>
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "not", condition: blankField() }]))}>+ not</button>
+          <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "sustained", minutes: 5, condition: blankField() }]))}>+ held for…</button>
         </div>
       </div>
     );
@@ -696,6 +705,17 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
       <div class="cond-not">
         <span class="cond-not-label">NOT</span>
         <div class="grow"><ConditionNode node={node.condition} objects={objects} onChange={(n) => onChange({ type: "not", condition: n })} /></div>
+        {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
+      </div>
+    );
+  }
+  if (node.type === "sustained") {
+    return (
+      <div class="cond-not">
+        <span class="cond-not-label">FOR</span>
+        <input type="number" min="1" max="1440" step="1" style={{ width: "4rem" }} value={node.minutes} onInput={(e) => onChange({ type: "sustained", minutes: Math.round(Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 1))), condition: node.condition })} />
+        <span class="muted">min, while</span>
+        <div class="grow"><ConditionNode node={node.condition} objects={objects} onChange={(n) => onChange({ type: "sustained", minutes: node.minutes, condition: n })} /></div>
         {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
       </div>
     );

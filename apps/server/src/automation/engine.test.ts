@@ -15,7 +15,7 @@ const { createAutomation, listRuns } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
 const { createConnection } = await import("../connections");
-const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById } = await import("./engine");
+const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
@@ -273,6 +273,78 @@ describe("trend sense (v6.1)", () => {
     expect(getCustomData(user.id, "trendHit")).toBeUndefined(); // <3 samples → no trend yet (like "changed" before prev)
     setCustomData(user.id, "tmp", 30); await fireAutomations(user.id, "tick", { now: at(2), usePrev: true });
     expect(getCustomData(user.id, "trendHit")).toBe("yes"); // 10→20→30 rising
+  });
+});
+
+describe("stale sense (v7.0)", () => {
+  it("matches only after a field has gone unchanged for N minutes; a change resets the clock", async () => {
+    createAutomation(user.id, {
+      name: "Dead sensor", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "field", field: "data.sens", op: "stale", value: 2 }, // no update in ≥ 2 min
+      actions: [{ kind: "setData", key: "staleHit", value: "yes" }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 5, 1, 0, m));
+    setCustomData(user.id, "sens", 1); await fireAutomations(user.id, "tick", { now: at(0), usePrev: true }); // first sight → fresh
+    await fireAutomations(user.id, "tick", { now: at(1), usePrev: true }); // 1 min unchanged < 2
+    expect(getCustomData(user.id, "staleHit")).toBeUndefined();
+    await fireAutomations(user.id, "tick", { now: at(3), usePrev: true }); // 3 min unchanged ≥ 2 → fires
+    expect(getCustomData(user.id, "staleHit")).toBe("yes");
+    // a value change re-baselines: freshness resets, so it's not stale again until 2 more min pass
+    setCustomData(user.id, "staleHit", "no");
+    setCustomData(user.id, "sens", 2); await fireAutomations(user.id, "tick", { now: at(4), usePrev: true }); // changed → fresh
+    expect(getCustomData(user.id, "staleHit")).toBe("no");
+  });
+});
+
+describe("sustained condition (v7.0)", () => {
+  it("matches only once the inner condition has held continuously for N minutes", async () => {
+    createAutomation(user.id, {
+      name: "Gone a while", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "sustained", minutes: 2, condition: { type: "field", field: "data.gone", op: "eq", value: true } },
+      actions: [{ kind: "setData", key: "sustHit", value: "yes" }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 6, 1, 0, m));
+    setCustomData(user.id, "gone", true); await fireAutomations(user.id, "tick", { now: at(0), usePrev: true }); // first true
+    await fireAutomations(user.id, "tick", { now: at(1), usePrev: true }); // held 1 min < 2
+    expect(getCustomData(user.id, "sustHit")).toBeUndefined();
+    await fireAutomations(user.id, "tick", { now: at(2), usePrev: true }); // held 2 min ≥ 2 → fires
+    expect(getCustomData(user.id, "sustHit")).toBe("yes");
+  });
+
+  it("resets the clock if the inner condition lapses", async () => {
+    createAutomation(user.id, {
+      name: "Held reset", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "sustained", minutes: 3, condition: { type: "field", field: "data.up", op: "eq", value: true } },
+      actions: [{ kind: "setData", key: "heldHit", value: "yes" }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 6, 2, 0, m));
+    setCustomData(user.id, "up", true); await fireAutomations(user.id, "tick", { now: at(0), usePrev: true });
+    await fireAutomations(user.id, "tick", { now: at(2), usePrev: true }); // 2 min in (< 3)
+    setCustomData(user.id, "up", false); await fireAutomations(user.id, "tick", { now: at(3), usePrev: true }); // lapses → clock cleared
+    setCustomData(user.id, "up", true); await fireAutomations(user.id, "tick", { now: at(4), usePrev: true }); // true again → restarts at t4
+    await fireAutomations(user.id, "tick", { now: at(6), usePrev: true }); // only 2 min since restart (< 3)
+    expect(getCustomData(user.id, "heldHit")).toBeUndefined();
+    await fireAutomations(user.id, "tick", { now: at(7), usePrev: true }); // now 3 min since restart → fires
+    expect(getCustomData(user.id, "heldHit")).toBe("yes");
+  });
+});
+
+describe("deferred actions (v7.0)", () => {
+  it("queues an action with afterMinutes and runs it only once it comes due", async () => {
+    const a = createAutomation(user.id, {
+      name: "Then later", enabled: true, trigger: { kind: "tick" },
+      actions: [{ kind: "incrementData", key: "deferredK", delta: 1, afterMinutes: 5 }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 7, 1, 0, m));
+    await fireAutomations(user.id, "tick", { now: at(0), usePrev: true }); // enqueues, does NOT run yet
+    expect(getCustomData(user.id, "deferredK")).toBeUndefined();
+    expect(listRuns(a.id, user.id)[0]!.matched).toBe(true); // the automation matched + scheduled
+    await drainDeferred(at(2)); // 2 min later — not due (due at +5)
+    expect(getCustomData(user.id, "deferredK")).toBeUndefined();
+    await drainDeferred(at(5)); // due → runs now
+    expect(getCustomData(user.id, "deferredK")).toBe(1);
+    await drainDeferred(at(9)); // already drained → no double-run
+    expect(getCustomData(user.id, "deferredK")).toBe(1);
   });
 });
 
