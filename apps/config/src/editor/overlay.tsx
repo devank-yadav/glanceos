@@ -176,10 +176,6 @@ export function Overlay({
     if (e.target === rootRef.current) dispatch({ type: "select", id: null });
   };
 
-  // Resize seams appear ONLY on the selected block's row — so the cursor doesn't flicker
-  // to a resize arrow near every object as you move the mouse around (Notion/Canva-clean).
-  const activeRow = geometry.blocks.find((b) => selectedIds.includes(b.id))?.rowIndex ?? -1;
-
   return (
     <div
       ref={rootRef}
@@ -229,39 +225,44 @@ export function Overlay({
             >
               <Icon.grip />
             </span>
+            {/* Per-object resize grips, only on the selected block (Canva-style): a small
+               grip at the bottom edge (height) and one on each shared column seam (width).
+               They carry their own resize cursor so it never appears over the text body. */}
+            {selectedIds.includes(b.id) && !widget.source && (
+              <>
+                <span
+                  class="widget-resize resize-b"
+                  title="Drag to resize height"
+                  onPointerDown={(e) => onRowDown(e as unknown as PointerEvent, b.rowIndex)}
+                  onPointerMove={(e) => onRowMove(e as unknown as PointerEvent)}
+                  onPointerUp={() => endGesture(true)}
+                  onPointerCancel={() => endGesture(false)}
+                />
+                {b.blockIndex < doc.rows[b.rowIndex]!.blocks.length - 1 && (
+                  <span
+                    class="widget-resize resize-r"
+                    title="Drag to resize width"
+                    onPointerDown={(e) => onGutterDown(e as unknown as PointerEvent, b.rowIndex, b.blockIndex)}
+                    onPointerMove={(e) => onGutterMove(e as unknown as PointerEvent)}
+                    onPointerUp={() => endGesture(true)}
+                    onPointerCancel={() => endGesture(false)}
+                  />
+                )}
+                {b.blockIndex > 0 && (
+                  <span
+                    class="widget-resize resize-l"
+                    title="Drag to resize width"
+                    onPointerDown={(e) => onGutterDown(e as unknown as PointerEvent, b.rowIndex, b.blockIndex - 1)}
+                    onPointerMove={(e) => onGutterMove(e as unknown as PointerEvent)}
+                    onPointerUp={() => endGesture(true)}
+                    onPointerCancel={() => endGesture(false)}
+                  />
+                )}
+              </>
+            )}
           </div>
         );
       })}
-
-      {/* column gutters (vertical seams) — only on the selected block's row */}
-      {geometry.blocks
-        .filter((b) => b.rowIndex === activeRow && b.blockIndex < doc.rows[b.rowIndex]!.blocks.length - 1)
-        .map((b) => (
-          <div
-            key={`cg-${b.id}`}
-            class="gutter gutter-col"
-            title="Drag to resize columns"
-            style={{ left: `${sx(b.x + b.w)}px`, top: `${sx(b.y)}px`, width: `${sx(geometry.gap)}px`, height: `${sx(b.h)}px` }}
-            onPointerDown={(e) => onGutterDown(e as unknown as PointerEvent, b.rowIndex, b.blockIndex)}
-            onPointerMove={(e) => onGutterMove(e as unknown as PointerEvent)}
-            onPointerUp={() => endGesture(true)}
-            onPointerCancel={() => endGesture(false)}
-          />
-        ))}
-
-      {/* row gutters (horizontal seams) — only on the selected block's row */}
-      {geometry.rows.filter((r) => r.index === activeRow).map((r) => (
-        <div
-          key={`rg-${r.index}`}
-          class="gutter gutter-row"
-          title="Drag to resize height"
-          style={{ left: `${sx(r.x)}px`, top: `${sx(r.y + r.h)}px`, width: `${sx(r.w)}px`, height: `${sx(geometry.gap)}px` }}
-          onPointerDown={(e) => onRowDown(e as unknown as PointerEvent, r.index)}
-          onPointerMove={(e) => onRowMove(e as unknown as PointerEvent)}
-          onPointerUp={() => endGesture(true)}
-          onPointerCancel={() => endGesture(false)}
-        />
-      ))}
     </div>
   );
 }

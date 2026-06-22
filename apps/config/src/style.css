@@ -1768,6 +1768,25 @@ ul.tasks li:last-child {
   background: color-mix(in srgb, var(--indigo) 42%, transparent);
 }
 
+/* Per-object resize grips on the selected block (Canva-style). Small, at the very edge,
+   each carrying its own resize cursor — so the resize cursor never lands on the text body. */
+.widget-resize {
+  position: absolute;
+  z-index: 16;
+  background: var(--indigo);
+  border: 1.5px solid var(--bg);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  touch-action: none;
+}
+.widget-box.selected .widget-resize { opacity: 1; }
+.widget-resize:hover { background: var(--fg); }
+.resize-b { bottom: -5px; left: 50%; transform: translateX(-50%); width: 34px; height: 8px; cursor: ns-resize; }
+.resize-r { right: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
+.resize-l { left: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
+
 /* ---------- slash menu ---------- */
 
 .slash-backdrop {
