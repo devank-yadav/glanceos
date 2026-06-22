@@ -2,7 +2,7 @@ import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
 import { editorOrigin } from "../router";
-import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
+import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, INPLACE_EDIT, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
 import { DataPanel } from "./databind";
 import {
   applyDrop, indicatorBox, moveBlock, moveRow, pageGeometry, removeBlocks, type DropTarget,
@@ -782,7 +782,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
       )}
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>
-          <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}>
+          <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}
+            editMode
+            onFocus={(id) => dispatch({ type: "select", id })}
+            onEdit={(id, patch) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id); if (blk) Object.assign(blk.props as Record<string, unknown>, patch); })}
+          >
             <div class="drag-halo" ref={haloRef} />
             <Overlay
               doc={state.present}
@@ -821,7 +825,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 onClose={() => setEditing(null)}
               />
             )}
-            {editBox && editing && editingBlock?.type !== "table" && !(editingBlock && LIST_EDIT.has(editingBlock.type)) && (
+            {editBox && editing && editingBlock?.type !== "table" && !(editingBlock && LIST_EDIT.has(editingBlock.type)) && !(editingBlock && INPLACE_EDIT.has(editingBlock.type)) && (
               <textarea
                 ref={editRef}
                 key={editing.id}
@@ -863,7 +867,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   box={primaryBox}
                   scale={scale}
                   stageW={stageW}
-                  canEdit={TEXT_PROP[primaryBlock.type] !== undefined}
+                  canEdit={TEXT_PROP[primaryBlock.type] !== undefined && !INPLACE_EDIT.has(primaryBlock.type)}
                   canBind={BINDABLE.has(primaryBlock.type)}
                   bound={!!primaryBlock.source}
                   editItems={primaryBlock.type === "tasks" ? "tasks" : primaryBlock.type === "queue" ? "queue" : null}

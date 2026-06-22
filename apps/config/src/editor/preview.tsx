@@ -21,6 +21,9 @@ export function PreviewStage({
   data,
   stageRef,
   sizeLabel,
+  editMode,
+  onEdit,
+  onFocus,
   children,
 }: {
   W: number;
@@ -30,6 +33,9 @@ export function PreviewStage({
   data: Record<string, unknown>;
   stageRef: RefObject<HTMLDivElement>;
   sizeLabel?: string;
+  editMode?: boolean; // load the in-iframe edit layer + accept edits back (v8.0)
+  onEdit?: (id: string, patch: Record<string, unknown>) => void;
+  onFocus?: (id: string | null) => void;
   children: ComponentChildren;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -37,17 +43,23 @@ export function PreviewStage({
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === "glanceos:ready") setReady(true);
+      // Only trust messages from OUR preview iframe origin (cross-origin in dev).
+      if (e.origin !== targetOrigin()) return;
+      const m = e.data as { type?: string; id?: string | null; patch?: Record<string, unknown> };
+      if (m?.type === "glanceos:ready") setReady(true);
+      else if (m?.type === "glanceos:edit" && m.id && m.patch) onEdit?.(m.id, m.patch);
+      else if (m?.type === "glanceos:focus") onFocus?.(m.id ?? null);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [onEdit, onFocus]);
 
   useEffect(() => {
     if (!ready) return;
     iframeRef.current?.contentWindow?.postMessage(
       {
         type: "glanceos:state",
+        edit: !!editMode,
         payload: {
           claimed: true,
           state: { layoutVersion: 0, layout: doc, data, deviceName: "Preview" },
@@ -55,7 +67,7 @@ export function PreviewStage({
       },
       targetOrigin(),
     );
-  }, [ready, doc, data]);
+  }, [ready, doc, data, editMode]);
 
   // The wrapper is sized to the SCALED box — transforms don't affect layout,
   // so without it the page grows phantom scrollbars.

@@ -15,14 +15,27 @@ const CACHE_KEY = "glanceos.lastPayload";
  */
 function bootPreview(): void {
   let got = false;
+  let editor: import("./edit").EditLayer | null = null;
+  let lastLayout: import("@glanceos/schema").LayoutT | null = null;
   window.addEventListener("message", (e: MessageEvent) => {
-    const msg = e.data as { type?: string; payload?: StreamPayloadT };
+    const msg = e.data as { type?: string; payload?: StreamPayloadT; edit?: boolean };
     if (msg?.type === "glanceos:state" && msg.payload) {
       got = true;
+      lastLayout = msg.payload.claimed ? msg.payload.state.layout ?? null : null;
       try {
         renderPayload(msg.payload);
       } catch {
         // a half-built draft may not render; keep the last good frame
+      }
+      // v8.0 in-place editing: load the edit layer ONCE when the Studio asks for it
+      // (never on a real screen → zero bytes shipped to panels). Re-attach after each
+      // render so freshly-painted cells become editable; locked cells are left alone.
+      if (msg.edit && !editor) {
+        import("./edit")
+          .then((m) => { editor = m.createEditLayer({ post: (x) => window.parent.postMessage(x, "*"), getDoc: () => lastLayout }); editor.refresh(); })
+          .catch(() => { /* editing is a studio nicety; never break the preview */ });
+      } else {
+        editor?.refresh();
       }
     }
   });

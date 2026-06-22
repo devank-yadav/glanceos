@@ -17,8 +17,15 @@ let cleanups: Array<() => void> = [];
 // and it needlessly recreated every self-running widget's interval). `mountedSig` is
 // the structural skeleton; while it's unchanged we diff, otherwise we full-rebuild.
 interface Cell { el: HTMLElement; sig: string; cleanup?: () => void }
-let cells = new Map<string, Cell>();
+const cells = new Map<string, Cell>();
 let mountedSig: string | null = null;
+
+// v8.0 in-place editing (Studio preview only): the edit layer owns this set of block
+// ids currently being typed into. updateCells must NOT repaint a locked cell or it
+// tears down the DOM the caret lives in. Empty + a no-op on real screens.
+let editingIds: ReadonlySet<string> = new Set();
+export function setEditingLock(ids: ReadonlySet<string>): void { editingIds = ids; }
+export function getCells(): ReadonlyMap<string, { el: HTMLElement }> { return cells; }
 
 function reset(): void {
   for (const fn of cleanups) fn();
@@ -78,6 +85,7 @@ function updateCells(layout: LayoutT, data: Record<string, unknown>): void {
     for (const row of rows) for (const block of row.blocks) {
       const c = cells.get(block.id);
       if (!c) continue; // structuralSig guarantees a cell exists for every visible block
+      if (editingIds.has(block.id)) continue; // being typed into in place — repainting would kill the caret
       const sig = blockSig(block, data[block.id]);
       if (c.sig === sig) continue; // unchanged → leave it (and its running interval) alone
       c.cleanup?.();

@@ -2,7 +2,7 @@ import type { LayoutT } from "@glanceos/schema";
 import type { RefObject } from "preact";
 import { useRef } from "preact/hooks";
 import type { Dispatch } from "preact/hooks";
-import { blockFor, TEXT_PROP } from "./blocks";
+import { blockFor, INPLACE_EDIT, TEXT_PROP } from "./blocks";
 import { Icon } from "./icons";
 import {
   hitTest, indicatorBox, resizeColumns, resizeRow,
@@ -185,11 +185,14 @@ export function Overlay({
       {geometry.blocks.map((b) => {
         const widget = doc.rows[b.rowIndex]!.blocks[b.blockIndex]!;
         const editable = TEXT_PROP[widget.type] !== undefined;
+        // v8.0 — unbound in-place-editable blocks: let pointer events fall through to the
+        // live iframe text (caret placement), so we don't open a floating editor for them.
+        const inplace = INPLACE_EDIT.has(widget.type) && !widget.source;
         return (
           <div
             key={b.id}
             data-block={b.id}
-            class={`widget-box${selectedIds.includes(b.id) ? " selected" : ""}`}
+            class={`widget-box${selectedIds.includes(b.id) ? " selected" : ""}${inplace ? " inplace" : ""}`}
             style={{ left: `${sx(b.x)}px`, top: `${sx(b.y)}px`, width: `${sx(b.w)}px`, height: `${sx(b.h)}px` }}
             onPointerDown={(e) => {
               const ev = e as unknown as PointerEvent;

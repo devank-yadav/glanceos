@@ -1514,7 +1514,18 @@ ul.tasks li:last-child {
   inset: 0;
   touch-action: none;
   z-index: 10;
+  /* v8.0: the overlay no longer eats every click — empty gaps + in-place-editable
+     blocks let pointer events fall through to the live preview iframe (so the caret
+     lands on the real rendered text). Interactive affordances re-enable below. */
+  pointer-events: none;
 }
+.studio-overlay > .widget-box,
+.studio-overlay > .gutter { pointer-events: auto; }
+/* an in-place-editable block: clicks pass THROUGH the box to the iframe text, but its
+   ⠿ grip (and resize handles) stay grabbable. */
+.widget-box.inplace { pointer-events: none; }
+.widget-box.inplace .drag-handle,
+.widget-box.inplace .widget-resize { pointer-events: auto; }
 
 .widget-box {
   position: absolute;

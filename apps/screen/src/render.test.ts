@@ -9,6 +9,7 @@ const { showAlert } = await import("./alert");
 // can prove one bad block can't blank the wall (render-isolation, v7.0 P0).
 const { WIDGETS } = await import("./widgets");
 (WIDGETS as Record<string, unknown>).__throw = () => { throw new Error("boom"); };
+const { createEditLayer } = await import("./edit");
 
 const row = { id: "r1", h: 6, blocks: [{ id: "b1", type: "divider", width: 1, props: {} }] };
 const baseLayout = { schemaVersion: 3, name: "Z", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top" };
@@ -54,6 +55,44 @@ describe("render isolation — one bad block never blanks the wall (v7.0 P0)", (
     const bad = document.querySelector(".widget-__throw");
     expect(bad).toBeTruthy();
     expect(bad?.querySelector(".placeholder")).toBeTruthy();
+  });
+});
+
+describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
+  const mkLayout = (content: string) => ({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+    { id: "h", type: "heading", width: 1, props: { content, level: 1 } },
+    { id: "clk", type: "clock", width: 1, props: { showDate: false } },
+  ] }] });
+  const pay = (layout: object): StreamPayloadT => ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
+
+  it("wires the real text node, posts edits, and locks the cell so a re-render can't kill the caret", () => {
+    const posted: Array<Record<string, unknown>> = [];
+    let doc = mkLayout("Hi");
+    renderPayload(pay(doc));
+    const layer = createEditLayer({ post: (m) => posted.push(m as Record<string, unknown>), getDoc: () => doc as never });
+    layer.refresh();
+
+    const node = document.querySelector(".heading") as HTMLElement;
+    expect(node.getAttribute("contenteditable")).toBeTruthy(); // the ACTUAL rendered text is editable
+    expect(node.classList.contains("glance-editable")).toBe(true);
+
+    node.dispatchEvent(new FocusEvent("focus"));
+    expect(posted.some((m) => m.type === "glanceos:focus" && m.id === "h")).toBe(true); // selects the block in the Studio
+
+    node.textContent = "Hello";
+    node.dispatchEvent(new InputEvent("input"));
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "h", patch: { content: "Hello" }, phase: "update" });
+
+    // The crucial bit: while focused, a re-render with CHANGED props must NOT repaint the
+    // edited cell (that would tear down the node the caret lives in).
+    doc = mkLayout("CHANGED");
+    renderPayload(pay(doc));
+    expect((document.querySelector(".heading") as HTMLElement).textContent).toBe("Hello"); // locked → user's text kept
+
+    node.dispatchEvent(new FocusEvent("blur"));
+    expect(posted.some((m) => m.type === "glanceos:edit" && m.phase === "commit")).toBe(true);
+    renderPayload(pay(mkLayout("AFTER")));
+    expect((document.querySelector(".heading") as HTMLElement).textContent).toBe("AFTER"); // unlocked → repaints normally
   });
 });
 

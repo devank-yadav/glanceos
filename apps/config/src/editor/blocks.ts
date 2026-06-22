@@ -371,6 +371,18 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   socialHandle: "handle",
 };
 
+// v8.0 — block types edited TRULY IN PLACE (contentEditable inside the live preview
+// iframe), not via a floating panel. MUST stay in sync with the SINGLE map in
+// apps/screen/src/edit.ts. These get a pointer-events-through box so clicks land on the
+// real rendered text; everything else (lists/tables/agenda) keeps the floating editor.
+export const INPLACE_EDIT = new Set<WidgetType>([
+  "text", "heading", "subheading", "label", "callout", "banner", "code", "lead", "ticker",
+  "highlight", "aside", "mantra", "epigraph", "postscript", "address", "breadcrumb", "noticeBar",
+  "badge", "nameTag", "signature", "logoText", "kicker", "letterhead", "fieldRow", "profileCard",
+  "definition", "todaySpecial", "welcomeSign", "priceTag", "phoneNumber", "socialHandle",
+  "stat", "metric", "bigNumber",
+]);
+
 // Blocks that can draw from a live data source (the toolbar's ⟿ Data tab).
 export const SERIES_BLOCKS = new Set<WidgetType>([
   "sparkline", "barChart", "lineChart", "areaChart", "histogram", "heatStrip", "winLossBar", "weightTrend", "kpiSpark",
