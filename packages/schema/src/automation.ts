@@ -5,7 +5,9 @@ import { z } from "zod";
 // context; comparators are total (never throw). Triggers and actions both map to
 // existing server seams — nothing here executes anything by itself.
 
-export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches"] as const;
+// v6.1 trend comparators read a small in-memory history of a numeric field (engine
+// ring-buffer) — direction over a window, not a level. They take no comparison value.
+export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches", "rising", "falling", "steady"] as const;
 export const Comparator = z.enum(COMPARATORS);
 export type ComparatorT = (typeof COMPARATORS)[number];
 
@@ -103,6 +105,9 @@ export const Automation = z.object({
   trigger: Trigger,
   conditions: Condition.optional(), // optional gate; absent = always matches
   actions: z.array(Action).min(1).max(10),
+  // v6.1 — "at most once per N minutes": after a run, stay quiet for the cooldown so a
+  // condition that holds for a while (rain, low battery) doesn't re-fire every tick. 0 = off.
+  cooldownMinutes: z.number().int().min(0).max(1440).optional(),
 }).superRefine((a, ctx) => {
   if (a.conditions && conditionDepth(a.conditions) > MAX_CONDITION_DEPTH) {
     ctx.addIssue({ code: "custom", message: `conditions nested deeper than ${MAX_CONDITION_DEPTH}`, path: ["conditions"] });

@@ -58,6 +58,9 @@ export const ScreenState = z.object({
   data: z.record(z.string(), z.unknown()),
   deviceName: z.string().optional(),
   tv: TvState.optional(), // present only for TV-mode devices
+  // v6.1 server-resolved presentation hints (any screen, not just TV):
+  effectiveTheme: z.enum(["light", "dark"]).optional(), // resolved when theme.mode === "auto"
+  quietDim: z.boolean().optional(), // true inside the screen's quiet-hours window (soft dim, not sleep)
 });
 
 // Every SSE `state` event carries one of these.

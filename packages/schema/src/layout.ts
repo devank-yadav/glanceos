@@ -343,7 +343,11 @@ export const SourceMap = z.object({
   path: z.string().max(400).default(""), // scalar/object path, e.g. "data.today.total"
   items: z.string().max(400).optional(), // array path for a list/series, e.g. "results"
   fields: z.record(z.string(), z.string().max(400)).optional(), // per-leaf rename: {value:"count", label:"date"}
-  transform: z.enum(["none", "series", "count", "sum", "first", "last", "join", "percent"]).default("none"),
+  // v6.1 adds round/currency/duration/rangeToWords — pure, total scalar shapers so a raw
+  // API number reads as a calm human phrase. `transformArg` carries their parameter
+  // (decimals / currency symbol / "33,67:low,medium,high"). All optional → no migration.
+  transform: z.enum(["none", "series", "count", "sum", "first", "last", "join", "percent", "round", "currency", "duration", "rangeToWords"]).default("none"),
+  transformArg: z.string().max(120).optional(),
 }).prefault({});
 export type SourceMapT = z.infer<typeof SourceMap>;
 
@@ -619,8 +623,12 @@ export const Layout = z.object({
   name: z.string().min(1),
   // fontScale is optional with a default → existing v3 docs parse unchanged (no migration).
   theme: z.object({
-    mode: z.enum(["light", "dark"]).default("light"),
+    // "auto" follows the screen's sun: light by day, dark after sunset (server-resolved).
+    mode: z.enum(["light", "dark", "auto"]).default("light"),
     fontScale: z.enum(["s", "m", "l"]).default("m"),
+    // v6.1 "Look" — a calm, monochrome typographic character (weight + tracking + accent).
+    // Optional → existing v3 docs render as before; the screen defaults it.
+    look: z.enum(["editorial", "terminal", "grotesk", "stencil"]).optional(),
   }).default({ mode: "light", fontScale: "m" }),
   gap: z.number().int().min(0).max(8).default(2),
   // where the (often shorter-than-screen) content sits vertically — v0.6, optional
