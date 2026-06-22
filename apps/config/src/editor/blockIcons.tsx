@@ -210,6 +210,8 @@ export const BLOCK_ICON_PATHS: Partial<Record<WidgetType, string>> = {
   "phoneNumber": "<path d=\"M6 3h12c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z\"/><circle cx=\"12\" cy=\"19\" r=\"1\"/><path d=\"M7 5h10\"/>",
   "socialHandle": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M10 10l4-4M14 10l-4-4M10 10l-2 2M14 10l2 2M12 10v4\"/>",
   "wayfinding": "<path d=\"M5 8h10M5 12h10M5 16h10M17 7v3l2-1.5L17 7z\"/><path d=\"M7 8v8M7 16v4\"/>",
+  "focusNow": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><circle cx=\"12\" cy=\"12\" r=\"2.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "leaveBy": "<path d=\"M13 7V5H6v14h7v-2\"/><path d=\"M10 12h9\"/><path d=\"M16 9l3 3-3 3\"/>",
 };
 
 /** The icon for a block type (falls back to a generic block mark). */

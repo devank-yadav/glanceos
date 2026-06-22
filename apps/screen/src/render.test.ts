@@ -232,6 +232,49 @@ describe("upNext agenda object", () => {
   });
 });
 
+describe("v7.0 calm-glance hero blocks", () => {
+  const ITEMS = "09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom";
+  const one = (block: object) =>
+    renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [block] }] }) as StreamPayloadT);
+
+  it("focusNow shows the running event as the hero (kicker 'Now')", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 9, 15, 0)); // mid-standup (09:00–10:00)
+      one({ id: "f", type: "focusNow", width: 1, props: { label: "", items: ITEMS } });
+      expect(document.querySelector(".focus-kicker")!.textContent).toBe("Now");
+      expect(document.querySelector(".focus-title")!.textContent).toBe("Standup");
+      expect(document.querySelector(".focus-meta")!.textContent).toBe("Room 3");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("focusNow falls back to the next event with a countdown ('Next')", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 50, 0)); // 10 min before standup
+      one({ id: "f", type: "focusNow", width: 1, props: { label: "", items: ITEMS } });
+      expect(document.querySelector(".focus-kicker")!.textContent).toBe("Next");
+      expect(document.querySelector(".focus-title")!.textContent).toBe("Standup");
+      expect(document.querySelector(".focus-meta")!.textContent).toBe("in 10 min · Room 3");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("leaveBy counts down to next-event-minus-travel, then says 'Leave now'", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 30, 0)); // 30 min before standup, 15 min travel → leave in 15
+      one({ id: "l", type: "leaveBy", width: 1, props: { label: "Leave by", items: ITEMS, travelMinutes: 15 } });
+      expect(document.querySelector(".leaveby-time")!.textContent).toBe("Leave in 15 min");
+      expect(document.querySelector(".leaveby-sub")!.textContent).toContain("Standup");
+      expect(document.querySelector(".leaveby-sub")!.textContent).toContain("Room 3");
+      // self-updating: once inside the travel window it flips to "Leave now" with no re-render
+      vi.setSystemTime(new Date(2026, 5, 22, 8, 50, 0));
+      vi.advanceTimersByTime(30_000);
+      expect(document.querySelector(".leaveby-time")!.textContent).toBe("Leave now");
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe("ambient / self objects", () => {
   it("myDay greets by time of day and shows bound weather", () => {
     vi.useFakeTimers();

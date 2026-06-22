@@ -2382,6 +2382,50 @@ const dayTimeline: Render = (el, w, data) => {
   });
 };
 
+// v7.0 calm-glance — the single "one thing now" hero: the current event if one is
+// running, else the next. The anchor a daily board lacks (nowNext shows a pair).
+const focusNow: Render = (el, w, data) => {
+  if (w.type !== "focusNow") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const kicker = div("focus-kicker");
+  const title = div("focus-title");
+  const meta = div("focus-meta");
+  el.append(kicker, title, meta);
+  return every(30_000, () => {
+    const now = Date.now();
+    const src = (eventsFrom(data) ?? parseAgendaItems(w.props.items)).sort((a, b) => a.start - b.start);
+    const current = src.find((e) => e.start <= now && e.start + 3_600_000 > now);
+    const pick = current ?? src.find((e) => e.start > now);
+    if (!pick) { kicker.textContent = ""; title.textContent = "All clear"; meta.textContent = "Nothing left today"; return; }
+    kicker.textContent = current ? "Now" : "Next";
+    title.textContent = pick.title;
+    const mins = Math.round((pick.start - now) / 60_000);
+    meta.textContent = current ? (pick.location ?? "in progress") : (pick.location ? `${relWhen(mins)} · ${pick.location}` : relWhen(mins));
+  });
+};
+
+// v7.0 calm-glance — "leave by": the next event minus YOUR travel time (you state
+// the minutes — no geocoding, no cloud). Answers "when do I move," not "what's next".
+const leaveBy: Render = (el, w, data) => {
+  if (w.type !== "leaveBy") return;
+  if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
+  const big = div("leaveby-time");
+  const sub = div("leaveby-sub");
+  el.append(big, sub);
+  return every(30_000, () => {
+    const now = Date.now();
+    const travelMs = w.props.travelMinutes * 60_000;
+    const src = (eventsFrom(data) ?? parseAgendaItems(w.props.items)).sort((a, b) => a.start - b.start);
+    const next = src.find((e) => e.start > now);
+    if (!next) { big.textContent = "—"; sub.textContent = "Nothing to leave for"; return; }
+    const leaveAt = next.start - travelMs;
+    const mins = Math.round((leaveAt - now) / 60_000);
+    big.textContent = mins <= 0 ? "Leave now" : `Leave ${relWhen(mins)}`;
+    const at = fmtTime(new Date(leaveAt), { hour: "2-digit", minute: "2-digit" });
+    sub.textContent = `${next.title} · by ${at}${next.location ? ` · ${next.location}` : ""}`;
+  });
+};
+
 // ================= v5.0 — ambient / self / home fusion objects =================
 
 // The "smart home screen" header: time-of-day greeting + date + (bound) weather + a line.
@@ -2469,7 +2513,7 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   // v4.7 new auto objects
   onAir, sunArc, nextFullMoon,
   // v5.0 agenda objects
-  upNext, dayTimeline,
+  upNext, dayTimeline, focusNow, leaveBy,
   // v5.0 ambient / self / home
   myDay, healthRing, homeTile,
 };

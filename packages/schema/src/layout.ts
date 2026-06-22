@@ -328,6 +328,11 @@ export const OnAirProps = z.object({ label: line(40).default(""), start: z.numbe
 // offline; when bound to a calendar source the live events override.
 export const UpNextProps = z.object({ label: line(40).default("Up next"), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom") });
 export const DayTimelineProps = z.object({ label: line(40).default(""), items: line(1200).default("09:00 | Standup\n12:30 | Lunch\n14:00 | Focus block\n16:00 | Review"), max: z.number().int().min(1).max(20).default(8) });
+// v7.0 calm-glance — the single "one thing now" hero (current event, else next).
+export const FocusNowProps = z.object({ label: line(40).default(""), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom") });
+// v7.0 calm-glance — "leave by": next event minus your own travel time (no geocoding;
+// you state the minutes). Binds to a calendar source like the agenda blocks.
+export const LeaveByProps = z.object({ label: line(40).default("Leave by"), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom"), travelMinutes: z.number().int().min(0).max(240).default(15) });
 // v5.0 ambient / self / home fusion objects.
 export const MyDayProps = z.object({ name: line(40).default(""), subtitle: line(140).default("Have a calm, focused day."), showDate: z.boolean().default(true) });
 export const HealthRingProps = z.object({ label: line(40).default("Steps"), value: z.number().default(6200), goal: z.number().min(1).default(10000), unit: line(12).default("") });
@@ -592,6 +597,8 @@ export const Widget = z.discriminatedUnion("type", [
   // v5.0 time/place agenda objects
   z.object({ ...b, type: z.literal("upNext"), props: UpNextProps }),
   z.object({ ...b, type: z.literal("dayTimeline"), props: DayTimelineProps }),
+  z.object({ ...b, type: z.literal("focusNow"), props: FocusNowProps }),
+  z.object({ ...b, type: z.literal("leaveBy"), props: LeaveByProps }),
   // v5.0 ambient / self / home objects
   z.object({ ...b, type: z.literal("myDay"), props: MyDayProps }),
   z.object({ ...b, type: z.literal("healthRing"), props: HealthRingProps }),
