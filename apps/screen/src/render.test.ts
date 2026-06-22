@@ -124,6 +124,47 @@ describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
     await new Promise((r) => setTimeout(r, 0)); // list blur commits on a 0ms tick (after focus-out check)
     expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "lst", patch: { items: "Bread\nEggs" }, phase: "commit" });
   });
+
+  it("makes table cells editable and serializes the grid on commit", async () => {
+    const posted: Array<Record<string, unknown>> = [];
+    const mkTable = (content: string) => ({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [{ id: "tbl", type: "table", width: 1, props: { content, header: true } }] }] });
+    let doc = mkTable("Name, Status\nDoor, Locked");
+    renderPayload(pay(doc));
+    const layer = createEditLayer({ post: (m) => posted.push(m as Record<string, unknown>), getDoc: () => doc as never });
+    layer.refresh();
+
+    const tcells = document.querySelectorAll<HTMLElement>(".data-table th, .data-table td");
+    expect(tcells.length).toBe(4);
+    expect(tcells[2]!.getAttribute("contenteditable")).toBeTruthy(); // the "Door" cell edits in place
+    tcells[2]!.dispatchEvent(new FocusEvent("focus"));
+    tcells[2]!.textContent = "Window";
+    tcells[2]!.dispatchEvent(new InputEvent("input"));
+    expect(posted.some((m) => m.type === "glanceos:edit")).toBe(false); // debounced
+
+    doc = mkTable("X, Y\nZ, W"); renderPayload(pay(doc)); // locked → kept
+    expect(document.querySelectorAll<HTMLElement>(".data-table th, .data-table td")[2]!.textContent).toBe("Window");
+
+    tcells[2]!.dispatchEvent(new FocusEvent("blur"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "tbl", patch: { content: "Name, Status\nWindow, Locked" }, phase: "commit" });
+  });
+});
+
+describe("deck / slideshow (v8.0 rotation)", () => {
+  const pay = (layout: object): StreamPayloadT => ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
+  it("renders one slide + a progress dot per slide, deterministically from the wall clock", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(25_000)); // floor(25/10) % 3 = 2 → the third slide
+      const doc = { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [{ id: "d", type: "deck", width: 1, props: { slides: "Alpha\n\nBeta\n\nGamma", seconds: 10 } }] }] };
+      renderPayload(pay(doc));
+      expect(document.querySelector(".deck-slide")!.textContent).toBe("Gamma");
+      expect(document.querySelectorAll(".deck-dot").length).toBe(3);
+      expect(document.querySelectorAll(".deck-dot.on").length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("renderPayload zones", () => {

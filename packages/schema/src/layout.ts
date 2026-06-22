@@ -365,6 +365,14 @@ export const BlockSource = z.object({
 });
 export type BlockSourceT = z.infer<typeof BlockSource>;
 
+// v8.0 — a deck/slideshow object: rotates through text slides on its own timer (deterministic
+// from the wall clock, so multiple screens flip in lockstep). Slides are separated by a blank
+// line, so each may be multi-line. Drop one into any grid cell to make that section rotate.
+export const DeckProps = z.object({
+  slides: line(2000).default("First slide\n\nSecond slide\n\nThird slide"),
+  seconds: z.number().int().min(2).max(600).default(8),
+});
+
 const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional() };
 
 export const Widget = z.discriminatedUnion("type", [
@@ -603,6 +611,8 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("myDay"), props: MyDayProps }),
   z.object({ ...b, type: z.literal("healthRing"), props: HealthRingProps }),
   z.object({ ...b, type: z.literal("homeTile"), props: HomeTileProps }),
+  // v8.0 rotation
+  z.object({ ...b, type: z.literal("deck"), props: DeckProps }),
 ]);
 
 export const Row = z.object({
@@ -643,6 +653,9 @@ export const Layout = z.object({
   rows: z.array(Row).max(40),
   // multi-zone signage: optional, no migration. Absent = single full-screen doc.
   zones: z.array(Zone).max(12).optional(),
+  // v8.0 spotlight: cycle a calm emphasis across the board's blocks (others dim), one at a
+  // time, every N seconds. Optional → absent = no spotlight, renders exactly as before.
+  spotlight: z.object({ seconds: z.number().int().min(3).max(600).default(20) }).optional(),
 });
 
 export type WidgetT = z.infer<typeof Widget>;

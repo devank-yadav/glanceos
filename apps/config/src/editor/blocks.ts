@@ -39,6 +39,7 @@ export const BLOCKS: BlockDef[] = [
 
   // Media & identity
   { type: "image", label: "Image", glyph: "▣", category: "Media", defaultH: 7, description: "Picture from a URL", keywords: "photo picture media", defaultProps: { url: "https://picsum.photos/800/600?grayscale", fit: "cover" } },
+  { type: "deck", label: "Slideshow", glyph: "⧉", category: "Media", defaultH: 6, description: "Rotating text slides (a section that cycles)", keywords: "slideshow carousel deck rotate cycle slides", defaultProps: { slides: "First slide\n\nSecond slide\n\nThird slide", seconds: 8 } },
   { type: "icon", label: "Icon", glyph: "★", category: "Media", defaultH: 5, description: "A big symbol or emoji", keywords: "symbol emoji glyph", defaultProps: { symbol: "★", label: "" } },
   { type: "avatar", label: "Avatar", glyph: "☻", category: "Media", defaultH: 5, description: "Photo, name and role", keywords: "person profile face", defaultProps: { url: "https://i.pravatar.cc/200", name: "Name", role: "" } },
   { type: "badge", label: "Badge", glyph: "◖", category: "Media", defaultH: 2, description: "A small pill", keywords: "tag chip status", defaultProps: { text: "Badge" } },
@@ -314,6 +315,7 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   quote: "content",
   callout: "content",
   banner: "content",
+  deck: "slides",
   code: "content",
   bulletList: "items",
   numberedList: "items",
@@ -383,6 +385,8 @@ export const INPLACE_EDIT = new Set<WidgetType>([
   "quote", "pullquote", "stat", "metric", "bigNumber", "moneyStat", "unitStat",
   // multi-item lists, edited per-item in place (Enter = new item, Backspace = merge)
   "bulletList", "numberedList", "checklist", "steps",
+  // tables, edited per-cell in place (Enter in the last cell grows a row)
+  "table",
 ]);
 
 // Blocks that can draw from a live data source (the toolbar's ⟿ Data tab).
@@ -417,4 +421,6 @@ export const ENTER_BREAKS = new Set<WidgetType>([
   "text", "heading", "subheading", "lead", "pullquote", "quote", "label", "banner", "numberedHeading",
   // v0.9
   "epigraph", "highlight", "aside", "kicker", "mantra", "ticker", "logoText",
+  // v8.0 — deck slides are a multi-line list (slides split on blank lines)
+  "deck",
 ]);

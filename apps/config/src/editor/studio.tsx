@@ -843,7 +843,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
             )}
             <div class="drop-indicator" ref={indicatorRef} />
-            {editBox && editing && editingBlock?.type === "table" && (
+            {editBox && editing && editingBlock?.type === "table" && !INPLACE_EDIT.has(editingBlock.type) && (
               <TableEditor
                 box={editBox}
                 scale={scale}

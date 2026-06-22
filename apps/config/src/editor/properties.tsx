@@ -43,6 +43,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   heading: [S("content", "Text"), Sel("level", "Level", ["1", "2"], true)],
   divider: [],
   image: [S("url", "Image URL"), Sel("fit", "Fit", ["cover", "contain"])],
+  deck: [T("slides", "Slides (separate each with a blank line)"), N("seconds", "Seconds per slide")],
   callout: [T("content", "Text"), S("emoji", "Emoji")],
   subheading: [S("content", "Text")],
   quote: [T("content", "Quote"), S("author", "Author")],
@@ -574,6 +575,26 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
             <option value="bottom">Bottom</option>
           </select>
         </label>
+        <label class="field">
+          <span>Spotlight</span>
+          <select
+            value={doc.spotlight ? "on" : "off"}
+            onChange={(e) => { const on = (e.currentTarget as HTMLSelectElement).value === "on"; const next = structuredClone(doc); if (on) next.spotlight = { seconds: doc.spotlight?.seconds ?? 20 }; else delete next.spotlight; commitDoc(next); }}
+          >
+            <option value="off">Off</option>
+            <option value="on">Cycle emphasis across objects</option>
+          </select>
+        </label>
+        {doc.spotlight && (
+          <label class="field">
+            <span>Spotlight <span class="muted">(secs each)</span></span>
+            <input
+              type="number" min={3} max={600} step={1}
+              value={doc.spotlight.seconds}
+              onInput={(e) => commitDoc({ ...structuredClone(doc), spotlight: { seconds: Math.round(Math.max(3, Math.min(600, Number((e.currentTarget as HTMLInputElement).value) || 20))) } })}
+            />
+          </label>
+        )}
       </div>
     </section>
   );

@@ -2479,6 +2479,34 @@ const homeTile: Render = (el, w, data) => {
   el.appendChild(row);
 };
 
+// v8.0 deck/slideshow — rotates through text slides on its own timer. Deterministic from
+// the wall clock (floor(now/seconds) % n), so every screen showing it flips in lockstep
+// with zero server state. Slides are separated by a blank line (so a slide may be multi-line).
+const deck: Render = (el, w) => {
+  if (w.type !== "deck") return;
+  const slides = w.props.slides.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+  const wrap = div("deck");
+  const slideEl = div("deck-slide");
+  wrap.appendChild(slideEl);
+  if (slides.length === 0) { el.appendChild(wrap); return; }
+  const dots = slides.length > 1 ? div("deck-dots") : null;
+  const dot = slides.map(() => { const d = div("deck-dot"); dots?.appendChild(d); return d; });
+  const secs = Math.max(2, w.props.seconds);
+  let last = -1;
+  const show = () => {
+    const idx = Math.floor(Date.now() / 1000 / secs) % slides.length;
+    if (idx === last) return;
+    last = idx;
+    slideEl.textContent = slides[idx]!;
+    slideEl.classList.remove("deck-in"); void slideEl.offsetWidth; slideEl.classList.add("deck-in");
+    dot.forEach((d, i) => d.classList.toggle("on", i === idx));
+  };
+  show();
+  if (dots) wrap.appendChild(dots);
+  el.appendChild(wrap);
+  return slides.length > 1 ? every(1000, show) : undefined;
+};
+
 export const WIDGETS: Record<WidgetT["type"], Render> = {
   clock, weather, calendar, tasks, text, queue, heading, divider, image, callout,
   subheading, quote, bulletList, numberedList, checklist, code, label, keyValue, table,
@@ -2516,4 +2544,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   upNext, dayTimeline, focusNow, leaveBy,
   // v5.0 ambient / self / home
   myDay, healthRing, homeTile,
+  // v8.0 rotation
+  deck,
 };

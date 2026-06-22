@@ -254,6 +254,54 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     }
   };
 
+  // ---- tables ----
+  // Each th/td edits in place; serialize back to the renderer's `content` format (cells
+  // joined by ", ", rows by "\n"). Enter in the last cell grows the table by a row.
+  const tableSerialize = (container: HTMLElement): Record<string, unknown> => ({
+    content: [...container.querySelectorAll("tr")]
+      .map((tr) => [...tr.querySelectorAll<HTMLElement>("th,td")].map((c) => (c.textContent ?? "").trim()).join(", "))
+      .join("\n"),
+  });
+  const wireTable = (id: string, cellEl: HTMLElement): void => {
+    const container = cellEl.querySelector<HTMLElement>(".data-table");
+    const cw = container as (HTMLElement & { _glw?: boolean }) | null;
+    if (!cw || cw._glw) return; cw._glw = true;
+    const s = makeSender(id, () => tableSerialize(cw));
+    const cells = () => [...cw.querySelectorAll<HTMLElement>("th,td")];
+    const wireC = (c: HTMLElement): void => {
+      const cc = c as HTMLElement & { _glw?: boolean };
+      if (cc._glw) return; cc._glw = true;
+      markEditable(c);
+      c.addEventListener("focus", () => { editing.add(id); opts.post({ type: "glanceos:focus", id }); });
+      c.addEventListener("input", () => s.update());
+      c.addEventListener("blur", () => { window.setTimeout(() => {
+        const active = cw.ownerDocument.activeElement as HTMLElement | null;
+        if (!active || !cw.contains(active)) { editing.delete(id); s.commit(); }
+      }, 0); });
+      c.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Escape") { c.blur(); return; }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const all = cells();
+          if (all[all.length - 1] === c) {
+            const rows = [...cw.querySelectorAll("tr")];
+            const lastRow = rows[rows.length - 1]!;
+            const cols = lastRow.querySelectorAll("th,td").length;
+            const tr = cw.ownerDocument.createElement("tr");
+            for (let i = 0; i < cols; i++) { const td = cw.ownerDocument.createElement("td"); tr.appendChild(td); wireC(td); }
+            lastRow.after(tr);
+            setCaret(tr.querySelector<HTMLElement>("td")!, 0); s.update();
+          } else {
+            const next = all[all.indexOf(c) + 1];
+            if (next) setCaret(next, (next.textContent ?? "").length);
+          }
+        }
+      });
+    };
+    cells().forEach(wireC);
+  };
+
   // Make the WHOLE cell behave like one text field (Notion): I-beam everywhere on the
   // block, and a click anywhere inside drops the caret into its text — even when you hit
   // the padding around the words. This is what kills the cursor flicker: instead of the
@@ -279,6 +327,10 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
           const a = it.getBoundingClientRect(), b = best.getBoundingClientRect();
           return Math.abs(a.top + a.height / 2 - e.clientY) < Math.abs(b.top + b.height / 2 - e.clientY) ? it : best;
         }, null);
+      } else if (type === "table") {
+        // focus the table cell nearest the click (2-D)
+        const d2 = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2; };
+        node = [...cellEl.querySelectorAll<HTMLElement>("th,td")].reduce<HTMLElement | null>((best, c) => (!best || d2(c) < d2(best) ? c : best), null);
       } else {
         const map = SINGLE[type];
         node = map ? cellEl.querySelector<HTMLElement>(map.sel) : null;
@@ -298,9 +350,10 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
       const block = byId.get(id);
       const editable =
         !!block && !block.source &&
-        (!!LIST_CFG[block.type] || (!!SINGLE[block.type] && !(block.type === "text" && (block.props as { format?: string }).format === "markdown")));
+        (block.type === "table" || !!LIST_CFG[block.type] || (!!SINGLE[block.type] && !(block.type === "text" && (block.props as { format?: string }).format === "markdown")));
       if (!editable) { cellEl.style.cursor = ""; cellEl.classList.remove("glance-editcell"); continue; }
       wireCellFocus(id, cellEl, block!.type);
+      if (block!.type === "table") { wireTable(id, cellEl); continue; }
       if (LIST_CFG[block!.type]) { wireList(id, cellEl, block!.type); continue; }
       const map = SINGLE[block!.type]!;
       const node = cellEl.querySelector<HTMLElement>(map.sel);

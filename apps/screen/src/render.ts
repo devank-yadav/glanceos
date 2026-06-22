@@ -27,13 +27,42 @@ let editingIds: ReadonlySet<string> = new Set();
 export function setEditingLock(ids: ReadonlySet<string>): void { editingIds = ids; }
 export function getCells(): ReadonlyMap<string, { el: HTMLElement }> { return cells; }
 
+let spotlightStop: (() => void) | null = null;
+
 function reset(): void {
   for (const fn of cleanups) fn();
   cleanups = [];
   for (const c of cells.values()) c.cleanup?.();
   cells.clear();
+  spotlightStop?.();
+  spotlightStop = null;
   mountedSig = null;
   root.innerHTML = "";
+}
+
+// v8.0 spotlight: cycle a calm emphasis across the board's cells (others dim), one at a
+// time, deterministic from the wall clock so multiple screens move in lockstep. Re-armed
+// each render; a board with no `spotlight` clears any leftover emphasis. Paused while a
+// cell is being edited in the Studio (so the dim never fights an active caret).
+function applySpotlight(spotlight: LayoutT["spotlight"]): void {
+  spotlightStop?.();
+  spotlightStop = null;
+  const list = () => [...cells.values()];
+  if (!spotlight) { for (const c of list()) c.el.classList.remove("is-spotlight", "is-dimmed"); return; }
+  const secs = Math.max(3, spotlight.seconds);
+  let last = -1;
+  const tick = () => {
+    const cs = list();
+    if (cs.length < 2) { cs.forEach((c) => c.el.classList.remove("is-spotlight", "is-dimmed")); return; }
+    if (editingIds.size > 0) return;
+    const idx = Math.floor(Date.now() / 1000 / secs) % cs.length;
+    if (idx === last) return;
+    last = idx;
+    cs.forEach((c, i) => { c.el.classList.toggle("is-spotlight", i === idx); c.el.classList.toggle("is-dimmed", i !== idx); });
+  };
+  tick();
+  const h = window.setInterval(tick, 1000);
+  spotlightStop = () => window.clearInterval(h);
 }
 
 function el(className: string, text?: string): HTMLDivElement {
@@ -130,7 +159,7 @@ export function renderPayload(payload: StreamPayloadT): void {
 
   // Same skeleton as last tick → diff in place (no flash); else full rebuild.
   const sig = structuralSig(layout, state.data);
-  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); return; }
+  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); return; }
   reset();
   mountedSig = sig;
   if (layout.zones && layout.zones.length > 0) {
@@ -148,6 +177,7 @@ export function renderPayload(payload: StreamPayloadT): void {
   } else {
     root.appendChild(buildPage(layout.rows, layout, state.data));
   }
+  applySpotlight(layout.spotlight);
 }
 
 // Build one document page (a height-unit grid of rows) for the given rows. Used
