@@ -22,14 +22,22 @@ export function ScreensPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [error, setError] = useState(false);
   const toast = useToast();
 
   const refresh = async () => {
     try {
-      setDevices(await api.get<DeviceSummary[]>("/api/devices"));
-      setSetups(await api.get<SetupSummary[]>("/api/layouts"));
-      setPlaylists(await api.get<Playlist[]>("/api/playlists"));
-    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+      const [d, s, p] = await Promise.all([
+        api.get<DeviceSummary[]>("/api/devices"),
+        api.get<SetupSummary[]>("/api/layouts"),
+        api.get<Playlist[]>("/api/playlists"),
+      ]);
+      setDevices(d); setSetups(s); setPlaylists(p); setError(false);
+    } catch {
+      // First load fails → show an inline retry (below) rather than toast-spamming
+      // every 5s; a background refresh that fails keeps the last-good cards quietly.
+      setError(true);
+    }
   };
 
   useEffect(() => {
@@ -47,7 +55,14 @@ export function ScreensPage() {
       <PageHeader title="Screens" actions={devices && devices.length > 0 ? actions : undefined} />
       <div class="shell-content">
         <ScreensTabs active="screens" />
-        {devices === null ? (
+        {devices === null && error ? (
+          <div class="empty-state">
+            <span class="empty-icon"><Icon.monitor /></span>
+            <h2>Couldn't load your screens</h2>
+            <p class="muted">Check that the server is reachable, then try again.</p>
+            <button class="primary" onClick={() => { setError(false); refresh(); }}>Try again</button>
+          </div>
+        ) : devices === null ? (
           <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
         ) : devices.length === 0 ? (
           <FirstScreen onClaim={() => setClaiming(true)} />
@@ -104,23 +119,21 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   const rename = async () => {
     setEditing(false);
     if (name === (device.name ?? "")) return;
-    await api.patch(`/api/devices/${device.id}`, { name });
-    toast.success("Renamed");
-    await onChanged();
+    try { await api.patch(`/api/devices/${device.id}`, { name }); toast.success("Renamed"); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   const setRefresh = async (seconds: number) => {
-    await api.patch(`/api/devices/${device.id}`, { refreshSeconds: seconds });
-    await onChanged();
+    try { await api.patch(`/api/devices/${device.id}`, { refreshSeconds: seconds }); toast.success("Refresh rate updated"); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   const setGroup = async (v: string) => {
-    await api.patch(`/api/devices/${device.id}`, { groupId: v ? Number(v) : null });
-    await onChanged();
+    try { await api.patch(`/api/devices/${device.id}`, { groupId: v ? Number(v) : null }); toast.success("Group updated"); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   const disconnect = async () => {
     if (!(await confirm({ title: `Disconnect "${device.name ?? "this screen"}"?`, body: "Its content is kept and can be reattached later.", confirmLabel: "Disconnect" }))) return;
-    await api.del(`/api/devices/${device.id}`);
-    toast.success("Screen disconnected");
-    await onChanged();
+    try { await api.del(`/api/devices/${device.id}`); toast.success("Screen disconnected"); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   // Live control (folded in from the old Remote page): nudge the screen now.
   const command = async (cmd: "reload" | "identify") => {
@@ -133,8 +146,8 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
   const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
   const ro = device.renderOpts ?? {};
   const setRenderOpt = async (patch: Record<string, unknown>) => {
-    await api.patch(`/api/devices/${device.id}`, { renderOpts: { algo: ro.algo ?? "floyd", threshold: ro.threshold ?? 128, gamma: ro.gamma ?? 1, ...patch } });
-    await onChanged();
+    try { await api.patch(`/api/devices/${device.id}`, { renderOpts: { algo: ro.algo ?? "floyd", threshold: ro.threshold ?? 128, gamma: ro.gamma ?? 1, ...patch } }); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); } // no success toast — slider fires often
   };
 
   return (

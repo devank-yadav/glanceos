@@ -354,7 +354,7 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
       {!editing && (items === null ? (
         <div class="cards">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
       ) : items.length === 0 ? (
-        <EmptyState icon={<Icon.command />} title="No automations yet" body={scoped ? "Add one to make this board react to events." : "Create one to make your screens react to events."} />
+        <EmptyState icon={<Icon.command />} title="No automations yet" body={scoped ? "Add one to make this board react to events." : "Create one to make your screens react to events."} action={{ label: "New automation", onClick: () => setEditing(newDraft()) }} />
       ) : (
         <ul class="picker-list key-list">
           {items.map((a) => (

@@ -69,18 +69,24 @@ function PlaylistCard({ playlist, setups, onChanged }: { playlist: Playlist; set
     const next = [...c]; [next[i], next[j]] = [next[j]!, next[i]!]; return next;
   }));
 
+  const [saving, setSaving] = useState(false);
   const save = async () => {
-    await api.patch(`/api/playlists/${playlist.id}`, { name, intervalSeconds: interval, layoutIds: chosen });
-    setDirty(false);
-    toast.success("Rotation saved");
-    await onChanged();
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api.patch(`/api/playlists/${playlist.id}`, { name, intervalSeconds: interval, layoutIds: chosen });
+      setDirty(false);
+      toast.success("Rotation saved");
+      await onChanged();
+    } catch (e) {
+      toast.error(String(e instanceof Error ? e.message : e)); // keep dirty so Save stays enabled to retry
+    } finally { setSaving(false); }
   };
 
   const remove = async () => {
     if (!(await confirm({ title: `Delete "${name}"?`, confirmLabel: "Delete", danger: true }))) return;
-    await api.del(`/api/playlists/${playlist.id}`);
-    toast.success("Rotation deleted");
-    await onChanged();
+    try { await api.del(`/api/playlists/${playlist.id}`); toast.success("Rotation deleted"); await onChanged(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
   const ordered = chosen.map((id) => setups.find((s) => s.id === id)).filter(Boolean) as SetupSummary[];

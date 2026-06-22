@@ -16,14 +16,15 @@ export function GroupsPage() {
   const [groups, setGroups] = useState<DisplayGroup[] | null>(null);
   const [setups, setSetups] = useState<SetupSummary[]>([]);
   const [name, setName] = useState("");
+  const [error, setError] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
   const refresh = async () => {
     const [g, s] = await Promise.all([api.get<DisplayGroup[]>("/api/groups"), api.get<SetupSummary[]>("/api/layouts")]);
-    setGroups(g); setSetups(s);
+    setGroups(g); setSetups(s); setError(false);
   };
-  useEffect(() => { refresh().catch(() => setGroups([])); }, []);
+  useEffect(() => { refresh().catch(() => setError(true)); }, []); // a failed load is an error, not "no groups"
 
   const create = async () => {
     if (!name.trim()) return;
@@ -42,9 +43,10 @@ export function GroupsPage() {
       <div class="shell-content">
         <ScreensTabs active="groups" />
         <p class="muted page-intro" style={{ marginTop: 0 }}>A group gives many screens one default board. Assign a screen to a group from its card on <a href="#/screens">Screens</a>.</p>
-        {groups === null ? <p class="muted">Loading…</p>
-          : groups.length === 0 ? <EmptyState icon={<Icon.layers />} title="No groups yet" body="Create a group to manage several screens together — a lobby, a floor, a whole building." />
-            : <div class="group-list">{groups.map((g) => <GroupCard key={g.id} group={g} setups={setups} onChanged={refresh} confirm={confirm} toast={toast} />)}</div>}
+        {groups === null && error ? <EmptyState icon={<Icon.layers />} title="Couldn't load groups" body="The server may be unreachable." action={{ label: "Try again", onClick: () => { setError(false); refresh().catch(() => setError(true)); } }} />
+          : groups === null ? <div class="group-list">{[0, 1].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
+            : groups.length === 0 ? <EmptyState icon={<Icon.layers />} title="No groups yet" body="Create a group to manage several screens together — a lobby, a floor, a whole building." />
+              : <div class="group-list">{groups.map((g) => <GroupCard key={g.id} group={g} setups={setups} onChanged={refresh} confirm={confirm} toast={toast} />)}</div>}
       </div>
     </>
   );
