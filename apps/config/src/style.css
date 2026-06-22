@@ -1526,6 +1526,10 @@ ul.tasks li:last-child {
 .widget-box.inplace { pointer-events: none; }
 .widget-box.inplace .drag-handle,
 .widget-box.inplace .widget-resize { pointer-events: auto; }
+/* Editing should be invisible — no loud selection box while you type in place; only the
+   small ⠿ grip appears (so you can still move the block). Calm, Notion-like. */
+.widget-box.inplace.selected { border-color: transparent; box-shadow: none; }
+.widget-box.inplace:hover { border-color: transparent; }
 
 .widget-box {
   position: absolute;

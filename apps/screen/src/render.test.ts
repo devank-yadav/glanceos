@@ -79,9 +79,11 @@ describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
     node.dispatchEvent(new FocusEvent("focus"));
     expect(posted.some((m) => m.type === "glanceos:focus" && m.id === "h")).toBe(true); // selects the block in the Studio
 
+    // Typing shows instantly via native contentEditable; the sync is debounced (not posted
+    // per keystroke — that churn was the "glitch"). So nothing is posted synchronously here.
     node.textContent = "Hello";
     node.dispatchEvent(new InputEvent("input"));
-    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "h", patch: { content: "Hello" }, phase: "update" });
+    expect(posted.some((m) => m.type === "glanceos:edit")).toBe(false); // debounced — no per-keystroke round-trip
 
     // The crucial bit: while focused, a re-render with CHANGED props must NOT repaint the
     // edited cell (that would tear down the node the caret lives in).
@@ -90,7 +92,7 @@ describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
     expect((document.querySelector(".heading") as HTMLElement).textContent).toBe("Hello"); // locked → user's text kept
 
     node.dispatchEvent(new FocusEvent("blur"));
-    expect(posted.some((m) => m.type === "glanceos:edit" && m.phase === "commit")).toBe(true);
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "h", patch: { content: "Hello" }, phase: "commit" }); // flushed on blur
     renderPayload(pay(mkLayout("AFTER")));
     expect((document.querySelector(".heading") as HTMLElement).textContent).toBe("AFTER"); // unlocked → repaints normally
   });

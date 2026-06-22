@@ -88,15 +88,21 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     node.spellcheck = false;
     node.classList.add("glance-editable");
     let composing = false;
-    const emit = (phase: "update" | "commit") => {
-      if (composing && phase === "update") return; // mid-IME: wait for compositionend
-      opts.post({ type: "glanceos:edit", id, patch: { [prop]: node.textContent ?? "" }, phase });
+    let timer = 0;
+    const send = (phase: "update" | "commit") => opts.post({ type: "glanceos:edit", id, patch: { [prop]: node.textContent ?? "" }, phase });
+    // The key to seamlessness: while you type, the native contentEditable shows your text
+    // instantly with ZERO round-trip. We only sync to the Studio after you pause (debounced)
+    // or on blur — so there's no per-keystroke clone-doc + re-render + re-post churn (the glitch).
+    const scheduleUpdate = () => {
+      if (composing) return; // mid-IME: wait for compositionend
+      clearTimeout(timer);
+      timer = window.setTimeout(() => send("update"), 600);
     };
     node.addEventListener("compositionstart", () => { composing = true; });
-    node.addEventListener("compositionend", () => { composing = false; emit("update"); });
+    node.addEventListener("compositionend", () => { composing = false; scheduleUpdate(); });
     node.addEventListener("focus", () => { editing.add(id); opts.post({ type: "glanceos:focus", id }); });
-    node.addEventListener("input", () => emit("update"));
-    node.addEventListener("blur", () => { editing.delete(id); emit("commit"); });
+    node.addEventListener("input", scheduleUpdate);
+    node.addEventListener("blur", () => { clearTimeout(timer); editing.delete(id); send("commit"); });
     node.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter" && singleLine) { e.preventDefault(); node.blur(); }
