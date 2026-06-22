@@ -5,6 +5,10 @@ import type { StreamPayloadT } from "@glanceos/schema";
 document.body.innerHTML = '<div id="app"></div>';
 const { renderPayload } = await import("./render");
 const { showAlert } = await import("./alert");
+// Same object reference render.ts holds — register a deliberately-throwing widget so we
+// can prove one bad block can't blank the wall (render-isolation, v7.0 P0).
+const { WIDGETS } = await import("./widgets");
+(WIDGETS as Record<string, unknown>).__throw = () => { throw new Error("boom"); };
 
 const row = { id: "r1", h: 6, blocks: [{ id: "b1", type: "divider", width: 1, props: {} }] };
 const baseLayout = { schemaVersion: 3, name: "Z", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top" };
@@ -34,6 +38,22 @@ describe("calm crossfade — in-place diff (v6.1)", () => {
     expect(keep1.classList.contains("swap")).toBe(false);
     expect(document.querySelector(".widget-customData")).toBe(live1); // updated in place, not replaced
     expect(live1.classList.contains("swap")).toBe(true); // changed → faded
+  });
+});
+
+describe("render isolation — one bad block never blanks the wall (v7.0 P0)", () => {
+  it("a throwing widget paints a calm placeholder; its siblings stay alive", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, data: {}, layout: { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "ok", type: "heading", width: 1, props: { content: "Alive", level: 1 } },
+      { id: "bad", type: "__throw", width: 1, props: {} },
+    ] }] } } } as unknown as StreamPayloadT);
+    // The page rendered (not blanked) and the healthy sibling is intact.
+    expect(document.querySelectorAll("#app > .page").length).toBe(1);
+    expect(document.querySelector(".widget-heading")?.textContent).toContain("Alive");
+    // The throwing cell exists but shows a calm placeholder instead of crashing the page.
+    const bad = document.querySelector(".widget-__throw");
+    expect(bad).toBeTruthy();
+    expect(bad?.querySelector(".placeholder")).toBeTruthy();
   });
 });
 

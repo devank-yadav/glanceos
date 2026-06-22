@@ -57,7 +57,18 @@ function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unkn
   cell.className = `widget widget-${block.type} halign-${st.align} valign-${st.valign}${st.invert ? " is-invert" : ""}`;
   cell.style.flexGrow = String(block.width ?? 1); // zod-free runtime: default the weight (the "thin strip" bug)
   const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
-  return (render ? render(cell, block, datum) : undefined) || undefined;
+  if (!render) return undefined;
+  try {
+    return render(cell, block, datum) || undefined;
+  } catch (err) {
+    // A single throwing widget must NEVER blank the whole wall (e.g. malformed live
+    // data at 3am): paint a calm placeholder for just this cell and keep every sibling
+    // — and the live clock — running. No cleanup to return.
+    try { console.warn(`[glanceos] block "${block.type}" failed to render`, err); } catch { /* ignore */ }
+    cell.replaceChildren();
+    cell.appendChild(el("placeholder", "·"));
+    return undefined;
+  }
 }
 
 // A new tick with the same skeleton: refresh only the cells whose content changed,
