@@ -32,6 +32,21 @@ body {
   cursor: none;
 }
 
+/* v6.1 "Look" presets — calm typographic character, monochrome + system fonts only
+   (no web fonts: the byte gate + e-ink safety). No data-look = the default sans above. */
+body[data-look="editorial"] { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; }
+body[data-look="terminal"] { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.01em; }
+body[data-look="grotesk"] { letter-spacing: -0.015em; }
+body[data-look="stencil"] { font-family: "Arial Narrow", "Helvetica Neue", system-ui, sans-serif; letter-spacing: 0.06em; }
+
+/* Quiet hours: the board stays showing but recedes (bedrooms/clinics) — not sleep. */
+body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
+
+/* Calm crossfade: only a changed cell fades on a data tick (vs the old full repaint);
+   off under reduced-motion. e-ink renders server-side so it never sees this. */
+@keyframes glance-swap { from { opacity: 0.35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) { .widget.swap { animation: glance-swap 0.35s ease-out; } }
+
 /* Document flow: the page is a vertical unit-grid; each row takes its own
    height in units, a trailing blank track holds the remainder, and blocks
    split a row by flex weight. The studio's geometry module mirrors this. */
@@ -1056,20 +1071,45 @@ body {
   justify-content: center;
   gap: 3vmin;
   text-align: center;
-  padding: 6vmin;
+  padding: 5vmin;
+}
+.claim-clock {
+  position: absolute;
+  top: 4vmin;
+  font-size: calc(4vmin * var(--font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 .claim-brand {
-  font-size: calc(2.4vmin * var(--font-scale, 1));
-  letter-spacing: 0.22em;
+  font-size: calc(2.6vmin * var(--font-scale, 1));
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* A framed card gives the pairing code a confident, designed centerpiece. */
+.claim-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.4vmin;
+  padding: 5vmin 6vmin;
+  border: 1.5px solid var(--fg);
+  border-radius: 2.5vmin;
+}
+.claim-label {
+  font-size: calc(2vmin * var(--font-scale, 1));
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--muted);
 }
 .claim-code {
-  font-size: calc(15vmin * var(--font-scale, 1));
+  font-size: calc(13vmin * var(--font-scale, 1));
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .claim-qr {
   background: #fff;
@@ -1077,11 +1117,11 @@ body {
   border-radius: 1.5vmin;
   line-height: 0;
 }
-.claim-qr svg { display: block; width: 34vmin; height: 34vmin; }
+.claim-qr svg { display: block; width: 28vmin; height: 28vmin; }
 .claim-hint {
-  font-size: calc(2.6vmin * var(--font-scale, 1));
+  font-size: calc(2.4vmin * var(--font-scale, 1));
   color: var(--muted);
-  max-width: 60ch;
+  max-width: 56ch;
 }
 
 /* full-screen message */

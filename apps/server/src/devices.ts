@@ -36,6 +36,7 @@ export interface DeviceProfile {
   safeArea?: { top: number; right: number; bottom: number; left: number };
   burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
   wake?: { startMin: number; endMin: number; daysMask: number };
+  quietHours?: { startMin: number; endMin: number; daysMask: number }; // v6.1 soft-dim window
   platform?: string;
   nativeVersion?: string;
 }
@@ -74,6 +75,10 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
     const w = p.wake as Record<string, unknown>;
     out.wake = { startMin: clamp(w.startMin, 0, 1439), endMin: clamp(w.endMin, 0, 1439), daysMask: clamp(w.daysMask, 0, 127, 127) };
   }
+  if (p.quietHours && typeof p.quietHours === "object") {
+    const q = p.quietHours as Record<string, unknown>;
+    out.quietHours = { startMin: clamp(q.startMin, 0, 1439), endMin: clamp(q.endMin, 0, 1439), daysMask: clamp(q.daysMask, 0, 127, 127) };
+  }
   const platform = shortLabel(p.platform, 24);
   if (platform) out.platform = platform;
   const nativeVersion = shortLabel(p.nativeVersion, 24);
@@ -85,7 +90,7 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
 export function setDeviceTvSettings(
   id: string,
   userId: string,
-  patch: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null },
+  patch: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null; quietHours?: DeviceProfile["quietHours"] | null },
 ): DeviceRow | null {
   const device = getDevice(id);
   if (!device || device.user_id !== userId) return null;
@@ -95,6 +100,7 @@ export function setDeviceTvSettings(
   if (patch.safeArea !== undefined) p.safeArea = patch.safeArea;
   if (patch.burnIn !== undefined) p.burnIn = patch.burnIn;
   if (patch.wake !== undefined) { if (patch.wake === null) delete p.wake; else p.wake = patch.wake; }
+  if (patch.quietHours !== undefined) { if (patch.quietHours === null) delete p.quietHours; else p.quietHours = patch.quietHours; }
   db.prepare("UPDATE devices SET profile = ? WHERE id = ?").run(JSON.stringify(p), id);
   return getDevice(id) ?? null;
 }

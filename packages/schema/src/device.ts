@@ -37,6 +37,9 @@ export const DeviceProfile = z.object({
   inputMethod: z.enum(["pointer", "dpad", "touch"]).optional(),
   burnIn: BurnIn.optional(),
   wake: WakeWindow.optional(),
+  // v6.1 quiet hours: the board stays showing but softly dims inside this window
+  // (bedrooms/clinics) — independent of the wake on/off window. Optional, no migration.
+  quietHours: WakeWindow.optional(),
   // What's running the screen — a native shell self-reports these so the fleet
   // can show "Fire TV" / "Pi" etc. Free-form short strings (optional, no migration).
   platform: z.string().max(24).optional(),       // e.g. firetv, androidtv, tizen, webos, tvos, pi

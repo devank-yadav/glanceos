@@ -11,10 +11,21 @@ const PAGE_UNITS = 24;
 
 const root = document.getElementById("app")!;
 let cleanups: Array<() => void> = [];
+// Per-block cells from the last board render, keyed by block id, so a data tick can
+// update only the blocks that changed instead of tearing down + rebuilding the whole
+// DOM (the old innerHTML="" did that every tick → an all-day flicker on wall panels,
+// and it needlessly recreated every self-running widget's interval). `mountedSig` is
+// the structural skeleton; while it's unchanged we diff, otherwise we full-rebuild.
+interface Cell { el: HTMLElement; sig: string; cleanup?: () => void }
+let cells = new Map<string, Cell>();
+let mountedSig: string | null = null;
 
 function reset(): void {
   for (const fn of cleanups) fn();
   cleanups = [];
+  for (const c of cells.values()) c.cleanup?.();
+  cells.clear();
+  mountedSig = null;
   root.innerHTML = "";
 }
 
@@ -25,9 +36,52 @@ function el(className: string, text?: string): HTMLDivElement {
   return d;
 }
 
+// What makes the DOM skeleton: gap/align, zones rects, and the visible blocks (id +
+// type) per row. If this is unchanged between ticks we keep the DOM and only refresh
+// changed cells; if it differs (layout edited, a block shown/hidden) we full-rebuild.
+function structuralSig(layout: LayoutT, data: Record<string, unknown>): string {
+  const vis = (b: RowT["blocks"][number]) =>
+    !b.hidden && !(b.visibility === "whenData" && data[b.id] == null) && (WIDGETS as Record<string, unknown>)[b.type];
+  const rowsSig = (rows: RowT[]) => rows.map((r) => `${r.h}|${r.blocks.filter(vis).map((b) => `${b.id}:${b.type}`).join(",")}`).join(";");
+  const base = `${layout.gap}/${layout.align ?? "top"}/`;
+  return layout.zones?.length
+    ? base + "Z" + layout.zones.map((z) => `${z.rect.x},${z.rect.y},${z.rect.w},${z.rect.h}[${rowsSig(z.rows)}]`).join("|")
+    : base + rowsSig(layout.rows);
+}
+// Per-block content signature — re-render the cell only when its props/style/width/data change.
+const blockSig = (block: RowT["blocks"][number], datum: unknown) => JSON.stringify([block.props, block.style, block.width, datum]);
+
+// (Re)paint a widget into a cell, applying its chrome (alignment/invert/flex weight).
+function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown): (() => void) | undefined {
+  const st = block.style ?? { invert: false, align: "start", valign: "top" };
+  cell.className = `widget widget-${block.type} halign-${st.align} valign-${st.valign}${st.invert ? " is-invert" : ""}`;
+  cell.style.flexGrow = String(block.width ?? 1); // zod-free runtime: default the weight (the "thin strip" bug)
+  const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
+  return (render ? render(cell, block, datum) : undefined) || undefined;
+}
+
+// A new tick with the same skeleton: refresh only the cells whose content changed,
+// with a gentle fade (CSS-gated off under reduced-motion / e-ink screenshot).
+function updateCells(layout: LayoutT, data: Record<string, unknown>): void {
+  const visit = (rows: RowT[]) => {
+    for (const row of rows) for (const block of row.blocks) {
+      const c = cells.get(block.id);
+      if (!c) continue; // structuralSig guarantees a cell exists for every visible block
+      const sig = blockSig(block, data[block.id]);
+      if (c.sig === sig) continue; // unchanged → leave it (and its running interval) alone
+      c.cleanup?.();
+      c.el.replaceChildren();
+      c.cleanup = paintCell(c.el, block, data[block.id]);
+      c.sig = sig;
+      c.el.classList.remove("swap"); void c.el.offsetWidth; c.el.classList.add("swap"); // retrigger the fade
+    }
+  };
+  if (layout.zones?.length) for (const z of layout.zones) visit(z.rows); else visit(layout.rows);
+}
+
 export function renderPayload(payload: StreamPayloadT): void {
-  reset();
   if (!payload.claimed) {
+    reset();
     renderClaim(payload.claimCode);
     return;
   }
@@ -36,7 +90,7 @@ export function renderPayload(payload: StreamPayloadT): void {
   if (state.tv?.enabled) {
     enableTvMode();
     applySafeArea(state.tv.safeArea);
-    if (state.tv.power === "off") { stopPixelShift(root); renderAsleep(); return; } // outside the wake window
+    if (state.tv.power === "off") { reset(); stopPixelShift(root); renderAsleep(); return; } // outside the wake window
     if (state.tv.burnIn?.pixelShift) startPixelShift(root); else stopPixelShift(root);
   }
   if (!state.layout) {
@@ -44,14 +98,22 @@ export function renderPayload(payload: StreamPayloadT): void {
     return;
   }
 
-  document.body.classList.toggle("dark", state.layout.theme.mode === "dark");
-  // Per-board font scale (s/m/l) → a multiplier the CSS reads via var(--font-scale).
-  const FONT_SCALE: Record<string, number> = { s: 0.85, m: 1, l: 1.18 };
-  document.body.style.setProperty("--font-scale", String(FONT_SCALE[state.layout.theme.fontScale ?? "m"] ?? 1));
-
   const layout = state.layout;
-  // Multi-zone signage: each zone is a positioned rectangle (%) with its own
-  // document. Absent zones → one full-screen page, byte-identical to before.
+  // Theme + look + quiet dim are body-level — apply every tick, no rebuild needed.
+  // "auto" mode resolves to effectiveTheme server-side (sun); fall back to light.
+  const mode = state.effectiveTheme ?? (layout.theme.mode === "auto" ? "light" : layout.theme.mode);
+  document.body.classList.toggle("dark", mode === "dark");
+  document.body.classList.toggle("quiet-dim", !!state.quietDim);
+  // Look is opt-in: no look → the default sans (existing boards unchanged).
+  if (layout.theme.look) document.body.dataset.look = layout.theme.look; else delete document.body.dataset.look;
+  const FONT_SCALE: Record<string, number> = { s: 0.85, m: 1, l: 1.18 };
+  document.body.style.setProperty("--font-scale", String(FONT_SCALE[layout.theme.fontScale ?? "m"] ?? 1));
+
+  // Same skeleton as last tick → diff in place (no flash); else full rebuild.
+  const sig = structuralSig(layout, state.data);
+  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); return; }
+  reset();
+  mountedSig = sig;
   if (layout.zones && layout.zones.length > 0) {
     const zones = el("page-zones");
     for (const zone of layout.zones) {
@@ -107,18 +169,10 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
       // Conditional visibility: a "whenData" block hides when its bound source resolved to nothing.
       if (block.visibility === "whenData" && data[block.id] == null) continue;
       // A cached bundle older than the document may not know this type — skip, don't blank.
-      const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
-      if (!render) continue;
-      const st = block.style ?? { invert: false, align: "start", valign: "top" };
-      const cell = el(`widget widget-${block.type} halign-${st.align} valign-${st.valign}`);
-      if (st.invert) cell.classList.add("is-invert");
-      // Default the flex weight — a doc posted into preview may omit `width` (the
-      // screen runtime is zod-free, so nothing fills schema defaults here). Without
-      // this, String(undefined) → flex-grow:"undefined" and the block collapsed to
-      // its min-content width (the "squished into a thin strip" bug).
-      cell.style.flexGrow = String(block.width ?? 1);
-      const cleanup = render(cell, block, data[block.id]);
-      if (cleanup) cleanups.push(cleanup);
+      if (!(WIDGETS as Record<string, unknown>)[block.type]) continue;
+      const cell = document.createElement("div");
+      const cleanup = paintCell(cell, block, data[block.id]); // sets className + flex weight + paints
+      cells.set(block.id, { el: cell, sig: blockSig(block, data[block.id]), cleanup }); // registered for in-place diff updates
       rowEl.appendChild(cell);
     }
     page.appendChild(rowEl);
@@ -126,18 +180,31 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
   return page;
 }
 
+// The literal first pixels on a fresh panel — make them a designed first impression,
+// not a bare code: a live clock proves the screen is alive, a framed card presents the
+// pairing code + QR with confidence. Still 1-bit-safe + monochrome.
 function renderClaim(code: string): void {
-  document.body.classList.remove("dark");
+  document.body.classList.remove("dark", "quiet-dim");
+  document.body.dataset.look = "editorial";
   const wrap = el("claim");
-  wrap.appendChild(el("claim-brand", "glanceos"));
-  wrap.appendChild(el("claim-code", code));
-  // Scan-to-set-up: a big QR to the config app (couch distance). Best-effort —
-  // if the encoder ever throws on an odd origin, just skip it.
+  const clock = el("claim-clock");
+  const paint = () => { const d = new Date(); clock.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  paint();
+  const t = window.setInterval(paint, 30_000);
+  cleanups.push(() => window.clearInterval(t));
+  wrap.appendChild(clock);
+  wrap.appendChild(el("claim-brand", "GLANCEOS"));
+  const card = el("claim-card");
+  card.appendChild(el("claim-label", "Pairing code"));
+  card.appendChild(el("claim-code", code));
+  // Scan-to-set-up: a QR to the config app (couch distance). Best-effort — if the
+  // encoder ever throws on an odd origin, just skip it; the code still shows.
   try {
     const qr = el("claim-qr");
-    qr.innerHTML = qrSvg(`${location.origin}/?claim=${encodeURIComponent(code)}`, { size: 240 });
-    wrap.appendChild(qr);
+    qr.innerHTML = qrSvg(`${location.origin}/?claim=${encodeURIComponent(code)}`, { size: 220 });
+    card.appendChild(qr);
   } catch { /* no QR, the code still shows */ }
+  wrap.appendChild(card);
   wrap.appendChild(el("claim-hint", "Scan to open the GlanceOS app, or enter this code there to claim the screen."));
   root.appendChild(wrap);
 }

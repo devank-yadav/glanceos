@@ -8,6 +8,7 @@ import { getLayout } from "./layouts";
 import { currentPlaylistLayout } from "./playlists";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
+import { sunTimes } from "./astro";
 
 // A screen inherits the account home location when it has none of its own, so a
 // weather/sun block resolves sensibly even on an unconfigured screen (precedence:
@@ -47,13 +48,18 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
 /** Pure: is the display awake at this wall-clock minute/weekday? Outside the wake
  *  window (or on an inactive day) → "off"; no window → always "on". Handles an
  *  overnight window (start > end). */
+// Pure: is this wall-clock minute/weekday inside the window? Handles an overnight
+// window (start > end). Shared by the wake window (power) and quiet hours (dim).
+export function windowActive(win: WakeWindowT, minute: number, weekday: number): boolean {
+  if ((win.daysMask & (1 << weekday)) === 0) return false;
+  return win.startMin <= win.endMin
+    ? minute >= win.startMin && minute < win.endMin
+    : minute >= win.startMin || minute < win.endMin;
+}
+
 export function wakePower(wake: WakeWindowT | undefined, minute: number, weekday: number): "on" | "off" {
   if (!wake) return "on";
-  if ((wake.daysMask & (1 << weekday)) === 0) return "off";
-  const inWindow = wake.startMin <= wake.endMin
-    ? minute >= wake.startMin && minute < wake.endMin
-    : minute >= wake.startMin || minute < wake.endMin;
-  return inWindow ? "on" : "off";
+  return windowActive(wake, minute, weekday) ? "on" : "off";
 }
 
 // The TV settings the screen applies (undefined for non-TV devices), incl. the
@@ -83,6 +89,21 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
       state: { layoutVersion: 0, layout: null, data: {}, deviceName: device.name ?? undefined, tv },
     };
   }
+  // v6.1 presentation hints (resolved server-side so the screen stays dumb):
+  // theme "auto" → light by day / dark after sunset at the screen's location; quiet
+  // hours → a soft dim. Both degrade gracefully (no geo → light; no window → no dim).
+  const profile = deviceProfile(device);
+  const geo = geoForDevice(device);
+  let effectiveTheme: "light" | "dark" | undefined;
+  if (layout.document.theme.mode === "auto") {
+    const sun = geo ? sunTimes(new Date(now), geo.latitude, geo.longitude) : null;
+    effectiveTheme = sun ? (now >= sun.sunrise.getTime() && now < sun.sunset.getTime() ? "light" : "dark") : "light";
+  }
+  let quietDim: boolean | undefined;
+  if (profile.quietHours) {
+    const { weekday, minute } = wallClock(now, device.timezone);
+    quietDim = windowActive(profile.quietHours, minute, weekday);
+  }
   return {
     claimed: true,
     state: {
@@ -92,10 +113,12 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
         layout.document,
         device.user_id ?? "",
         connLookupFor(device.user_id ?? ""),
-        geoForDevice(device),
+        geo,
       ),
       deviceName: device.name ?? undefined,
       tv,
+      effectiveTheme,
+      quietDim,
     },
   };
 }

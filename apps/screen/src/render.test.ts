@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StreamPayloadT } from "@glanceos/schema";
 
 // renderPayload captures #app at module load, so it must exist before importing.
@@ -10,6 +10,32 @@ const row = { id: "r1", h: 6, blocks: [{ id: "b1", type: "divider", width: 1, pr
 const baseLayout = { schemaVersion: 3, name: "Z", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top" };
 const payload = (layout: object): StreamPayloadT =>
   ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
+
+// v6.1 the renderer keeps the DOM across same-shaped ticks (calm crossfade) + carries
+// module state (cells / mountedSig). Reset it between tests so each is independent —
+// render a claimed-no-layout payload, which routes through renderMessage()→reset().
+beforeEach(() => renderPayload({ claimed: true, state: { layoutVersion: 0, layout: null, data: {} } } as StreamPayloadT));
+
+describe("calm crossfade — in-place diff (v6.1)", () => {
+  const mk = (n: number): StreamPayloadT => ({
+    claimed: true,
+    state: { layoutVersion: 1, data: { live: n }, layout: { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "keep", type: "heading", width: 1, props: { content: "Hi", level: 1 } },
+      { id: "live", type: "customData", width: 1, props: { key: "live", label: "" } },
+    ] }] } },
+  } as unknown as StreamPayloadT);
+
+  it("keeps an unchanged cell (same node, no fade) and re-renders only the changed one", () => {
+    renderPayload(mk(1));
+    const keep1 = document.querySelector(".widget-heading")!;
+    const live1 = document.querySelector(".widget-customData")!;
+    renderPayload(mk(2)); // same skeleton, only data.live changed
+    expect(document.querySelector(".widget-heading")).toBe(keep1); // unchanged → same DOM node, never rebuilt
+    expect(keep1.classList.contains("swap")).toBe(false);
+    expect(document.querySelector(".widget-customData")).toBe(live1); // updated in place, not replaced
+    expect(live1.classList.contains("swap")).toBe(true); // changed → faded
+  });
+});
 
 describe("renderPayload zones", () => {
   it("emits one positioned .zone per zone, each with its own page", () => {
@@ -141,8 +167,9 @@ describe("new self-running objects", () => {
       one(blk);
       expect(document.querySelector(".openbig")!.textContent).toBe("ON AIR");
       expect(document.querySelector(".openbig")!.className).toContain("on-air");
+      // self-updating: it flips on its own interval (no re-render) once we're past the window.
       vi.setSystemTime(new Date(2026, 5, 21, 20, 0, 0)); // outside
-      one(blk);
+      vi.advanceTimersByTime(60_000);
       expect(document.querySelector(".openbig")!.textContent).toBe("OFF AIR");
     } finally { vi.useRealTimers(); }
   });
