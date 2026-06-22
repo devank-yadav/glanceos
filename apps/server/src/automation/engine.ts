@@ -42,8 +42,10 @@ export interface Ctx {
   // `weather.precipProbPct`. Resolved only when an automation references `weather.*`.
   weather?: { tempC: number; summary: string; high?: number; low?: number; precipProbPct: number; isRaining: boolean };
   // v5.0 substrate — are you home? Derived from the `presence` custom-data key
-  // (a phone geofence webhook or a bound Home Assistant person entity).
-  presence?: { home: boolean; state: string };
+  // (a phone geofence webhook or a bound Home Assistant person entity). v7.0 adds
+  // per-person lanes from `presence.<name>` keys (`presence.people.alex` in conditions),
+  // so a household can react to each member without a schema change.
+  presence?: { home: boolean; state: string; people: Record<string, boolean> };
   // v6.1 substrate — the user's agenda (first calendar connection), resolved only
   // when a rule references `calendar.*`. Lets boards react to meetings.
   calendar?: { isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string };
@@ -230,7 +232,13 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
 const isHomeState = (s: string): boolean => /^\s*(home|present|in|true|1|yes|on)\s*$/i.test(s);
 function presenceFromData(data: Record<string, unknown>): Ctx["presence"] {
   const state = String(data.presence ?? "");
-  return { home: isHomeState(state), state };
+  // Per-person lanes from `presence.<name>` keys (the data store is flat key→JSON),
+  // so a household reacts to each member with no schema/migration change.
+  const people: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k.startsWith("presence.") && k.length > "presence.".length) people[k.slice("presence.".length)] = isHomeState(String(v ?? ""));
+  }
+  return { home: isHomeState(state), state, people };
 }
 
 // Resolve the user's current weather (cached, keyless) for automation context —
@@ -535,6 +543,7 @@ function intervalMatches(trigger: Extract<TriggerT, { kind: "interval" }>, ctx: 
 const prevCtx = new Map<string, Ctx>();
 const lastOnline = new Map<string, boolean>();
 const lastPresence = new Map<string, boolean>();
+const lastPresencePerson = new Map<string, boolean>(); // v7.0 per-person lanes, keyed `user:name`
 const ctxKey = (userId: string, layoutId: number | null): string => (layoutId == null ? userId : `${userId}:${layoutId}`);
 const loadBoard = (userId: string, layoutId: number): { id: number; document: LayoutT } | undefined => {
   const rec = getOwnedLayout(layoutId, userId);
@@ -547,7 +556,7 @@ const loadBoard = (userId: string, layoutId: number): { id: number; document: La
 export async function fireAutomations(
   userId: string,
   kind: TriggerT["kind"],
-  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx; presenceEvent?: "enter" | "leave" } = {},
+  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx; presenceEvent?: "enter" | "leave"; presencePerson?: string } = {},
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
@@ -600,7 +609,7 @@ export async function fireAutomations(
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "interval" && !intervalMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
-    if (a.trigger.kind === "presence" && a.trigger.event !== opts.presenceEvent) continue;
+    if (a.trigger.kind === "presence" && (a.trigger.event !== opts.presenceEvent || (a.trigger.person ?? "") !== (opts.presencePerson ?? ""))) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
     // "held for N minutes" verdicts are driven once here (mutating sustainedSince), then
     // read purely inside evaluate. Only walks the tree when the rule uses `sustained`.
@@ -650,6 +659,15 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
       await fireAutomations(userId, "presence", { ctx, now, presenceEvent: homeNow ? "enter" : "leave" });
     }
     lastPresence.set(userId, homeNow);
+    // v7.0 — per-person lanes (presence.<name>): one edge per household member.
+    for (const [name, here] of Object.entries(ctx.presence?.people ?? {})) {
+      const pk = `${userId}:${name}`;
+      const wasHere = lastPresencePerson.get(pk);
+      if (wasHere !== undefined && wasHere !== here) {
+        await fireAutomations(userId, "presence", { ctx, now, presenceEvent: here ? "enter" : "leave", presencePerson: name });
+      }
+      lastPresencePerson.set(pk, here);
+    }
   }
 }
 

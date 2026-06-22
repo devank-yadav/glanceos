@@ -348,6 +348,36 @@ describe("deferred actions (v7.0)", () => {
   });
 });
 
+describe("multi-person presence lanes (v7.0)", () => {
+  it("exposes per-person lanes from presence.<name> keys", () => {
+    setCustomData(user.id, "presence.alex", "home");
+    setCustomData(user.id, "presence.sam", "away");
+    const c = buildContext(user.id);
+    expect(c.presence!.people.alex).toBe(true);
+    expect(c.presence!.people.sam).toBe(false);
+  });
+
+  it("a person-scoped presence rule fires only for that person's lane (global stays separate)", async () => {
+    createAutomation(user.id, {
+      name: "Alex home", enabled: true, trigger: { kind: "presence", event: "enter", person: "alex" },
+      actions: [{ kind: "setData", key: "alexHit", value: "yes" }],
+    });
+    createAutomation(user.id, {
+      name: "Anyone home", enabled: true, trigger: { kind: "presence", event: "enter" },
+      actions: [{ kind: "setData", key: "anyHit", value: "yes" }],
+    });
+    // an "alex" enter edge runs the alex rule, not the global (no-person) rule
+    await fireAutomations(user.id, "presence", { presenceEvent: "enter", presencePerson: "alex" });
+    expect(getCustomData(user.id, "alexHit")).toBe("yes");
+    expect(getCustomData(user.id, "anyHit")).toBeUndefined();
+    // a global (no-person) enter edge runs the global rule, not alex's
+    setCustomData(user.id, "alexHit", "no");
+    await fireAutomations(user.id, "presence", { presenceEvent: "enter" });
+    expect(getCustomData(user.id, "anyHit")).toBe("yes");
+    expect(getCustomData(user.id, "alexHit")).toBe("no");
+  });
+});
+
 describe("objects — board-scoped reads & writes (v4.0)", () => {
   // A board with one static object (a heading) and one custom-data-bound object.
   const board = createLayout("Lobby", {

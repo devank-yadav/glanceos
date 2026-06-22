@@ -54,7 +54,9 @@ export const Trigger = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("sun"), event: z.enum(["sunrise", "sunset"]), offsetMin: z.number().int().min(-180).max(180).default(0), daysMask: z.number().int().min(0).max(127).default(127) }),
   // v5.0 — fires when you arrive home / leave (presence comes from the `presence`
   // custom-data key: a phone geofence webhook, or a bound Home Assistant person entity).
-  z.object({ kind: z.literal("presence"), event: z.enum(["enter", "leave"]) }),
+  // v7.0 — an optional `person` watches a per-household lane (`presence.<name>`); absent
+  // = the single-occupant `presence` lane (the individual-KW default, unchanged).
+  z.object({ kind: z.literal("presence"), event: z.enum(["enter", "leave"]), person: z.string().max(60).optional() }),
 ]);
 export type TriggerT = z.infer<typeof Trigger>;
 export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "interval", "time", "sun", "presence"] as const;

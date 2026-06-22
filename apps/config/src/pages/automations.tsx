@@ -25,7 +25,7 @@ type Cond =
   | { type: "sustained"; minutes: number; condition: Cond } // v7.0 — engine-supported; preserved on round-trip
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
-interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number }
+interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
@@ -119,6 +119,8 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   // Presence
   { id: "arrive", group: "Presence", label: "When I arrive home", trigger: { kind: "presence", event: "enter" } },
   { id: "leave", group: "Presence", label: "When I leave home", trigger: { kind: "presence", event: "leave" } },
+  { id: "arrive-person", group: "Presence", label: "When a household member arrives", trigger: { kind: "presence", event: "enter", person: "" } },
+  { id: "leave-person", group: "Presence", label: "When a household member leaves", trigger: { kind: "presence", event: "leave", person: "" } },
   // Calendar (from your first calendar connection) — the context-aware bits
   { id: "meeting-soon", group: "Calendar", label: "My next meeting is within 15 min", trigger: { kind: "tick" }, conditions: fcond("calendar.minutesUntilNext", "lte", 15) },
   { id: "in-meeting", group: "Calendar", label: "While I'm in a meeting", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", true) },
@@ -574,13 +576,20 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
       )}
       {a.trigger.kind === "presence" && (
         <div class="row wrap">
-          <label class="field"><span>When you</span>
+          <label class="field"><span>When</span>
             <select value={a.trigger.event ?? "enter"} onChange={(e) => set({ trigger: { ...a.trigger, event: (e.currentTarget as HTMLSelectElement).value } })}>
-              <option value="enter">Arrive home</option>
-              <option value="leave">Leave home</option>
+              <option value="enter">arrives home</option>
+              <option value="leave">leaves home</option>
             </select>
           </label>
-          <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Set presence from a phone geofence webhook (POST <code>{"{key:\"presence\", value:\"home\"|\"away\"}"}</code>) or bind a Home Assistant person entity to the <code>presence</code> data key.</p>
+          <label class="field"><span>Who <span class="muted">(optional)</span></span>
+            <input type="text" placeholder="anyone" value={a.trigger.person ?? ""} onInput={(e) => {
+              const v = (e.currentTarget as HTMLInputElement).value.trim();
+              const { person: _drop, ...rest } = a.trigger;
+              set({ trigger: v ? { ...rest, person: v } : rest });
+            }} />
+          </label>
+          <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Leave <strong>Who</strong> blank for the single <code>presence</code> lane, or name a household member to watch their own <code>presence.&lt;name&gt;</code> key (e.g. <code>presence.alex</code>). Set presence from a phone geofence webhook (POST <code>{"{key:\"presence.alex\", value:\"home\"|\"away\"}"}</code>) or a bound Home Assistant person entity.</p>
         </div>
       )}
 
