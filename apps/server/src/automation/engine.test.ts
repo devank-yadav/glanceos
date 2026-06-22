@@ -227,6 +227,37 @@ describe("interval trigger (v6.0)", () => {
   });
 });
 
+describe("cooldown (v6.1)", () => {
+  it("fires once, then stays quiet within the cooldown window", async () => {
+    const a = createAutomation(user.id, {
+      name: "Cooldown", enabled: true, trigger: { kind: "tick" }, cooldownMinutes: 10,
+      actions: [{ kind: "incrementData", key: "cdCount", delta: 1 }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 2, 1, 0, m));
+    await fireAutomations(user.id, "tick", { now: at(0), usePrev: true }); // fires → 1, lastRun set
+    await fireAutomations(user.id, "tick", { now: at(1), usePrev: true }); // 1 min later, within 10-min cooldown → skip
+    await fireAutomations(user.id, "tick", { now: at(2), usePrev: true }); // still within → skip
+    expect(getCustomData(user.id, "cdCount")).toBe(1);
+    expect(listRuns(a.id, user.id).length).toBe(1); // skipped ticks aren't logged
+  });
+});
+
+describe("trend sense (v6.1)", () => {
+  it("matches 'rising' only after enough increasing samples", async () => {
+    createAutomation(user.id, {
+      name: "Rising", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "all", conditions: [{ type: "field", field: "data.tmp", op: "rising" }] },
+      actions: [{ kind: "setData", key: "trendHit", value: "yes" }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 3, 1, 0, m));
+    setCustomData(user.id, "tmp", 10); await fireAutomations(user.id, "tick", { now: at(0), usePrev: true });
+    setCustomData(user.id, "tmp", 20); await fireAutomations(user.id, "tick", { now: at(1), usePrev: true });
+    expect(getCustomData(user.id, "trendHit")).toBeUndefined(); // <3 samples → no trend yet (like "changed" before prev)
+    setCustomData(user.id, "tmp", 30); await fireAutomations(user.id, "tick", { now: at(2), usePrev: true });
+    expect(getCustomData(user.id, "trendHit")).toBe("yes"); // 10→20→30 rising
+  });
+});
+
 describe("objects — board-scoped reads & writes (v4.0)", () => {
   // A board with one static object (a heading) and one custom-data-bound object.
   const board = createLayout("Lobby", {

@@ -11,12 +11,14 @@ interface AutomationRow {
   trigger: string; conditions: string | null; actions: string;
   layout_id: number | null;
   created_at: number; last_run: number | null; run_count: number;
+  cooldown_min: number | null;
 }
 export interface AutomationRecord {
   id: string; name: string; enabled: boolean;
   trigger: TriggerT; conditions: ConditionT | null; actions: ActionT[];
   layoutId: number | null; // board this rule belongs to (reads/writes its objects); null = global
   createdAt: number; lastRun: number | null; runCount: number;
+  cooldownMinutes: number; // v6.1 "at most once per N minutes"; 0 = off
 }
 
 const hydrate = (r: AutomationRow): AutomationRecord => ({
@@ -26,6 +28,7 @@ const hydrate = (r: AutomationRow): AutomationRecord => ({
   actions: JSON.parse(r.actions) as ActionT[],
   layoutId: r.layout_id,
   createdAt: r.created_at, lastRun: r.last_run, runCount: r.run_count,
+  cooldownMinutes: r.cooldown_min ?? 0,
 });
 
 export function listAutomations(userId: string): AutomationRecord[] {
@@ -48,16 +51,16 @@ export const MAX_AUTOMATIONS_PER_USER = 200; // bounds the per-minute tick cost
 
 export function createAutomation(userId: string, a: AutomationT, layoutId: number | null = null): AutomationRecord {
   const id = randomUUID();
-  db.prepare("INSERT INTO automations (id, user_id, name, enabled, trigger, conditions, actions, layout_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, userId, a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, Date.now());
+  db.prepare("INSERT INTO automations (id, user_id, name, enabled, trigger, conditions, actions, layout_id, created_at, cooldown_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, userId, a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, Date.now(), a.cooldownMinutes ?? 0);
   return getAutomation(id, userId)!;
 }
 
 export function updateAutomation(id: string, userId: string, a: AutomationT, layoutId: number | null = null): AutomationRecord | null {
   const existing = db.prepare("SELECT 1 FROM automations WHERE id = ? AND user_id = ?").get(id, userId);
   if (!existing) return null;
-  db.prepare("UPDATE automations SET name = ?, enabled = ?, trigger = ?, conditions = ?, actions = ?, layout_id = ? WHERE id = ?")
-    .run(a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, id);
+  db.prepare("UPDATE automations SET name = ?, enabled = ?, trigger = ?, conditions = ?, actions = ?, layout_id = ?, cooldown_min = ? WHERE id = ?")
+    .run(a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, a.cooldownMinutes ?? 0, id);
   return getAutomation(id, userId);
 }
 

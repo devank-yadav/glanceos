@@ -11,6 +11,8 @@ import { pushDevice, pushUserDevices } from "../state";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
+import { connLookupFor, listConnections } from "../connections";
+import { resolveSource } from "../providers/resolve";
 import { weatherData } from "../fetchers/weather";
 import { precipData } from "../fetchers/openmeteo";
 import { sunTimes, tzMinuteOfDay } from "../astro";
@@ -42,9 +44,12 @@ export interface Ctx {
   // v5.0 substrate — are you home? Derived from the `presence` custom-data key
   // (a phone geofence webhook or a bound Home Assistant person entity).
   presence?: { home: boolean; state: string };
+  // v6.1 substrate — the user's agenda (first calendar connection), resolved only
+  // when a rule references `calendar.*`. Lets boards react to meetings.
+  calendar?: { isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string };
   objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
 }
-export interface LiveCtx { weather?: Ctx["weather"] }
+export interface LiveCtx { weather?: Ctx["weather"]; calendar?: Ctx["calendar"] }
 
 // Server-side primary-text heuristic (the config app owns the authoritative per-type
 // map; object-set actions carry the exact prop, so this only powers *reads* + a
@@ -122,13 +127,14 @@ function compare(op: ComparatorT, actual: unknown, expected: unknown): boolean {
 
 /** Evaluate a condition tree against a context (and an optional previous context
  *  for the "changed" operator). Pure + total. */
-export function evaluate(cond: ConditionT, ctx: Ctx, prev?: Ctx, depth = 0): boolean {
+export function evaluate(cond: ConditionT, ctx: Ctx, prev?: Ctx, depth = 0, trend?: Record<string, "rising" | "falling" | "steady" | null>): boolean {
   if (depth > MAX_EVAL_DEPTH) return false; // never recurse a hostile/pathological tree off the stack
   switch (cond.type) {
-    case "all": return cond.conditions.every((c) => evaluate(c, ctx, prev, depth + 1));
-    case "any": return cond.conditions.length > 0 && cond.conditions.some((c) => evaluate(c, ctx, prev, depth + 1));
-    case "not": return !evaluate(cond.condition, ctx, prev, depth + 1);
+    case "all": return cond.conditions.every((c) => evaluate(c, ctx, prev, depth + 1, trend));
+    case "any": return cond.conditions.length > 0 && cond.conditions.some((c) => evaluate(c, ctx, prev, depth + 1, trend));
+    case "not": return !evaluate(cond.condition, ctx, prev, depth + 1, trend);
     case "field": {
+      if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") return (trend?.[cond.field] ?? null) === cond.op;
       const actual = resolvePath(ctx, cond.field);
       if (cond.op === "exists") return actual !== undefined && actual !== null;
       if (cond.op === "changed") return safeStringify(actual) !== safeStringify(prev ? resolvePath(prev, cond.field) : undefined);
@@ -197,6 +203,7 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
     sun: sunContext(userId, now, tz, time.minuteOfDay),
     weather: opts.live?.weather,
     presence: presenceFromData(data),
+    calendar: opts.live?.calendar,
     objects: opts.layout ? buildLayoutObjects(opts.layout, data) : {},
   });
 }
@@ -224,14 +231,66 @@ async function resolveUserWeather(userId: string): Promise<Ctx["weather"]> {
   };
 }
 
-// Does any of these automations read `weather.*` in its conditions? (cheap guard so
-// the tick only fetches weather when a rule actually needs it).
+// Resolve the user's agenda from their first calendar connection (iCal URL or
+// Google), only when an automation references `calendar.*`. Cached via resolveSource.
+async function resolveUserCalendar(userId: string): Promise<Ctx["calendar"]> {
+  const conn = listConnections(userId).find((c) => c.provider === "ical" || c.provider === "google");
+  if (!conn) return undefined;
+  const kind = conn.provider === "google" ? "google.calendar" : "ical.events";
+  const raw = await resolveSource({ kind, connectionId: conn.id, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupFor(userId)).catch(() => null);
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { events?: unknown[] }).events) ? (raw as { events: unknown[] }).events : [];
+  const now = Date.now();
+  const evs = list
+    .map((e) => { const o = (e ?? {}) as Record<string, unknown>; const s = Date.parse(String(o.start)); return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? "") }; })
+    .filter((e) => Number.isFinite(e.start))
+    .sort((a, b) => a.start - b.start);
+  const busy = evs.find((e) => e.start <= now && e.end > now);
+  const next = evs.find((e) => e.start > now);
+  return {
+    isBusyNow: !!busy,
+    minutesUntilNext: next ? Math.max(0, Math.round((next.start - now) / 60_000)) : undefined,
+    nextTitle: next?.title || undefined,
+    nextStart: next ? new Date(next.start).toISOString() : undefined,
+    freeUntil: busy ? new Date(busy.end).toISOString() : undefined,
+  };
+}
+
+// Does any of these automations read `<prefix>.*` in its conditions? (cheap guard so
+// the tick only fetches weather/calendar when a rule actually needs it).
 function refsField(cond: ConditionT | null | undefined, prefix: string): boolean {
   if (!cond) return false;
   if (cond.type === "field") return cond.field.startsWith(prefix);
   if (cond.type === "all" || cond.type === "any") return cond.conditions.some((c) => refsField(c, prefix));
   if (cond.type === "not") return refsField(cond.condition, prefix);
   return false;
+}
+
+// v6.1 trend sense — a small, bounded in-memory ring-buffer of recent numeric samples
+// per (user[:board]):field, so a condition can react to DIRECTION (rising/falling/
+// steady) over a window, not just a level. Re-baselines on restart, like prevCtx.
+interface TrendSample { ts: number; value: number }
+const TREND_CAP = 12; // ~12 minutes at the 60s tick
+const trendSamples = new Map<string, TrendSample[]>();
+function recordTrend(key: string, value: number, minuteStamp: number): void {
+  let buf = trendSamples.get(key);
+  if (!buf) { buf = []; trendSamples.set(key, buf); }
+  if (buf.length && buf[buf.length - 1]!.ts === minuteStamp) buf[buf.length - 1]!.value = value; // same minute → replace
+  else { buf.push({ ts: minuteStamp, value }); if (buf.length > TREND_CAP) buf.shift(); }
+}
+function trendDirection(buf: TrendSample[] | undefined): "rising" | "falling" | "steady" | null {
+  if (!buf || buf.length < 3) return null; // not enough history yet → no trend (like "changed" before prev)
+  const first = buf[0]!.value, last = buf[buf.length - 1]!.value;
+  const tol = Math.max(1e-9, Math.abs(first) * 0.02);
+  if (last - first > tol) return "rising";
+  if (first - last > tol) return "falling";
+  return "steady";
+}
+// Field paths a tree references with a trend comparator (so the tick samples only those).
+function collectTrendFields(cond: ConditionT | null | undefined, out: Set<string>): void {
+  if (!cond) return;
+  if (cond.type === "field") { if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") out.add(cond.field); return; }
+  if (cond.type === "not") return collectTrendFields(cond.condition, out);
+  if (cond.type === "all" || cond.type === "any") cond.conditions.forEach((c) => collectTrendFields(c, out));
 }
 
 const dayOf = (ctx: Ctx): number => Math.floor(ctx.time.ts / 86_400_000);
@@ -391,40 +450,60 @@ export async function fireAutomations(
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
-  // Resolve live data (weather) once, only if a rule references it — keeps the tick cheap.
-  const live: LiveCtx = opts.live ?? (autos.some((a) => refsField(a.conditions, "weather")) ? { weather: await resolveUserWeather(userId) } : {});
-  const hasLive = live.weather !== undefined;
+  // Resolve live data (weather + calendar) once, only if a rule references it — keeps the tick cheap.
+  const live: LiveCtx = opts.live ?? {
+    weather: autos.some((a) => refsField(a.conditions, "weather")) ? await resolveUserWeather(userId) : undefined,
+    calendar: autos.some((a) => refsField(a.conditions, "calendar")) ? await resolveUserCalendar(userId) : undefined,
+  };
+  const hasLive = live.weather !== undefined || live.calendar !== undefined;
   const baseCtx = !hasLive && opts.ctx ? opts.ctx : buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, live });
-  // Build each referenced board's context once (its objects read from the doc + data).
-  const boardCtx = new Map<number, { board?: { id: number; document: LayoutT }; ctx: Ctx }>();
-  const ctxFor = (layoutId: number | null): { board?: { id: number; document: LayoutT }; ctx: Ctx } => {
-    if (layoutId == null) return { ctx: baseCtx };
-    let c = boardCtx.get(layoutId);
+  // Numeric fields any rule reads with a trend comparator — the tick samples just these.
+  const trendNeeded = new Set<string>();
+  for (const a of autos) collectTrendFields(a.conditions, trendNeeded);
+  type Resolved = { board?: { id: number; document: LayoutT }; ctx: Ctx; trend: Record<string, "rising" | "falling" | "steady" | null> };
+  // Build each referenced context once (board objects read from the doc + data),
+  // record this tick's trend samples for it, and snapshot the resulting directions.
+  const ctxCache = new Map<number | null, Resolved>();
+  const ctxFor = (layoutId: number | null): Resolved => {
+    let c = ctxCache.get(layoutId);
     if (!c) {
-      const board = loadBoard(userId, layoutId);
-      const ctx = board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live }) : baseCtx;
-      c = { board, ctx };
-      boardCtx.set(layoutId, c);
+      const board = layoutId == null ? undefined : loadBoard(userId, layoutId);
+      const ctx = layoutId == null ? baseCtx : board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live }) : baseCtx;
+      const tkey = ctxKey(userId, layoutId);
+      const trend: Resolved["trend"] = {};
+      for (const f of trendNeeded) {
+        if (opts.usePrev) { const v = num(resolvePath(ctx, f)); if (v !== null) recordTrend(`${tkey}:${f}`, v, Math.floor(ctx.time.ts / 60_000)); }
+        trend[f] = trendDirection(trendSamples.get(`${tkey}:${f}`));
+      }
+      c = { board, ctx, trend };
+      ctxCache.set(layoutId, c);
     }
     return c;
   };
   for (const a of autos) {
-    const { board, ctx } = ctxFor(a.layoutId);
+    const { board, ctx, trend } = ctxFor(a.layoutId);
     if (a.trigger.kind === "time" && !timeMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "interval" && !intervalMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "presence" && a.trigger.event !== opts.presenceEvent) continue;
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
-    const matched = a.conditions ? evaluate(a.conditions, ctx, prev) : true;
-    let run = 0; let error: string | null = null;
-    if (matched) { const r = await runActions(a.actions, userId, ctx, board); run = r.run; error = r.errors.length ? r.errors.join("; ") : null; }
-    recordRun(a.id, userId, kind, matched, run, error);
+    const matched = a.conditions ? evaluate(a.conditions, ctx, prev, 0, trend) : true;
+    if (matched) {
+      // Cooldown: stay quiet for N minutes after a run so a long-held condition
+      // (rain, low battery) doesn't re-fire every tick. lastRun is the persisted
+      // last *matched* fire; we skip silently (keep lastRun) until it expires.
+      const cdMs = (a.cooldownMinutes ?? 0) * 60_000;
+      if (cdMs > 0 && a.lastRun != null && ctx.time.ts - a.lastRun < cdMs) continue;
+      const r = await runActions(a.actions, userId, ctx, board);
+      recordRun(a.id, userId, kind, true, r.run, r.errors.length ? r.errors.join("; ") : null);
+    } else {
+      recordRun(a.id, userId, kind, false, 0, null);
+    }
   }
   // The tick stashes every context it evaluated as next tick's "prev" (so "changed"
   // compares against the exact prior snapshot — globally and per board).
   if (opts.usePrev) {
-    prevCtx.set(userId, baseCtx);
-    for (const [lid, c] of boardCtx) prevCtx.set(ctxKey(userId, lid), c.ctx);
+    for (const [lid, c] of ctxCache) prevCtx.set(ctxKey(userId, lid), c.ctx);
   }
 }
 

@@ -34,8 +34,20 @@ function project(el: unknown, fields?: Record<string, string>): unknown {
   return out;
 }
 
-function reduce(v: unknown, transform: SourceMapT["transform"]): unknown {
+// v6.1 "0,33,67:Low,OK,High" → thresholds [0,33,67] + labels; maps a number to a word.
+function rangeToWords(n: number, arg?: string): unknown {
+  if (!arg) return n;
+  const [th = "", lb = ""] = arg.split(":");
+  const thresholds = th.split(",").map(Number).filter(Number.isFinite);
+  const labels = lb.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!labels.length) return n;
+  for (let i = 0; i < thresholds.length; i++) if (n < thresholds[i]!) return labels[i] ?? labels[labels.length - 1];
+  return labels[labels.length - 1];
+}
+
+function reduce(v: unknown, transform: SourceMapT["transform"], arg?: string): unknown {
   const arr = Array.isArray(v) ? v : null;
+  const scalar = () => toNum(arr ? arr[0] : v); // v6.1 scalar shapers operate on the value (first element if array)
   switch (transform) {
     case "series": return (arr ?? []).map((el) => toNum(leaf(el)));
     case "count": return arr ? arr.length : v == null ? 0 : 1;
@@ -47,6 +59,11 @@ function reduce(v: unknown, transform: SourceMapT["transform"]): unknown {
         ? String((el as Record<string, unknown>).text ?? (el as Record<string, unknown>).value ?? JSON.stringify(el))
         : String(el))).join("\n");
     case "percent": return toNum(arr ? arr[0] : v);
+    // v6.1 derived transforms — pure, total scalar shapers (a raw number → a human phrase).
+    case "round": { const d = Math.max(0, Math.min(6, Math.trunc(toNum(arg)) || 0)); return Number(scalar().toFixed(d)); }
+    case "currency": { const sym = (arg ?? "$").trim() || "$"; return sym + scalar().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    case "duration": { const s = Math.max(0, Math.round(scalar())); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : m ? `${m}m` : `${s}s`; }
+    case "rangeToWords": return rangeToWords(scalar(), arg);
     default: return v;
   }
 }
@@ -62,7 +79,7 @@ export function applyMap(raw: unknown, map: SourceMapT): unknown {
   let val: unknown = map.items ? resolvePath(raw, map.items) : map.path ? resolvePath(raw, map.path) : raw;
   if (Array.isArray(val) && map.fields) val = val.map((el) => project(el, map.fields));
   if (NEEDS_ARRAY.has(map.transform) && !Array.isArray(val)) return null; // wrong shape → placeholder/props fallback
-  return reduce(val, map.transform);
+  return reduce(val, map.transform, map.transformArg);
 }
 
 export async function resolveSource(src: BlockSourceT, lookup?: ConnLookup): Promise<unknown> {
