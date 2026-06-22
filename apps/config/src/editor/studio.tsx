@@ -16,6 +16,7 @@ import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
 import { createPortal } from "preact/compat";
 import { Modal } from "../components/Modal";
+import { LAYOUTS, applyLayout, type LayoutPreset } from "./layouts";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
 import { Shortcuts } from "./shortcuts";
@@ -146,6 +147,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [dataOpen, setDataOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const [keepContent, setKeepContent] = useState(true);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -325,6 +328,15 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const selectedBlocks = (): WidgetT[] => {
     const ids = new Set(selectedRef.current);
     return docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+  };
+
+  // Apply a "choose your layout" preset: rearrange the board into that rows×columns shape,
+  // optionally pouring the existing blocks into its cells (one undo step via stageEdit).
+  const applyPreset = (preset: LayoutPreset) => {
+    const hasContent = docRef.current.rows.some((r) => r.blocks.length > 0);
+    stageEdit((d) => { d.rows = applyLayout(d, preset, keepContent && hasContent); });
+    setLayoutOpen(false);
+    dispatch({ type: "select", id: null });
   };
   const clone = (b: WidgetT): WidgetT => ({ ...structuredClone(b), id: newWidgetId(), width: 1 });
 
@@ -687,6 +699,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <select value={String(zoom)} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setZoom(v === "null" ? null : Number(v)); }} title="Zoom">
           {ZOOMS.map((z) => <option key={z.label} value={String(z.value)}>{z.label}</option>)}
         </select>
+        <button class={`ghost hide-narrow${layoutOpen ? " on" : ""}`} title="Choose a layout for this board" onClick={() => setLayoutOpen(true)}><Icon.grid /> Layout</button>
         <button class="ghost icon-btn" disabled={state.past.length === 0} aria-label="Undo" title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}><Icon.undo /></button>
         <button class="ghost icon-btn" disabled={state.future.length === 0} aria-label="Redo" title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
         <button class="ghost icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
@@ -702,6 +715,31 @@ export function Studio({ layoutId }: { layoutId: number }) {
             layoutId={layoutId}
             objects={state.present.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, type: b.type, settable: !b.source, prop: TEXT_PROP[b.type] }))}
           />
+        </Modal>
+      )}
+      {layoutOpen && (
+        <Modal open={layoutOpen} onClose={() => setLayoutOpen(false)} title="Choose a layout" width={640}>
+          <p class="muted layout-intro">Arrange this board into sections. Pick a layout, then click any cell to fill it in.</p>
+          {state.present.rows.some((r) => r.blocks.length > 0) && (
+            <label class="layout-keep">
+              <input type="checkbox" checked={keepContent} onChange={(e) => setKeepContent((e.currentTarget as HTMLInputElement).checked)} />
+              <span>Keep my content (flow existing objects into the new sections)</span>
+            </label>
+          )}
+          <div class="layout-gallery">
+            {LAYOUTS.map((p) => (
+              <button key={p.id} class="layout-card" title={`Apply “${p.name}”`} onClick={() => applyPreset(p)}>
+                <div class="layout-thumb">
+                  {p.rows.map((r, i) => (
+                    <div key={i} class="lt-row" style={{ flexGrow: r.h }}>
+                      {r.cells.map((c, j) => <div key={j} class="lt-cell" style={{ flexGrow: c.width ?? 1 }} />)}
+                    </div>
+                  ))}
+                </div>
+                <span class="layout-card-name">{p.name}</span>
+              </button>
+            ))}
+          </div>
         </Modal>
       )}
       {shareOpen && createPortal(

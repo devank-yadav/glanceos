@@ -1787,6 +1787,24 @@ ul.tasks li:last-child {
 .resize-r { right: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
 .resize-l { left: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
 
+/* ---------- "choose your layout" picker ---------- */
+.layout-intro { margin: 0 0 12px; }
+.layout-keep { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.layout-keep input { accent-color: var(--indigo); }
+.layout-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.layout-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px; border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--fg) 3%, var(--bg)); cursor: pointer; text-align: left;
+  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+.layout-card:hover { border-color: var(--indigo); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.layout-thumb { display: flex; flex-direction: column; gap: 4px; height: 84px; }
+.layout-thumb .lt-row { display: flex; gap: 4px; min-height: 0; }
+.layout-thumb .lt-cell { flex: 1; background: color-mix(in srgb, var(--fg) 13%, transparent); border-radius: 4px; min-width: 0; }
+.layout-card:hover .lt-cell { background: color-mix(in srgb, var(--indigo) 30%, transparent); }
+.layout-card-name { font-size: 12.5px; font-weight: 500; color: var(--fg); }
+
 /* ---------- slash menu ---------- */
 
 .slash-backdrop {
