@@ -420,12 +420,16 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   const set = (patch: Partial<Automation>) => setA((x) => ({ ...x, ...patch }));
   const settable = (objects ?? []).filter((o) => o.settable);
   // Screens + boards for the "Switch a screen" picker — so the user never types an
-  // id. Fetched once when the editor opens; the picker degrades to a hint if empty.
+  // id. Fetched once when the editor opens; `picksLoaded` lets the picker say
+  // "Loading…" then "No screens yet" instead of ever falling back to a raw id box.
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
   const [boards, setBoards] = useState<{ id: number; name: string }[]>([]);
+  const [picksLoaded, setPicksLoaded] = useState(false);
   useEffect(() => {
-    api.get<{ id: string; name: string | null }[]>("/api/devices").then((d) => setDevices(d.map((x) => ({ id: x.id, name: x.name || x.id })))).catch(() => {});
-    api.get<{ id: number; name: string }[]>("/api/layouts").then((l) => setBoards(l.map((x) => ({ id: x.id, name: x.name })))).catch(() => {});
+    Promise.all([
+      api.get<{ id: string; name: string | null }[]>("/api/devices").then((d) => setDevices(d.map((x) => ({ id: x.id, name: x.name || x.id })))).catch(() => {}),
+      api.get<{ id: number; name: string }[]>("/api/layouts").then((l) => setBoards(l.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}),
+    ]).finally(() => setPicksLoaded(true));
   }, []);
   // Object actions appear when the board has any named object (show/hide work on any;
   // set-text/prop list only settable ones in their picker).
@@ -591,7 +595,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             <select value={act.kind} onChange={(e) => setAction(i, defaultAction((e.currentTarget as HTMLSelectElement).value, objects))}>
               {actionKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
-            <ActionFields action={act} objects={objects} devices={devices} boards={boards} onChange={(p) => setAction(i, p)} />
+            <ActionFields action={act} objects={objects} devices={devices} boards={boards} loaded={picksLoaded} onChange={(p) => setAction(i, p)} />
             {a.actions.length > 1 && <button class="ghost danger icon-btn" onClick={() => set({ actions: a.actions.filter((_, j) => j !== i) })}>×</button>}
           </div>
         ))}
@@ -778,7 +782,7 @@ function valueControl(c: ObjControl, value: unknown, onValue: (v: unknown) => vo
   return <input class="grow" value={value == null ? "" : String(value)} placeholder="value" onInput={(e) => onValue((e.currentTarget as HTMLInputElement).value)} />;
 }
 
-function ActionFields({ action, objects, devices, boards, onChange }: { action: Action; objects?: ObjOption[]; devices?: { id: string; name: string }[]; boards?: { id: number; name: string }[]; onChange: (a: Action) => void }) {
+function ActionFields({ action, objects, devices, boards, loaded, onChange }: { action: Action; objects?: ObjOption[]; devices?: { id: string; name: string }[]; boards?: { id: number; name: string }[]; loaded?: boolean; onChange: (a: Action) => void }) {
   const f = (k: string, v: unknown) => onChange({ ...action, [k]: v });
   const txt = (k: string, ph: string, cls = "") => <input class={cls} value={String(action[k] ?? "")} placeholder={ph} onInput={(e) => f(k, (e.currentTarget as HTMLInputElement).value)} />;
   // Object picker for the object-targeting actions — settable objects only, and we
@@ -807,28 +811,30 @@ function ActionFields({ action, objects, devices, boards, onChange }: { action: 
     case "addTask": return <>{txt("listId", "list")}{txt("text", "task text", "grow")}</>;
     case "advanceQueue": return <>{txt("queueId", "queue id")}{txt("delta", "+1")}</>;
     case "switchBoard": {
-      // No more typing ids: pick the screen and the board from dropdowns.
+      // Always pick from dropdowns — the user never types an id. When the list is
+      // empty (still loading, or no screens/boards exist yet) the select is disabled
+      // with a plain-language hint instead of a raw id box.
       const dev = String(action.deviceId ?? "");
       const lay = action.layoutId != null ? Number(action.layoutId) : 0;
-      const devMissing = dev !== "" && !(devices ?? []).some((d) => d.id === dev);
-      const layMissing = !!lay && !(boards ?? []).some((b) => b.id === lay);
+      const devList = devices ?? [];
+      const boardList = boards ?? [];
+      const devMissing = dev !== "" && !devList.some((d) => d.id === dev);
+      const layMissing = !!lay && !boardList.some((b) => b.id === lay);
+      const devEmptyLabel = !loaded ? "Loading screens…" : "No screens yet — claim one first";
+      const boardEmptyLabel = !loaded ? "Loading boards…" : "No boards yet — create one first";
       return (
         <>
-          {(devices && devices.length > 0) ? (
-            <select value={dev} onChange={(e) => f("deviceId", (e.currentTarget as HTMLSelectElement).value)}>
-              <option value="" disabled>Pick a screen…</option>
-              {devMissing && <option value={dev}>{`⚠ ${dev} (missing)`}</option>}
-              {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          ) : txt("deviceId", "screen id")}
+          <select value={dev} disabled={devList.length === 0} onChange={(e) => f("deviceId", (e.currentTarget as HTMLSelectElement).value)}>
+            <option value="" disabled>{devList.length ? "Pick a screen…" : devEmptyLabel}</option>
+            {devMissing && <option value={dev}>{`⚠ ${dev} (missing)`}</option>}
+            {devList.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
           <span class="muted">→</span>
-          {(boards && boards.length > 0) ? (
-            <select class="grow" value={lay ? String(lay) : ""} onChange={(e) => f("layoutId", Number((e.currentTarget as HTMLSelectElement).value) || 0)}>
-              <option value="" disabled>Pick a board…</option>
-              {layMissing && <option value={String(lay)}>{`⚠ board #${lay} (missing)`}</option>}
-              {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          ) : <input class="grow" type="number" value={lay || ""} placeholder="board id" onInput={(e) => f("layoutId", Number((e.currentTarget as HTMLInputElement).value) || 0)} />}
+          <select class="grow" value={lay ? String(lay) : ""} disabled={boardList.length === 0} onChange={(e) => f("layoutId", Number((e.currentTarget as HTMLSelectElement).value) || 0)}>
+            <option value="" disabled>{boardList.length ? "Pick a board…" : boardEmptyLabel}</option>
+            {layMissing && <option value={String(lay)}>{`⚠ board #${lay} (missing)`}</option>}
+            {boardList.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
         </>
       );
     }
