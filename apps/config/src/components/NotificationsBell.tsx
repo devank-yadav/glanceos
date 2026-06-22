@@ -8,6 +8,10 @@ import { IconButton } from "./IconButton";
 interface Notification { id: number; deviceId: string | null; kind: string; message: string; createdAt: number; read: boolean }
 interface Feed { notifications: Notification[]; unread: number }
 
+// A spoken label for the colour-coded dot, so the kind isn't conveyed by colour alone.
+const KIND_LABELS: Record<string, string> = { offline: "Offline", online: "Online", low_battery: "Low battery", low: "Low battery", conn: "Integration", error: "Error", info: "Info" };
+const kindLabel = (k: string): string => KIND_LABELS[k] ?? k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
 // Bell in the sidebar foot: polls the alert feed, badges the unread count, and
 // drops down a panel. Clicking an item (or "Mark all read") clears it.
 export function NotificationsBell() {
@@ -76,11 +80,12 @@ export function NotificationsBell() {
           {feed.notifications.length === 0 ? (
             <p class="muted notif-empty">You're all caught up.</p>
           ) : (
-            <ul class="notif-list">
+            <ul class="notif-list" aria-live="polite">
               {feed.notifications.map((n) => (
                 <li key={n.id} class={`notif-item${n.read ? " read" : ""}`}>
                   <button class="notif-item-btn" onClick={() => !n.read && markRead(n.id)} title={n.read ? "" : "Mark read"}>
                     <span class={`notif-dot ${n.kind}`} aria-hidden="true" />
+                    <span class="sr-only">{kindLabel(n.kind)}: </span>
                     <span class="notif-msg">{n.message}</span>
                     <span class="notif-time muted">{fmtAgo(n.createdAt)}</span>
                   </button>

@@ -22,6 +22,11 @@ const URL_KINDS = [
   { id: "rss.feed", label: "RSS / Atom feed" },
 ];
 const TRANSFORMS = ["first", "last", "sum", "count", "percent", "join", "round", "currency", "duration", "rangeToWords", "none"];
+// Human labels for the transform picker (raw enum tokens read as jargon).
+const TRANSFORM_LABELS: Record<string, string> = {
+  none: "None — use as-is", first: "First item", last: "Last item", sum: "Sum", count: "Count",
+  percent: "As a number", join: "Join lines", round: "Round", currency: "Currency", duration: "Duration", rangeToWords: "Map to words",
+};
 // Transforms that take an argument, with the placeholder hint for the arg field.
 const TRANSFORM_ARGS: Record<string, string> = {
   round: "decimals, e.g. 1",
@@ -199,6 +204,7 @@ export function DataPanel({
           <label class="field grow">
             <span>{isSeries || isList ? "Array path (items)" : "Field path"}</span>
             <input value={isSeries || isList ? items : field} placeholder={isSeries || isList ? "results (blank = root)" : "data.total"} onInput={(e) => ((isSeries || isList) ? setItems : setField)((e.currentTarget as HTMLInputElement).value)} />
+            <span class="field-hint">{isSeries || isList ? "Dotted path to the list, e.g. results — blank uses the whole response." : "Dotted path to one value, e.g. main.temp — blank uses the whole response."}</span>
           </label>
           {(isSeries || isList) && (
             <label class="field grow">
@@ -210,7 +216,7 @@ export function DataPanel({
             <label class="field">
               <span>Transform</span>
               <select value={transform} onChange={(e) => { setTransform((e.currentTarget as HTMLSelectElement).value); setTransformArg(""); }}>
-                {TRANSFORMS.map((t) => <option key={t} value={t}>{t}</option>)}
+                {TRANSFORMS.map((t) => <option key={t} value={t}>{TRANSFORM_LABELS[t] ?? t}</option>)}
               </select>
             </label>
           )}

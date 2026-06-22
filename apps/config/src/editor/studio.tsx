@@ -258,28 +258,32 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const scale = zoom ?? fitScale;
   const geometry = useMemo(() => pageGeometry(state.present, W, H), [state.present, W, H]);
 
-  // autosave
+  // Persist the current doc now (shared by autosave + the error-banner Retry).
+  const saveNow = async () => {
+    const parsed = Layout.safeParse(docRef.current);
+    if (!parsed.success) {
+      setSaveState("error");
+      setSaveError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+      return;
+    }
+    setSaveState("saving");
+    try {
+      await api.put(`/api/layouts/${layoutId}`, { document: parsed.data });
+      lastSavedRef.current = JSON.stringify(docRef.current);
+      setSaveState("saved");
+      setSaveError("");
+    } catch (e) {
+      setSaveState("error");
+      setSaveError(String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  // autosave (debounced)
   useEffect(() => {
     if (!loaded || state.gestureBase) return;
     if (JSON.stringify(state.present) === lastSavedRef.current) return;
     setSaveState("saving");
-    const timer = window.setTimeout(async () => {
-      const parsed = Layout.safeParse(docRef.current);
-      if (!parsed.success) {
-        setSaveState("error");
-        setSaveError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-        return;
-      }
-      try {
-        await api.put(`/api/layouts/${layoutId}`, { document: parsed.data });
-        lastSavedRef.current = JSON.stringify(docRef.current);
-        setSaveState("saved");
-        setSaveError("");
-      } catch (e) {
-        setSaveState("error");
-        setSaveError(String(e instanceof Error ? e.message : e));
-      }
-    }, 1000);
+    const timer = window.setTimeout(saveNow, 1000);
     return () => window.clearTimeout(timer);
   }, [state.present, state.gestureBase, loaded, layoutId]);
 
@@ -770,7 +774,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
         </>,
         document.body,
       )}
-      {saveState === "error" && saveError && <p class="issues studio-issues">{saveError}</p>}
+      {saveState === "error" && saveError && (
+        <p class="issues studio-issues">
+          <span>Couldn't save — {saveError}</span>
+          <button class="ghost" onClick={saveNow}>Retry</button>
+        </p>
+      )}
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>
           <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}>
@@ -788,7 +797,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               onHandleClick={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
               menuId={menuId}
             />
-            {state.present.rows.length === 0 && !editing && (
+            {loaded && state.present.rows.length === 0 && !editing && (
               <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
             )}
             <div class="drop-indicator" ref={indicatorRef} />

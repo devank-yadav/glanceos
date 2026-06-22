@@ -12,6 +12,7 @@ import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { ScreensTabs } from "../components/ScreensTabs";
+import { StatChip } from "../components/StatChip";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { navigate } from "../router";
@@ -183,10 +184,10 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
           : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
             : <>No content yet</>}
       </p>
-      <div class="device-meta muted">
-        {device.online ? "Online" : "Offline"} · {device.resolution}
-        {device.battery !== null ? ` · ${device.battery}%${batteryHint(device.batteryForecast)}` : ""}
-        {device.lastSeen ? ` · seen ${fmtAgo(device.lastSeen)}` : ""}
+      <div class="device-meta row">
+        <StatChip title="Resolution">{device.resolution}</StatChip>
+        {device.battery !== null && <StatChip title="Battery">{device.battery}%{batteryHint(device.batteryForecast)}</StatChip>}
+        {device.lastSeen && <StatChip title="Last seen">seen {fmtAgo(device.lastSeen)}</StatChip>}
       </div>
 
       {previewing && (
@@ -546,13 +547,16 @@ function DevicePreview({ device, playlists }: { device: DeviceSummary; playlists
     return () => { alive = false; };
   }, [layoutId]);
 
-  if (!device.online) return <PreviewEmpty icon={<Icon.monitor />} label="Not connected" />;
-  if (layoutId === null) return <PreviewEmpty icon={<Icon.monitor />} label="No screen yet" />;
+  // Nothing assigned → empty state (worded for online vs offline). Otherwise show the
+  // board it WOULD display, dimmed + grayscale with an "Offline" pill when offline —
+  // far more informative than a blank "Not connected" card.
+  if (layoutId === null) return <PreviewEmpty icon={<Icon.monitor />} label={device.online ? "No screen yet" : "Not connected"} />;
   if (failed) return <PreviewEmpty icon={<Icon.monitor />} label="Preview unavailable" />;
   if (!doc) return <div class="device-preview"><div class="board-preview is-loading" style={{ aspectRatio: `${w} / ${h}` }} /></div>;
   return (
-    <div class="device-preview">
+    <div class={`device-preview${device.online ? "" : " is-offline"}`}>
       <BoardPreview doc={doc} w={w} h={h} deviceName={device.name ?? undefined} />
+      {!device.online && <span class="offline-pill">Offline</span>}
     </div>
   );
 }

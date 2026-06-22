@@ -1458,6 +1458,10 @@ ul.tasks li:last-child {
 
 .studio-issues {
   margin: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
 }
 
 .studio-body {
@@ -2431,6 +2435,18 @@ ul.tasks li:last-child {
   outline: none;
 }
 
+/* Screen-reader-only: visible to assistive tech, hidden visually (e.g. the kind word
+   before a colour-coded notification dot). */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ============================================================
    App shell revamp — Notion-style sidebar, page header, toasts,
    command palette, shared components. (light + dark via tokens)
@@ -2773,6 +2789,16 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .device-card-body { display: flex; flex-direction: column; gap: 7px; padding: 13px 15px 15px; }
 .device-card-body .tile-status { margin: 0; }
 .device-meta { font-size: 12px; }
+.device-meta.row { gap: 6px; flex-wrap: wrap; align-items: center; }
+/* Offline screen card: show the board it WOULD display, dimmed + greyscale, with a pill. */
+.device-preview.is-offline .board-preview-frame { filter: grayscale(1); opacity: 0.5; }
+.offline-pill {
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 2px 9px; border-radius: 999px; color: var(--muted);
+  background: var(--glass-strong); border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
 
 /* Template / hub tiles: same hero treatment as board/screen tiles (shared .cards grid). */
 .hub-card { padding: 0; transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
@@ -2907,7 +2933,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .studio-crumbs .title-input.crumb-current { min-width: 0; }
 
 /* small hint under a form field */
-.field-hint { font-size: 12px; margin-top: 3px; display: block; }
+.field-hint { font-size: 12px; margin-top: 3px; display: block; color: var(--muted); }
 .field-hint code { font-size: 11px; padding: 1px 4px; background: var(--soft); border-radius: 4px; }
 
 /* ---------- studio share popover ---------- */
