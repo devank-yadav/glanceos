@@ -1083,8 +1083,28 @@ ul.tasks li:last-child {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin-bottom: 58px;
+  margin-bottom: 14px;
   animation: rise 0.5s var(--ease) 0.18s both;
+}
+/* a quiet tertiary link beneath the two real CTAs (demoted from a third big button) */
+.hero-howlink {
+  display: inline-block;
+  margin-bottom: 52px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+  animation: rise 0.5s var(--ease) 0.22s both;
+}
+.hero-howlink:hover { color: var(--fg); }
+.cta-closed-note { margin-top: 12px; font-size: 13px; max-width: 34ch; }
+
+/* Landing nav: on narrow screens drop the section links + keep brand + the real CTA,
+   wrapping rather than clipping. */
+@media (max-width: 820px) {
+  .landing-nav { flex-wrap: wrap; gap: 10px; row-gap: 8px; }
+  .landing-nav .landing-links { display: none; }
+  .landing-nav .ghost-link { display: none; } /* Screen mode / Log in collapse; primary CTA + brand remain */
+  .hero-ctas { flex-direction: column; align-items: stretch; }
 }
 
 /* the mock board in a liquid-glass frame */
@@ -3046,10 +3066,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #d65745, var(-
 .location-actions { align-items: center; }
 .location-actions .grow { flex: 1 1 auto; min-width: 0; }
 /* one-time post-login location offer */
-.geo-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; margin-bottom: 16px; border: 1px solid var(--accent); }
+.geo-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--rule)); border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 5%, var(--card-bg)); box-shadow: var(--shadow-sm); }
 .geo-offer-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .geo-offer-text .muted { font-size: 13px; }
-.geo-offer-actions { flex: 0 0 auto; flex-wrap: wrap; }
+.geo-offer-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
 .danger-zone h2 { color: var(--bad); }
 .ghost.danger { color: var(--bad); }
 

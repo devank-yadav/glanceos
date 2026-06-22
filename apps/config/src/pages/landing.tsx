@@ -30,7 +30,7 @@ function BridgeMotif() {
       <path d="M0 96 Q 300 312 600 106 T 1200 96" stroke="currentColor" stroke-width="1" />
       {Array.from({ length: 30 }, (_, i) => {
         const x = 20 + i * 40;
-        return <line key={i} x1={x} y1={88 + Math.abs(Math.sin((x / 1200) * Math.PI * 2)) * 0} x2={x} y2={320} stroke="currentColor" stroke-width="1" opacity="0.5" />;
+        return <line key={i} x1={x} y1={88} x2={x} y2={320} stroke="currentColor" stroke-width="1" opacity="0.5" />;
       })}
       <line x1="300" y1="0" x2="300" y2="320" stroke="currentColor" stroke-width="3" />
       <line x1="900" y1="0" x2="900" y2="320" stroke="currentColor" stroke-width="3" />
@@ -45,7 +45,7 @@ function MockBoard() {
     return () => window.clearInterval(t);
   }, []);
   return (
-    <div class="mock-frame glass-strong">
+    <div class="mock-frame glass-strong" aria-hidden="true">
       <div class="mock-board">
         <div class="mock-row" style={{ flex: "0 0 30%" }}>
           <div class="mock-cell">
@@ -137,10 +137,8 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a class="btn glass-btn lg" href={screenModeHref()}>
             Open screen mode →
           </a>
-          <a class="btn glass-btn lg" href="#how">
-            How it works
-          </a>
         </div>
+        <a class="hero-howlink" href="#how">or see how it works ↓</a>
         <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
         <MockBoard />
         <p class="hero-caption">The Studio edits the exact pixels your screens render — zero drift, ever.</p>
@@ -194,6 +192,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a class="btn solid lg" href={cta}>
             {ctaLabel} →
           </a>
+          {!registrationOpen && <p class="muted cta-closed-note">Sign-ups are closed on this server — ask whoever runs it for an account.</p>}
         </div>
       </section>
 

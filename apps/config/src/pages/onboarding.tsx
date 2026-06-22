@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { api } from "../api";
 import { ClaimForm } from "../components/ClaimForm";
+import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { DISMISS_KEY } from "../onboarding";
 import { navigate } from "../router";
@@ -24,20 +25,25 @@ const VIBES: { category: Category; label: string; blurb: string }[] = [
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null); // which tile is building
+  const toast = useToast();
   const dismiss = () => { try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ } onDone(); };
 
-  const open = async (name: string, document?: unknown) => {
+  const open = async (name: string, document?: unknown, key = name) => {
     if (busy) return;
-    setBusy(true);
+    setBusy(true); setPicked(key);
     try {
       const r = await api.post<{ id: number }>("/api/layouts", document ? { name, document } : { name });
       dismiss();
       navigate(`/edit/${r.id}`);
-    } catch { setBusy(false); }
+    } catch (e) {
+      toast.error(`Couldn't create the board — ${e instanceof Error ? e.message : e}`);
+      setBusy(false); setPicked(null);
+    }
   };
   const pickVibe = (category: Category) => {
     const tpl = STARTER_TEMPLATES.find((t) => t.category === category);
-    return tpl ? open(tpl.name, tpl.doc) : open("My first board");
+    return tpl ? open(tpl.name, tpl.doc, category) : open("My first board", undefined, category);
   };
 
   return (
@@ -48,9 +54,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         <p class="muted onboard-sub">Pick a starting point — you'll get a finished, editable board. You can change everything later.</p>
         <div class="onboard-vibes">
           {VIBES.map((v) => (
-            <button key={v.category} class="vibe-tile" disabled={busy} onClick={() => pickVibe(v.category)}>
+            <button key={v.category} class={`vibe-tile${picked === v.category ? " is-picked" : ""}`} disabled={busy} onClick={() => pickVibe(v.category)}>
               <strong>{v.label}</strong>
-              <span class="muted">{v.blurb}</span>
+              <span class="muted">{picked === v.category ? "Building your board…" : v.blurb}</span>
             </button>
           ))}
         </div>

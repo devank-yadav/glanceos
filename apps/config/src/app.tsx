@@ -196,12 +196,12 @@ export function App() {
         {drawer && <div class="sidebar-scrim" onClick={() => setDrawer(false)} />}
         <main id="main" class="shell-main page-enter">
           {geoOffer && (
-            <div class="geo-offer card">
+            <div class="geo-offer">
               <div class="geo-offer-text">
                 <strong>Set your location</strong>
                 <span class="muted">{geoMsg || "Get accurate weather, sunrise/sunset and the right time zone on your screens. Used once — change it anytime in Settings."}</span>
               </div>
-              <div class="row geo-offer-actions" style={{ gap: "8px" }}>
+              <div class="geo-offer-actions">
                 <button class="primary" disabled={geoBusy} onClick={grantLocation}>{geoBusy ? "Locating…" : "Use my location"}</button>
                 <button class="ghost" onClick={() => { dismissGeo(); navigate("/account"); }}>Search a city</button>
                 <button class="ghost" onClick={dismissGeo}>Not now</button>
