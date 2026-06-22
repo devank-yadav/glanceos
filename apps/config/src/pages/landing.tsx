@@ -1,11 +1,13 @@
-import { useEffect, useState } from "preact/hooks";
+import type { LayoutT } from "@glanceos/schema";
+import { useMemo } from "preact/hooks";
+import { BoardPreview } from "../components/BoardPreview";
 import { BLOCKS } from "../editor/blocks";
 import { BlockIcon } from "../editor/blockIcons";
 import { Icon } from "../editor/icons";
 
 // The home page: liquid-glass surfaces over a monochrome fog, a monumental
-// hero with a faint suspension-bridge motif, and Notion-calm typography.
-// Pure presentation — the only JS is the ticking clock in the mock board.
+// hero with a faint suspension-bridge motif, and Notion-calm typography. The
+// demo is the ACTUAL <30 KB screen runtime — no signup, the homepage IS the product.
 
 const FEATURES = [
   { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
@@ -38,44 +40,40 @@ function BridgeMotif() {
   );
 }
 
-function MockBoard() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
+// A canned board that shows off the v7.0 "knows your day" story — Focus now, Leave
+// by, the day's timeline — fed to the real runtime below. Times are relative to the
+// viewer's clock (built fresh on mount) so the demo is alive, not a screenshot.
+const DEMO_BOARD = {
+  schemaVersion: 3,
+  name: "A day at a glance",
+  theme: { mode: "light", fontScale: "m" },
+  gap: 3,
+  align: "top",
+  rows: [
+    { id: "r1", h: 20, blocks: [{ id: "day1", type: "myDay", width: 1, props: { name: "Alex", subtitle: "", showDate: true } }] },
+    { id: "r2", h: 44, blocks: [
+      { id: "focus1", type: "focusNow", width: 1, props: { label: "Right now", items: "" } },
+      { id: "leave1", type: "leaveBy", width: 1, props: { label: "Leave by", items: "", travelMinutes: 15 } },
+    ] },
+    { id: "r3", h: 36, blocks: [
+      { id: "agenda1", type: "dayTimeline", width: 1, props: { label: "Today", items: "", max: 5 } },
+      { id: "steps1", type: "healthRing", width: 1, props: { label: "Steps", value: 7200, goal: 10000, unit: "" } },
+    ] },
+  ],
+} as unknown as LayoutT;
+
+const buildDemoData = (): Record<string, unknown> => {
+  const now = Date.now();
+  const ev = (min: number, title: string, location?: string) => ({ start: new Date(now + min * 60_000).toISOString(), title, location });
+  const agenda = [ev(-12, "Design review", "Studio"), ev(22, "1:1 with Sam", "Zoom"), ev(95, "Gym"), ev(200, "Dinner", "Home")];
+  return { day1: { temperatureC: 21, summary: "clear" }, focus1: { events: agenda }, leave1: { events: agenda }, agenda1: { events: agenda } };
+};
+
+function DemoBoard() {
+  const data = useMemo(buildDemoData, []);
   return (
-    <div class="mock-frame glass-strong" aria-hidden="true">
-      <div class="mock-board">
-        <div class="mock-row" style={{ flex: "0 0 30%" }}>
-          <div class="mock-cell">
-            <div class="mock-time">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-            <div class="mock-sub">{now.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}</div>
-          </div>
-          <div class="mock-cell mock-right">
-            <div class="mock-temp">24°</div>
-            <div class="mock-sub">clear evening</div>
-          </div>
-        </div>
-        <div class="mock-row" style={{ flex: "0 0 18%" }}>
-          <div class="mock-cell">
-            <div class="mock-heading">Good evening.</div>
-          </div>
-        </div>
-        <div class="mock-row" style={{ flex: "1" }}>
-          <div class="mock-cell">
-            <div class="mock-label">Tasks</div>
-            <div class="mock-li">• Water the plants</div>
-            <div class="mock-li">• Call grandma</div>
-            <div class="mock-li">• Ship something calm</div>
-          </div>
-          <div class="mock-cell">
-            <div class="mock-label">Tonight</div>
-            <div class="mock-moon">🌖 Waning gibbous</div>
-            <div class="mock-sub">sunset 19:42</div>
-          </div>
-        </div>
-      </div>
+    <div class="mock-frame glass-strong">
+      <BoardPreview doc={DEMO_BOARD} data={data} w={1920} h={1080} deviceName="Live demo" />
     </div>
   );
 }
@@ -140,8 +138,15 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         </div>
         <a class="hero-howlink" href="#how">or see how it works ↓</a>
         <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
-        <MockBoard />
-        <p class="hero-caption">The Studio edits the exact pixels your screens render — zero drift, ever.</p>
+        <DemoBoard />
+        <p class="hero-caption">This is the live runtime — the exact pixels your screens render. No signup to look.</p>
+        <ul class="trust-strip" aria-label="What you get">
+          <li>No subscription</li>
+          <li>No telemetry</li>
+          <li>Own your data</li>
+          <li>One container · SQLite</li>
+          <li>MIT licensed</li>
+        </ul>
       </section>
 
       <section id="features" class="section">
