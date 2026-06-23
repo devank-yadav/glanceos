@@ -172,8 +172,39 @@ export function Overlay({
     }
   };
 
+  // ---- marquee (rubber-band) select ----
+  // A drag starting on the empty canvas draws a selection rect (imperative DOM, no
+  // re-render churn) and selects every block whose box it intersects; a plain click clears.
+  const marquee = useRef<{ x0: number; y0: number; el: HTMLDivElement; rect: { x: number; y: number; w: number; h: number }; moved: boolean } | null>(null);
   const onBackgroundDown = (e: PointerEvent) => {
-    if (e.target === rootRef.current) dispatch({ type: "select", id: null });
+    if (e.target !== rootRef.current) return;
+    const p = toPage(e);
+    const el = document.createElement("div");
+    el.className = "marquee";
+    rootRef.current!.appendChild(el);
+    marquee.current = { x0: p.x, y0: p.y, el, rect: { x: p.x, y: p.y, w: 0, h: 0 }, moved: false };
+    try { rootRef.current!.setPointerCapture(e.pointerId); } catch { /* tests */ }
+  };
+  const onBackgroundMove = (e: PointerEvent) => {
+    const m = marquee.current;
+    if (!m) return;
+    const p = toPage(e);
+    if (Math.abs(p.x - m.x0) + Math.abs(p.y - m.y0) > 3) m.moved = true;
+    m.rect = { x: Math.min(p.x, m.x0), y: Math.min(p.y, m.y0), w: Math.abs(p.x - m.x0), h: Math.abs(p.y - m.y0) };
+    Object.assign(m.el.style, { left: `${sx(m.rect.x)}px`, top: `${sx(m.rect.y)}px`, width: `${sx(m.rect.w)}px`, height: `${sx(m.rect.h)}px` });
+  };
+  const onBackgroundUp = () => {
+    const m = marquee.current;
+    marquee.current = null;
+    if (!m) return;
+    m.el.remove();
+    if (!m.moved) { dispatch({ type: "select", id: null }); return; } // a plain click clears
+    const r = m.rect;
+    const ids = geometry.blocks
+      .filter((b) => b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y)
+      .map((b) => b.id);
+    if (ids.length) dispatch({ type: "selectMany", ids });
+    else dispatch({ type: "select", id: null });
   };
 
   return (
@@ -181,6 +212,9 @@ export function Overlay({
       ref={rootRef}
       class="studio-overlay"
       onPointerDown={(e) => onBackgroundDown(e as unknown as PointerEvent)}
+      onPointerMove={(e) => onBackgroundMove(e as unknown as PointerEvent)}
+      onPointerUp={onBackgroundUp}
+      onPointerCancel={onBackgroundUp}
     >
       {geometry.blocks.map((b) => {
         const widget = doc.rows[b.rowIndex]!.blocks[b.blockIndex]!;
@@ -188,11 +222,12 @@ export function Overlay({
         // v8.0 — unbound in-place-editable blocks: let pointer events fall through to the
         // live iframe text (caret placement), so we don't open a floating editor for them.
         const inplace = INPLACE_EDIT.has(widget.type) && !widget.source;
+        const locked = !!widget.locked; // v9.0 — can't be moved/resized; still selectable + can be unlocked from its menu
         return (
           <div
             key={b.id}
             data-block={b.id}
-            class={`widget-box${selectedIds.includes(b.id) ? " selected" : ""}${inplace ? " inplace" : ""}`}
+            class={`widget-box${selectedIds.includes(b.id) ? " selected" : ""}${inplace ? " inplace" : ""}${locked ? " locked" : ""}`}
             style={{ left: `${sx(b.x)}px`, top: `${sx(b.y)}px`, width: `${sx(b.w)}px`, height: `${sx(b.h)}px` }}
             onPointerDown={(e) => {
               const ev = e as unknown as PointerEvent;
@@ -212,23 +247,33 @@ export function Overlay({
             }}
           >
             <span class="widget-tag">{blockFor(widget.type).label}</span>
-            <span
-              class={`drag-handle${menuId === b.id ? " has-menu" : ""}`}
-              title="Drag to move · click for options"
-              onPointerDown={(e) => {
-                const node = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
-                onHandleDown(e as unknown as PointerEvent, b.id, blockFor(widget.type).label, blockFor(widget.type).glyph, node);
-              }}
-              onPointerMove={(e) => onHandleMove(e as unknown as PointerEvent)}
-              onPointerUp={() => endHandle(true)}
-              onPointerCancel={() => endHandle(false)}
-            >
-              <Icon.grip />
-            </span>
+            {locked ? (
+              <span
+                class={`widget-lock${menuId === b.id ? " has-menu" : ""}`}
+                title="Locked · click for options"
+                onPointerDown={(e) => { (e as unknown as PointerEvent).stopPropagation(); onHandleClick(b.id); }}
+              >
+                <Icon.lock />
+              </span>
+            ) : (
+              <span
+                class={`drag-handle${menuId === b.id ? " has-menu" : ""}`}
+                title="Drag to move · click for options"
+                onPointerDown={(e) => {
+                  const node = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+                  onHandleDown(e as unknown as PointerEvent, b.id, blockFor(widget.type).label, blockFor(widget.type).glyph, node);
+                }}
+                onPointerMove={(e) => onHandleMove(e as unknown as PointerEvent)}
+                onPointerUp={() => endHandle(true)}
+                onPointerCancel={() => endHandle(false)}
+              >
+                <Icon.grip />
+              </span>
+            )}
             {/* Per-object resize grips, only on the selected block (Canva-style): a small
                grip at the bottom edge (height) and one on each shared column seam (width).
                They carry their own resize cursor so it never appears over the text body. */}
-            {selectedIds.includes(b.id) && !widget.source && (
+            {selectedIds.includes(b.id) && !widget.source && !locked && (
               <>
                 <span
                   class="widget-resize resize-b"

@@ -12,17 +12,19 @@ interface Props {
   canEdit: boolean;
   canBind: boolean;
   bound: boolean;
+  locked: boolean;
   editItems?: "tasks" | "queue" | null; // interactive blocks edit their items/counter in Options
   onEdit: () => void;
   onConvert: () => void;
   onData: () => void;
   onOptions: () => void;
+  onToggleLock: () => void;
   onDelete: () => void;
 }
 
 const MENU_W = 188;
 
-export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, editItems, onEdit, onConvert, onData, onOptions, onDelete }: Props) {
+export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, locked, editItems, onEdit, onConvert, onData, onOptions, onToggleLock, onDelete }: Props) {
   const left = Math.min(Math.max(2, box.x * scale), Math.max(2, stageW - MENU_W));
   const top = Math.max(4, box.y * scale + 6);
   const stop = (e: Event) => e.stopPropagation();
@@ -39,6 +41,7 @@ export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, editIte
         <li><button class={`bm-item${bound ? " bm-on" : ""}`} onClick={onData}><Icon.link /> {bound ? "Edit data source" : "Connect data"}</button></li>
       )}
       <li><button class="bm-item" onClick={onOptions}><Icon.settings /> Options &amp; style</button></li>
+      <li><button class={`bm-item${locked ? " bm-on" : ""}`} onClick={onToggleLock}><Icon.lock /> {locked ? "Unlock" : "Lock"}</button></li>
       <li><button class="bm-item bm-danger" onClick={onDelete}><Icon.trash /> Delete</button></li>
     </ul>
   );

@@ -1529,6 +1529,7 @@ ul.tasks li:last-child {
    ⠿ grip (and resize handles) stay grabbable. */
 .widget-box.inplace { pointer-events: none; }
 .widget-box.inplace .drag-handle,
+.widget-box.inplace .widget-lock,
 .widget-box.inplace .widget-resize { pointer-events: auto; }
 /* Editing should be invisible — no loud selection box while you type in place; only the
    small ⠿ grip appears (so you can still move the block). Calm, Notion-like. */
@@ -1804,6 +1805,24 @@ ul.tasks li:last-child {
 .layout-thumb .lt-cell { flex: 1; background: color-mix(in srgb, var(--fg) 13%, transparent); border-radius: 4px; min-width: 0; }
 .layout-card:hover .lt-cell { background: color-mix(in srgb, var(--indigo) 30%, transparent); }
 .layout-card-name { font-size: 12.5px; font-weight: 500; color: var(--fg); }
+
+/* ---------- v9.0 pro composition: lock badge + marquee select ---------- */
+.widget-lock {
+  position: absolute; top: 2px; left: -26px; width: 22px; height: 19px;
+  display: grid; place-items: center;
+  color: var(--muted); background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border); border-radius: 999px;
+  box-shadow: var(--shadow-sm); cursor: pointer; z-index: 3;
+}
+.widget-lock svg { width: 13px; height: 13px; }
+.widget-lock.has-menu { color: var(--indigo); border-color: rgba(35, 131, 226, 0.4); }
+.marquee {
+  position: absolute; z-index: 20; pointer-events: none;
+  border: 1px solid var(--indigo);
+  background: color-mix(in srgb, var(--indigo) 10%, transparent);
+  border-radius: 2px;
+}
 
 /* ---------- slash menu ---------- */
 

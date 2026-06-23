@@ -908,11 +908,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   canEdit={TEXT_PROP[primaryBlock.type] !== undefined && !INPLACE_EDIT.has(primaryBlock.type)}
                   canBind={BINDABLE.has(primaryBlock.type)}
                   bound={!!primaryBlock.source}
+                  locked={!!primaryBlock.locked}
                   editItems={primaryBlock.type === "tasks" ? "tasks" : primaryBlock.type === "queue" ? "queue" : null}
                   onEdit={() => { if (primary) startEditing(primary); setMenuId(null); }}
                   onConvert={() => { setOptionsOpen(false); setDataOpen(false); setMenuId(null); setConvertId(primary); }}
                   onData={() => { setConvertId(null); setOptionsOpen(false); setMenuId(null); setDataOpen(true); }}
                   onOptions={() => { setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
+                  onToggleLock={() => { setMenuId(null); if (primary) stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((bb) => bb.id === primary); if (blk) blk.locked = blk.locked ? undefined : true; }); }}
                   onDelete={() => { setMenuId(null); removeSelected(); }}
                 />
               </>
