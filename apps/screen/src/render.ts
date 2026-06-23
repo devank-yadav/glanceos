@@ -91,7 +91,14 @@ const blockSig = (block: RowT["blocks"][number], datum: unknown) => JSON.stringi
 // (Re)paint a widget into a cell, applying its chrome (alignment/invert/flex weight).
 function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown): (() => void) | undefined {
   const st = block.style ?? { invert: false, align: "start", valign: "top" };
-  cell.className = `widget widget-${block.type} halign-${st.align} valign-${st.valign}${st.invert ? " is-invert" : ""}`;
+  // v9.0 designable objects — optional per-block style as CSS classes (absent = unchanged).
+  const d = st as { pad?: string; border?: string; radius?: string; bg?: string };
+  const deco =
+    (d.pad && d.pad !== "none" ? ` pad-${d.pad}` : "") +
+    (d.border && d.border !== "none" ? ` bd-${d.border}` : "") +
+    (d.radius && d.radius !== "none" ? ` rad-${d.radius}` : "") +
+    (d.bg && d.bg !== "none" ? ` bg-${d.bg}` : "");
+  cell.className = `widget widget-${block.type} halign-${st.align} valign-${st.valign}${st.invert ? " is-invert" : ""}${deco}`;
   cell.style.flexGrow = String(block.width ?? 1); // zod-free runtime: default the weight (the "thin strip" bug)
   const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
   if (!render) return undefined;

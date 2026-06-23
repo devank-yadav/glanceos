@@ -98,6 +98,19 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
   flex-shrink: 1;
 }
 
+/* v9.0 designable objects — optional per-block decoration (a block with no style.* is
+   unchanged). Monochrome-safe: background is a faint tint of the foreground. */
+.widget.pad-s { padding: 1.6vmin; }
+.widget.pad-m { padding: 3vmin; }
+.widget.pad-l { padding: 5vmin; }
+.widget.bd-thin { box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); }
+.widget.bd-strong { box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--fg) 48%, transparent); }
+.widget.rad-s { border-radius: 1.2vmin; }
+.widget.rad-m { border-radius: 2.4vmin; }
+.widget.rad-l { border-radius: 4vmin; }
+.widget.bg-subtle { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.widget.bg-strong { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+
 /* clock */
 .clock-time {
   font-size: calc(9vmin * var(--font-scale, 1));

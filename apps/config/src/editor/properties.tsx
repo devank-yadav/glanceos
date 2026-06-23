@@ -302,7 +302,7 @@ export function BlockFields({
       for (let n = 2; taken.has(nm.toLowerCase()); n++) nm = `${desired} ${n}`;
       target.name = nm;
     });
-  const editStyle = (patch: Partial<{ invert: boolean; align: string; valign: string }>) =>
+  const editStyle = (patch: Partial<{ invert: boolean; align: string; valign: string; pad: string; border: string; radius: string; bg: string }>) =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.style = { ...target.style, ...patch } as typeof target.style;
@@ -409,6 +409,33 @@ export function BlockFields({
         </label>
         <Segmented label="Align" value={style.align} options={["start", "center", "end"]} icons={[<Icon.alignLeft />, <Icon.alignCenter />, <Icon.alignRight />]} onChange={(v) => editStyle({ align: v })} />
         <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={[<Icon.alignTop />, <Icon.alignMiddle />, <Icon.alignBottom />]} onChange={(v) => editStyle({ valign: v })} />
+      </div>
+      <h4>Design</h4>
+      <div class="row wrap">
+        <label class="field">
+          <span>Padding</span>
+          <select value={style.pad ?? "none"} onChange={(e) => editStyle({ pad: (e.currentTarget as HTMLSelectElement).value })}>
+            <option value="none">None</option><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Border</span>
+          <select value={style.border ?? "none"} onChange={(e) => editStyle({ border: (e.currentTarget as HTMLSelectElement).value })}>
+            <option value="none">None</option><option value="thin">Thin</option><option value="strong">Strong</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Corners</span>
+          <select value={style.radius ?? "none"} onChange={(e) => editStyle({ radius: (e.currentTarget as HTMLSelectElement).value })}>
+            <option value="none">Square</option><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Background</span>
+          <select value={style.bg ?? "none"} onChange={(e) => editStyle({ bg: (e.currentTarget as HTMLSelectElement).value })}>
+            <option value="none">None</option><option value="subtle">Subtle</option><option value="strong">Strong</option>
+          </select>
+        </label>
       </div>
     </div>
   );

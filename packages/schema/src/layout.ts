@@ -111,6 +111,12 @@ export const BlockStyle = z.object({
   invert: z.boolean().default(false),
   align: z.enum(["start", "center", "end"]).default("start"),
   valign: z.enum(["top", "middle", "bottom"]).default("top"),
+  // v9.0 designable objects — all optional → absent on existing boards, no migration,
+  // applied as CSS classes on the cell (monochrome-safe: bg is a faint fg tint).
+  pad: z.enum(["none", "s", "m", "l"]).optional(),
+  border: z.enum(["none", "thin", "strong"]).optional(),
+  radius: z.enum(["none", "s", "m", "l"]).optional(),
+  bg: z.enum(["none", "subtle", "strong"]).optional(),
 });
 export type BlockStyleT = z.infer<typeof BlockStyle>;
 
@@ -373,7 +379,7 @@ export const DeckProps = z.object({
   seconds: z.number().int().min(2).max(600).default(8),
 });
 
-const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional() };
+const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),

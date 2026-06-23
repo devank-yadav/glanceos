@@ -418,3 +418,20 @@ describe("signage blocks bind to live data with a static fallback", () => {
     expect(document.querySelector(".metric-value")!.textContent).toBe("42.5");
   });
 });
+
+describe("designable objects — per-block style classes (v9.0)", () => {
+  const pay = (layout: object): StreamPayloadT => ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
+  it("applies pad/border/radius/bg classes only when set; a plain block is unchanged", () => {
+    const st = (extra: object) => ({ invert: false, align: "start", valign: "top", ...extra });
+    renderPayload(pay({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "plain", type: "stat", width: 1, style: st({}), props: { label: "P", value: "1" } },
+      { id: "card", type: "stat", width: 1, style: st({ pad: "m", border: "strong", radius: "l", bg: "subtle" }), props: { label: "C", value: "2" } },
+    ] }] }));
+    const cells = document.querySelectorAll<HTMLElement>(".widget-stat");
+    expect(cells[0]!.className).not.toMatch(/pad-|bd-|rad-|bg-/); // plain → no decoration
+    expect(cells[1]!.className).toContain("pad-m");
+    expect(cells[1]!.className).toContain("bd-strong");
+    expect(cells[1]!.className).toContain("rad-l");
+    expect(cells[1]!.className).toContain("bg-subtle");
+  });
+});
