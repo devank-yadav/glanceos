@@ -880,3 +880,169 @@ reg({
     return { items };
   },
 });
+
+// ============================================================================
+// Integrations B3 — developer / observability providers (paste a personal token
+// or API key; no OAuth app needed). Documented REST endpoints; returns the raw
+// payload (the resource label notes the array path) which the block's SourceMap
+// shapes — same pattern as jira/asana. Can't be live-tested without creds.
+// ============================================================================
+
+reg({
+  id: "gitlab", label: "GitLab", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [
+    { id: "gitlab.issues", label: "Issues assigned to me", shape: "list" },
+    { id: "gitlab.mrs", label: "Open merge requests", shape: "list" },
+    { id: "gitlab.pipelines", label: "Project pipelines (project_id)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = ((ctx.config.baseUrl as string) || "https://gitlab.com").replace(/\/+$/, "");
+    const h = { "PRIVATE-TOKEN": ctx.secret };
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    if (ctx.resource === "gitlab.mrs") return getJSON(`${base}/api/v4/merge_requests?scope=all&state=opened&per_page=${max}`, h);
+    if (ctx.resource === "gitlab.pipelines") {
+      const pid = encodeURIComponent(ctx.query.project_id || "");
+      if (!pid) return null;
+      return getJSON(`${base}/api/v4/projects/${pid}/pipelines?per_page=${max}`, h);
+    }
+    return getJSON(`${base}/api/v4/issues?scope=assigned_to_me&state=opened&per_page=${max}`, h);
+  },
+});
+
+reg({
+  id: "bitbucket", label: "Bitbucket", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "bitbucket.prs", label: "Open pull requests (workspace, repo)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const ws = (ctx.query.workspace || "").trim();
+    const repo = (ctx.query.repo || "").trim();
+    if (!ws || !repo) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    // payload: { values: [{ title, author, state, links }] }
+    return getJSON(`https://api.bitbucket.org/2.0/repositories/${encodeURIComponent(ws)}/${encodeURIComponent(repo)}/pullrequests?state=OPEN&pagelen=${max}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "sentry", label: "Sentry", category: "ops", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "sentry.issues", label: "Unresolved issues (org, project)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const org = (ctx.query.org || "").trim();
+    const project = (ctx.query.project || "").trim();
+    if (!org || !project) return null;
+    // payload: array of { title, culprit, count, lastSeen }
+    return getJSON(`https://sentry.io/api/0/projects/${encodeURIComponent(org)}/${encodeURIComponent(project)}/issues/?query=is:unresolved&statsPeriod=24h`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "vercel", label: "Vercel", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "vercel.deployments", label: "Recent deployments", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    const team = ctx.query.teamId ? `&teamId=${encodeURIComponent(ctx.query.teamId)}` : "";
+    // payload: { deployments: [{ name, state, url, created }] }
+    return getJSON(`https://api.vercel.com/v6/deployments?limit=${max}${team}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "netlify", label: "Netlify", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "netlify.sites", label: "Sites", shape: "list" },
+    { id: "netlify.deploys", label: "Site deploys (site_id)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    if (ctx.resource === "netlify.deploys") {
+      const id = (ctx.query.site_id || "").trim();
+      if (!id) return null;
+      return getJSON(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(id)}/deploys?per_page=${max}`, h);
+    }
+    return getJSON(`https://api.netlify.com/api/v1/sites?per_page=${max}`, h);
+  },
+});
+
+reg({
+  id: "cloudflare", label: "Cloudflare", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "cloudflare.zones", label: "Zones", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const max = Math.min(Number(ctx.query.max) || 20, 50);
+    // payload: { result: [{ name, status, plan }] }
+    return getJSON(`https://api.cloudflare.com/client/v4/zones?per_page=${max}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "circleci", label: "CircleCI", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "circleci.pipelines", label: "Project pipelines (project_slug, e.g. gh/org/repo)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const slug = (ctx.query.project_slug || "").trim();
+    if (!slug) return null;
+    // payload: { items: [{ number, state, vcs }] }
+    return getJSON(`https://circleci.com/api/v2/project/${slug}/pipeline`, { "Circle-Token": ctx.secret });
+  },
+});
+
+reg({
+  id: "uptimerobot", label: "UptimeRobot", category: "ops", authKind: "apiKey",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "uptimerobot.monitors", label: "Monitors", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { monitors: [{ friendly_name, status, url }] } — POST with api_key in body
+    return postJSON("https://api.uptimerobot.com/v2/getMonitors", { api_key: ctx.secret, format: "json" });
+  },
+});
+
+reg({
+  id: "statuspage", label: "Statuspage", category: "ops", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "statuspage.incidents", label: "Unresolved incidents (page_id)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const page = (ctx.query.page_id || "").trim();
+    if (!page) return null;
+    // payload: array of { name, status, impact, created_at }
+    return getJSON(`https://api.statuspage.io/v1/pages/${encodeURIComponent(page)}/incidents/unresolved`, { Authorization: `OAuth ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "betteruptime", label: "Better Stack (Uptime)", category: "ops", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "betteruptime.monitors", label: "Monitors", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { data: [{ attributes: { pronounceable_name, status, url } }] }
+    return getJSON("https://uptime.betterstack.com/api/v2/monitors", { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "pagerduty", label: "PagerDuty", category: "ops", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "pagerduty.incidents", label: "Triggered incidents", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    // payload: { incidents: [{ title, status, urgency, created_at }] }
+    return getJSON(`https://api.pagerduty.com/incidents?statuses[]=triggered&limit=${max}`, {
+      Authorization: `Token token=${ctx.secret}`, Accept: "application/vnd.pagerduty+json;version=2",
+    });
+  },
+});
