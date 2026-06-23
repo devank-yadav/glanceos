@@ -745,3 +745,138 @@ reg({
     return { items };
   },
 });
+
+// ============================================================================
+// Integrations B2 — keyless civic / finance / media providers (no login).
+// ============================================================================
+
+reg({
+  id: "usgs", label: "USGS Earthquakes", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  resources: [{ id: "usgs.quakes", label: "Recent earthquakes", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    const minmag = Number(ctx.query.minMagnitude) || 2.5;
+    type F = { properties?: { place?: string; mag?: number; time?: number; url?: string } };
+    const raw = (await getJSON(
+      `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit=${max}&orderby=time&minmagnitude=${minmag}`,
+      UA,
+    )) as { features?: F[] } | null;
+    const items = (raw?.features ?? []).map((f) => ({
+      title: f.properties?.place ?? "Earthquake",
+      value: typeof f.properties?.mag === "number" ? `M${f.properties.mag.toFixed(1)}` : "",
+      label: f.properties?.time ? new Date(f.properties.time).toISOString().slice(0, 16).replace("T", " ") : "",
+      url: f.properties?.url ?? "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "diseasesh", label: "Health stats (disease.sh)", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10 * 60_000,
+  resources: [{ id: "diseasesh.country", label: "Country stats", shape: "scalar" }],
+  async resolve(ctx) {
+    const country = (ctx.query.country || "World").trim();
+    const url = country.toLowerCase() === "world"
+      ? "https://disease.sh/v3/covid-19/all"
+      : `https://disease.sh/v3/covid-19/countries/${encodeURIComponent(country)}`;
+    const raw = (await getJSON(url, UA)) as
+      { cases?: number; todayCases?: number; deaths?: number; active?: number; recovered?: number; tests?: number } | null;
+    if (!raw) return null;
+    return {
+      value: Number(raw.active ?? raw.cases ?? 0),
+      label: `${country} · active`,
+      cases: Number(raw.cases ?? 0), todayCases: Number(raw.todayCases ?? 0),
+      deaths: Number(raw.deaths ?? 0), recovered: Number(raw.recovered ?? 0),
+    };
+  },
+});
+
+reg({
+  id: "coingecko", label: "CoinGecko", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "coingecko.markets", label: "Coin prices", shape: "list" },
+    { id: "coingecko.trending", label: "Trending coins", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "coingecko.trending") {
+      type T = { item?: { name?: string; symbol?: string; market_cap_rank?: number } };
+      const raw = (await getJSON("https://api.coingecko.com/api/v3/search/trending", UA)) as { coins?: T[] } | null;
+      const items = (raw?.coins ?? []).map((c) => ({
+        title: c.item?.name ?? "", label: (c.item?.symbol ?? "").toUpperCase(), value: c.item?.market_cap_rank ?? "",
+      }));
+      return { items };
+    }
+    const vs = (ctx.query.vs || "usd").toLowerCase().replace(/[^a-z]/g, "");
+    const ids = (ctx.query.ids || "bitcoin,ethereum,solana").replace(/[^\w,-]/g, "");
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    type M = { name?: string; symbol?: string; current_price?: number; price_change_percentage_24h?: number };
+    const raw = (await getJSON(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vs}&ids=${ids}&per_page=${max}&page=1`,
+      UA,
+    )) as M[] | null;
+    const items = (raw ?? []).map((c) => ({
+      title: c.name ?? "", label: (c.symbol ?? "").toUpperCase(),
+      value: c.current_price ?? 0, change: Number(c.price_change_percentage_24h ?? 0),
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "tvmaze", label: "TVmaze", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "tvmaze.search", label: "Show search", shape: "list" },
+    { id: "tvmaze.schedule", label: "Today's episodes (by country)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "tvmaze.schedule") {
+      const country = (ctx.query.country || "US").replace(/[^A-Za-z]/g, "").slice(0, 2) || "US";
+      const max = Math.min(Number(ctx.query.max) || 12, 40);
+      type E = { name?: string; airtime?: string; show?: { name?: string } };
+      const raw = (await getJSON(`https://api.tvmaze.com/schedule?country=${country}`, UA)) as E[] | null;
+      const items = (raw ?? []).slice(0, max).map((e) => ({
+        title: e.show?.name ?? "", label: e.name ?? "", value: e.airtime ?? "",
+      }));
+      return { items };
+    }
+    const q = (ctx.query.q || ctx.query.query || "").trim();
+    if (!q) return null;
+    const max = Math.min(Number(ctx.query.max) || 8, 20);
+    type S = { show?: { name?: string; premiered?: string; rating?: { average?: number } } };
+    const raw = (await getJSON(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`, UA)) as S[] | null;
+    const items = (raw ?? []).slice(0, max).map((s) => ({
+      title: s.show?.name ?? "", label: (s.show?.premiered ?? "").slice(0, 4), value: s.show?.rating?.average ?? "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "jikan", label: "Anime (Jikan / MyAnimeList)", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "jikan.top", label: "Top anime", shape: "list" },
+    { id: "jikan.search", label: "Anime search", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    type A = { title?: string; title_english?: string; score?: number; year?: number };
+    let url: string;
+    if (ctx.resource === "jikan.search") {
+      const q = (ctx.query.q || ctx.query.query || "").trim();
+      if (!q) return null;
+      url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&limit=${max}&order_by=score&sort=desc`;
+    } else {
+      url = `https://api.jikan.moe/v4/top/anime?limit=${max}`;
+    }
+    const raw = (await getJSON(url, UA)) as { data?: A[] } | null;
+    const items = (raw?.data ?? []).map((a) => ({
+      title: a.title_english || a.title || "", label: a.year ? String(a.year) : "", value: a.score ?? "",
+    }));
+    return { items };
+  },
+});

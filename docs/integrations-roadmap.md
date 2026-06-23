@@ -13,7 +13,7 @@ Architecture per provider: add a `reg({...})` block (id, label, category, authKi
 ## Batches
 
 - [x] **B1 — Keyless social/dev/books (render tonight):** reddit, devto, lobsters, npm, bluesky, mastodon, openlibrary, steam, thesportsdb. New cats: social, books, gaming, sports. + CAT_LABEL. ✅ 31 providers, 231 server tests green.
-- [ ] **B2 — Keyless news/finance/space/civic:** stooq (stocks CSV), coincap (crypto markets), worldbank/restcountries, disease.sh (health stats), open-notify/ISS-pass, USGS earthquakes, nasa APOD (DEMO_KEY), open-meteo marine/pollen. cats: finance, news, civic.
+- [x] **B2 — Keyless civic/finance/media:** usgs (earthquakes), diseasesh (health stats), coingecko (markets+trending), tvmaze (TV search+schedule), jikan (anime top+search). ✅ 36 providers, 231 server tests green. (Dropped from plan as unreliable/blocked: stooq, coincap, restcountries, nasa DEMO_KEY — revisit with keyed providers later.)
 - [ ] **B3 — Dev/observability tokens:** gitlab, bitbucket, sentry, vercel, netlify, cloudflare, circleci, statuspage/betteruptime, uptimerobot, pagerduty.
 - [ ] **B4 — Productivity/PM tokens:** clickup, monday, height, shortcut, basecamp, harvest, toggl, wakatime, airtable, pinboard, raindrop.
 - [ ] **B5 — Money/analytics tokens:** stripe, ynab, plausible, umami, fathom, posthog, simpleanalytics, lemonsqueezy, paddle, openexchangerates.
