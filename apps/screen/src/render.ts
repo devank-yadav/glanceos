@@ -49,7 +49,8 @@ function applySpotlight(spotlight: LayoutT["spotlight"]): void {
   spotlightStop = null;
   const list = () => [...cells.values()];
   if (!spotlight) { for (const c of list()) c.el.classList.remove("is-spotlight", "is-dimmed"); return; }
-  const secs = Math.max(3, spotlight.seconds);
+  const secs = Math.max(3, Number(spotlight.seconds) || 20); // zod-free runtime: a cached/legacy payload may lack seconds → never NaN
+
   let last = -1;
   const tick = () => {
     const cs = list();

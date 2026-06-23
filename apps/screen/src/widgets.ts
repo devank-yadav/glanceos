@@ -2491,7 +2491,7 @@ const deck: Render = (el, w) => {
   if (slides.length === 0) { el.appendChild(wrap); return; }
   const dots = slides.length > 1 ? div("deck-dots") : null;
   const dot = slides.map(() => { const d = div("deck-dot"); dots?.appendChild(d); return d; });
-  const secs = Math.max(2, w.props.seconds);
+  const secs = Math.max(2, Number(w.props.seconds) || 8); // never NaN if a cached payload lacks seconds
   let last = -1;
   const show = () => {
     const idx = Math.floor(Date.now() / 1000 / secs) % slides.length;

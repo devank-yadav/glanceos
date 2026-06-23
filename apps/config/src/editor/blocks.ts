@@ -421,6 +421,4 @@ export const ENTER_BREAKS = new Set<WidgetType>([
   "text", "heading", "subheading", "lead", "pullquote", "quote", "label", "banner", "numberedHeading",
   // v0.9
   "epigraph", "highlight", "aside", "kicker", "mantra", "ticker", "logoText",
-  // v8.0 — deck slides are a multi-line list (slides split on blank lines)
-  "deck",
 ]);
