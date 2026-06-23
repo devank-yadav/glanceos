@@ -51,16 +51,41 @@ const SINGLE: Record<string, { sel: string; prop: string; strip?: boolean }> = {
   socialHandle: { sel: ".social-handle", prop: "handle" },
   quote: { sel: ".quote-text", prop: "content", strip: true },
   pullquote: { sel: ".pullquote-text", prop: "content", strip: true },
+  dividerLabeled: { sel: ".dl-label", prop: "label" },
+  link: { sel: ".link-label", prop: "label" },
   // value-bearing (skip when bound to a live source — handled below)
   stat: { sel: ".stat-value", prop: "value" },
   metric: { sel: ".metric-value", prop: "value" },
   bigNumber: { sel: ".stat-value", prop: "value" },
-  moneyStat: { sel: ".money-amt", prop: "amount" },
-  unitStat: { sel: ".us-val", prop: "value" },
+  moneyStat: { sel: ".stat-value", prop: "amount" }, // renderer uses .stat-value, not .money-amt
+  unitStat: { sel: ".metric-value", prop: "value" }, // renderer uses .metric-value, not .us-val
+};
+
+// Blocks with 2+ separate editable text nodes (the renderer paints each prop into its own
+// node). Listed here are the fields BEYOND the primary in SINGLE (or the full set when the
+// type isn't in SINGLE). Each becomes its own in-place editor. `editFields()` merges these
+// with the SINGLE primary so a click lands on whichever field is nearest.
+const EXTRA: Record<string, { sel: string; prop: string; singleLine?: boolean; strip?: boolean }[]> = {
+  definition: [{ sel: ".def-term", prop: "term", singleLine: true }],
+  eventBanner: [{ sel: ".event-when", prop: "when", singleLine: true }],
+  priceTag: [{ sel: ".pt-price", prop: "price", singleLine: true }],
+  socialHandle: [{ sel: ".social-platform", prop: "platform", singleLine: true }],
+  welcomeSign: [{ sel: ".welcome-msg", prop: "message" }],
+  todaySpecial: [{ sel: ".ts-detail", prop: "detail" }],
+  signature: [{ sel: ".sig-role", prop: "role", singleLine: true }],
+  letterhead: [{ sel: ".lh-tagline", prop: "tagline", singleLine: true }],
+  fieldRow: [{ sel: ".field-label", prop: "label", singleLine: true }],
+  frame: [{ sel: ".frame-label", prop: "label", singleLine: true }],
+  noticeBar: [{ sel: ".notice-icon", prop: "icon", singleLine: true }],
+  profileCard: [{ sel: ".pc-role", prop: "role", singleLine: true }, { sel: ".pc-detail", prop: "detail", singleLine: true }],
+  nameTag: [{ sel: ".nametag-sub", prop: "subtitle", singleLine: true }],
+  // not in SINGLE — full field set lives here
+  numberedHeading: [{ sel: ".numhead-n", prop: "number", singleLine: true }, { sel: ".numhead-t", prop: "content", singleLine: true }],
+  readingNow: [{ sel: ".reading-title", prop: "title", singleLine: true }, { sel: ".reading-author", prop: "author", singleLine: true }],
 };
 
 // Types that never hold their own newline — Enter commits + blurs instead of inserting one.
-const SINGLE_LINE = new Set(["heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading", "kicker", "ticker", "mantra", "logoText", "phoneNumber", "socialHandle", "moneyStat", "unitStat", "eventBanner", "priceTag"]);
+const SINGLE_LINE = new Set(["heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading", "kicker", "ticker", "mantra", "logoText", "phoneNumber", "socialHandle", "moneyStat", "unitStat", "eventBanner", "priceTag", "dividerLabeled", "link"]);
 
 // Multi-item lists rendered as one item per line. Each shares a container + per-row
 // structure so we can edit items in place: Enter = new item, Backspace-at-start = merge.
@@ -69,6 +94,24 @@ const LIST_CFG: Record<string, { container: string; row: string; marker: string;
   numberedList: { container: ".list", row: "li", marker: "li-marker", text: "li-text", mark: (i) => `${i + 1}.` },
   checklist: { container: ".list", row: "li", marker: "li-marker", text: "li-text", mark: () => "", check: true },
   steps: { container: ".steps", row: "step-row", marker: "step-n", text: "step-t", mark: (i) => `${i + 1}` },
+  footnotes: { container: ".footnotes", row: "fn-row", marker: "fn-num", text: "fn-text", mark: (i) => `${i + 1}` },
+};
+
+// Two-column list blocks: each row holds a key + a value node, serialized one row per line
+// as `key<delim> value`. A shared wirer (wireDuoList) edits both nodes in place, with
+// Enter/Backspace row management and the same "+ add" affordance as the single lists.
+const DUO_CFG: Record<string, { container: string; row: string; keySel: string; valSel: string; delim: string; prop: string }> = {
+  keyValue: { container: ".kv", row: ".kv-row", keySel: ".kv-key", valSel: ".kv-val", delim: ":", prop: "pairs" },
+  hours: { container: ".kv", row: ".kv-row", keySel: ".kv-key", valSel: ".kv-val", delim: ":", prop: "content" },
+  directory: { container: ".kv", row: ".kv-row", keySel: ".kv-key", valSel: ".kv-val", delim: "|", prop: "items" },
+  peopleList: { container: ".kv", row: ".kv-row", keySel: ".kv-key", valSel: ".kv-val", delim: "|", prop: "items" },
+  wayfinding: { container: ".kv", row: ".kv-row", keySel: ".kv-key", valSel: ".wf-dir", delim: "|", prop: "items" },
+  glossary: { container: ".kv", row: ".gloss-row", keySel: ".gloss-term", valSel: ".gloss-def", delim: "|", prop: "items" },
+  bookList: { container: ".kv", row: ".book-row", keySel: ".book-title", valSel: ".book-author", delim: "|", prop: "items" },
+  menuList: { container: ".menu", row: ".menu-row", keySel: ".menu-item", valSel: ".menu-price", delim: "|", prop: "content" },
+  timeline: { container: ".timeline", row: ".tl-row", keySel: ".tl-time", valSel: ".tl-text", delim: "|", prop: "items" },
+  faq: { container: ".faq", row: ".faq-row", keySel: ".faq-q", valSel: ".faq-a", delim: "|", prop: "items" },
+  statRow: { container: ".statrow", row: ".sr-cell", keySel: ".sr-value", valSel: ".sr-label", delim: "|", prop: "items" },
 };
 
 const stripQuotes = (s: string): string => s.replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, "");
@@ -162,6 +205,36 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     node.classList.add("glance-editable");
   };
 
+  // Every editable text field for a block type = its SINGLE primary (if any) + any EXTRA
+  // fields. One unified list so single- and multi-field blocks share the click/wire path.
+  const editFields = (type: string): { sel: string; prop: string; singleLine?: boolean; strip?: boolean }[] => {
+    const out: { sel: string; prop: string; singleLine?: boolean; strip?: boolean }[] = [];
+    const sg = SINGLE[type];
+    if (sg) out.push({ sel: sg.sel, prop: sg.prop, strip: sg.strip, singleLine: SINGLE_LINE.has(type) });
+    if (EXTRA[type]) out.push(...EXTRA[type]);
+    return out;
+  };
+
+  // nearest node to a click (2-D), for "click anywhere in the block → caret in the closest field".
+  const nearest2D = (nodes: HTMLElement[], x: number, y: number): HTMLElement | null => {
+    const d2 = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return (r.left + r.width / 2 - x) ** 2 + (r.top + r.height / 2 - y) ** 2; };
+    return nodes.reduce<HTMLElement | null>((best, n) => (!best || d2(n) < d2(best) ? n : best), null);
+  };
+
+  // A dimmed, non-editable "+ …" ghost appended to a list so adding an item is discoverable
+  // (not just an Enter you have to know about). Styled inline — edit.ts is a Studio-only
+  // chunk, never shipped to real screens, so this costs the runtime gzip budget nothing.
+  const makeAddItem = (label: string, onAdd: () => void): HTMLElement => {
+    const add = document.createElement("div");
+    add.className = "gl-additem";
+    add.textContent = `+ ${label}`;
+    add.style.cssText = "opacity:.4;cursor:pointer;font-size:.82em;padding:3px 0;user-select:none;";
+    add.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); onAdd(); });
+    add.addEventListener("pointerenter", () => { add.style.opacity = ".7"; });
+    add.addEventListener("pointerleave", () => { add.style.opacity = ".4"; });
+    return add;
+  };
+
   // ---- single-text blocks ----
   const wireText = (id: string, node: HTMLElement, prop: string, singleLine: boolean, strip?: boolean): void => {
     const w = node as HTMLElement & { _glw?: boolean };
@@ -198,7 +271,7 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
       row.className = cfg.row;
       const marker = cw.ownerDocument.createElement("div");
       marker.className = cfg.marker;
-      if (cfg.check) marker.innerHTML = CHECK_OFF; else marker.textContent = cfg.mark(0);
+      if (cfg.check) { marker.innerHTML = CHECK_OFF; marker.style.cursor = "pointer"; } else marker.textContent = cfg.mark(0);
       const t = cw.ownerDocument.createElement("div");
       t.className = cfg.text; t.textContent = text;
       row.append(marker, t);
@@ -219,10 +292,13 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
         e.stopPropagation();
         if (e.key === "Enter") {
           e.preventDefault();
+          // Enter on a blank trailing row exits the list (Notion) instead of stacking empties.
+          const liEl = t.closest("." + cfg.row), after = liEl?.nextElementSibling;
+          if ((t.textContent ?? "") === "" && (!after || after.classList.contains("gl-additem"))) { t.blur(); return; }
           const off = caretOffset(t), txt = t.textContent ?? "";
           t.textContent = txt.slice(0, off);
           const row = makeRow(txt.slice(off));
-          t.closest("." + cfg.row)?.after(row);
+          liEl?.after(row);
           renumber(); setCaret(row.querySelector<HTMLElement>("." + cfg.text)!, 0); s.update();
         } else if (e.key === "Backspace" && caretOffset(t) === 0) {
           const li = t.closest("." + cfg.row);
@@ -252,6 +328,105 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
         editing.add(id); s.commit(); editing.delete(id);
       });
     }
+    // An empty list is otherwise a dead block — give it one row to click into. The "+ add"
+    // ghost makes adding discoverable (no need to know Enter splits a row).
+    if (items().length === 0) cw.appendChild(makeRow(""));
+    let ghost: HTMLElement;
+    const addRow = () => { const row = makeRow(""); cw.insertBefore(row, ghost); renumber(); setCaret(row.querySelector<HTMLElement>("." + cfg.text)!, 0); s.update(); };
+    ghost = makeAddItem(cfg.check ? "add task" : "add item", addRow);
+    cw.appendChild(ghost);
+  };
+
+  // ---- two-column lists (keyValue/hours/menuList/timeline/faq/glossary/directory/wayfinding/statRow/peopleList/bookList) ----
+  // Each row holds a key + value node; Enter on the key jumps to the value, Enter on the
+  // value makes a new row, Backspace-at-start merges/removes. Serialized one row per line.
+  const wireDuoList = (id: string, cell: HTMLElement, type: string): void => {
+    const cfg = DUO_CFG[type];
+    if (!cfg) return;
+    const container = cell.querySelector<HTMLElement>(cfg.container);
+    const cw = container as (HTMLElement & { _glw?: boolean }) | null;
+    if (!cw || cw._glw) return; cw._glw = true;
+    const sep = cfg.delim === ":" ? ": " : " | ";
+    const rowClass = cfg.row.slice(1), keyClass = cfg.keySel.slice(1), valClass = cfg.valSel.slice(1);
+    const rows = () => [...cw.querySelectorAll<HTMLElement>(cfg.row)].filter((r) => !r.classList.contains("gl-additem"));
+    const serialize = (): Record<string, unknown> => ({
+      [cfg.prop]: rows().map((r) => {
+        const k = (r.querySelector<HTMLElement>(cfg.keySel)?.textContent ?? "").trim();
+        const v = (r.querySelector<HTMLElement>(cfg.valSel)?.textContent ?? "").trim();
+        return v ? `${k}${sep}${v}` : k;
+      }).join("\n"),
+    });
+    const s = makeSender(id, serialize);
+    // Clone an existing row (keeps dots/leaders) when one with both nodes exists, else build
+    // a minimal row — the renderer restores full structure on the next repaint after blur.
+    let template: HTMLElement | null = rows()[0] ?? null;
+    if (template && !template.querySelector(cfg.valSel)) template = null;
+    const minimalRow = (): HTMLElement => {
+      const r = cw.ownerDocument.createElement("div"); r.className = rowClass;
+      const k = cw.ownerDocument.createElement("div"); k.className = keyClass;
+      const v = cw.ownerDocument.createElement("div"); v.className = valClass;
+      r.append(k, v); return r;
+    };
+    const blankClone = (tmpl: HTMLElement): HTMLElement => {
+      const c = tmpl.cloneNode(true) as HTMLElement;
+      const k = c.querySelector<HTMLElement>(cfg.keySel), v = c.querySelector<HTMLElement>(cfg.valSel);
+      if (k) k.textContent = ""; if (v) v.textContent = "";
+      return c;
+    };
+    let ghost: HTMLElement;
+    const wireNode = (n: HTMLElement, isKey: boolean): void => {
+      const nw = n as HTMLElement & { _glw?: boolean };
+      if (nw._glw) return; nw._glw = true;
+      markEditable(n);
+      n.addEventListener("focus", () => { editing.add(id); opts.post({ type: "glanceos:focus", id }); });
+      n.addEventListener("input", () => s.update());
+      n.addEventListener("blur", () => { window.setTimeout(() => {
+        const active = cw.ownerDocument.activeElement as HTMLElement | null;
+        if (!active || !cw.contains(active)) { editing.delete(id); s.commit(); }
+      }, 0); });
+      n.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        const row = n.closest(cfg.row) as HTMLElement | null;
+        if (e.key === "Escape") { n.blur(); return; }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const v = row?.querySelector<HTMLElement>(cfg.valSel);
+          if (isKey && v) { setCaret(v, (v.textContent ?? "").length); return; } // key → value
+          const k = row?.querySelector<HTMLElement>(cfg.keySel);
+          const empty = !(k?.textContent ?? "").trim() && !(v?.textContent ?? "").trim();
+          const after = row?.nextElementSibling;
+          if (empty && (!after || after.classList.contains("gl-additem"))) { n.blur(); return; } // exit on blank trailing row
+          addRow(row ?? undefined);
+        } else if (e.key === "Backspace" && caretOffset(n) === 0) {
+          if (!isKey) { const k = row?.querySelector<HTMLElement>(cfg.keySel); if (k) { e.preventDefault(); setCaret(k, (k.textContent ?? "").length); } return; }
+          const k = row?.querySelector<HTMLElement>(cfg.keySel), v = row?.querySelector<HTMLElement>(cfg.valSel);
+          if (!(k?.textContent ?? "") && !(v?.textContent ?? "").trim()) {
+            const prev = row?.previousElementSibling as HTMLElement | null;
+            if (prev && !prev.classList.contains("gl-additem")) {
+              e.preventDefault();
+              const pv = prev.querySelector<HTMLElement>(cfg.valSel) ?? prev.querySelector<HTMLElement>(cfg.keySel);
+              row?.remove(); if (pv) setCaret(pv, (pv.textContent ?? "").length); s.update();
+            }
+          }
+        }
+      });
+    };
+    const wireRow = (r: HTMLElement): void => {
+      const k = r.querySelector<HTMLElement>(cfg.keySel), v = r.querySelector<HTMLElement>(cfg.valSel);
+      if (k) wireNode(k, true);
+      if (v) wireNode(v, false);
+    };
+    const makeRow = (): HTMLElement => { const r = template ? blankClone(template) : minimalRow(); wireRow(r); return r; };
+    const addRow = (afterRow?: HTMLElement): void => {
+      const r = makeRow();
+      if (afterRow) afterRow.after(r); else cw.insertBefore(r, ghost);
+      const k = r.querySelector<HTMLElement>(cfg.keySel); if (k) setCaret(k, 0);
+      s.update();
+    };
+    rows().forEach(wireRow);
+    if (rows().length === 0) { const r = makeRow(); cw.appendChild(r); template = r; }
+    ghost = makeAddItem("add row", () => addRow());
+    cw.appendChild(ghost);
   };
 
   // ---- tables ----
@@ -316,7 +491,9 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     cellEl.addEventListener("pointerdown", (e) => {
       const t = e.target as HTMLElement;
       if (t.closest(".glance-editable")) return; // hit the text itself → native caret placement
+      if (t.closest(".gl-additem")) return; // the "+ add" ghost owns its click
       const cfg = LIST_CFG[type];
+      const dcfg = DUO_CFG[type];
       if (cfg && t.closest("." + cfg.marker)) return; // checkbox toggle owns its click
       let node: HTMLElement | null = null;
       if (cfg) {
@@ -327,13 +504,16 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
           const a = it.getBoundingClientRect(), b = best.getBoundingClientRect();
           return Math.abs(a.top + a.height / 2 - e.clientY) < Math.abs(b.top + b.height / 2 - e.clientY) ? it : best;
         }, null);
+      } else if (dcfg) {
+        // focus the key/value node nearest the click (2-D)
+        node = nearest2D([...cellEl.querySelectorAll<HTMLElement>(dcfg.keySel + "," + dcfg.valSel)], e.clientX, e.clientY);
       } else if (type === "table") {
         // focus the table cell nearest the click (2-D)
-        const d2 = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2; };
-        node = [...cellEl.querySelectorAll<HTMLElement>("th,td")].reduce<HTMLElement | null>((best, c) => (!best || d2(c) < d2(best) ? c : best), null);
+        node = nearest2D([...cellEl.querySelectorAll<HTMLElement>("th,td")], e.clientX, e.clientY);
       } else {
-        const map = SINGLE[type];
-        node = map ? cellEl.querySelector<HTMLElement>(map.sel) : null;
+        // single- or multi-field block → caret in the nearest editable field
+        const cands = editFields(type).map((f) => cellEl.querySelector<HTMLElement>(f.sel)).filter((n): n is HTMLElement => !!n);
+        node = cands.length <= 1 ? (cands[0] ?? null) : nearest2D(cands, e.clientX, e.clientY);
       }
       if (!node) return;
       e.preventDefault();
@@ -348,16 +528,17 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
     for (const [id, cell] of getCells()) {
       const cellEl = cell.el as HTMLElement;
       const block = byId.get(id);
+      const fields = block ? editFields(block.type) : [];
       const editable =
         !!block && !block.source &&
-        (block.type === "table" || !!LIST_CFG[block.type] || (!!SINGLE[block.type] && !(block.type === "text" && (block.props as { format?: string }).format === "markdown")));
+        (block.type === "table" || !!LIST_CFG[block.type] || !!DUO_CFG[block.type] ||
+          (fields.length > 0 && !(block.type === "text" && (block.props as { format?: string }).format === "markdown")));
       if (!editable) { cellEl.style.cursor = ""; cellEl.classList.remove("glance-editcell"); continue; }
       wireCellFocus(id, cellEl, block!.type);
       if (block!.type === "table") { wireTable(id, cellEl); continue; }
       if (LIST_CFG[block!.type]) { wireList(id, cellEl, block!.type); continue; }
-      const map = SINGLE[block!.type]!;
-      const node = cellEl.querySelector<HTMLElement>(map.sel);
-      if (node) wireText(id, node, map.prop, SINGLE_LINE.has(block!.type), map.strip);
+      if (DUO_CFG[block!.type]) { wireDuoList(id, cellEl, block!.type); continue; }
+      for (const f of fields) { const node = cellEl.querySelector<HTMLElement>(f.sel); if (node) wireText(id, node, f.prop, !!f.singleLine, f.strip); }
     }
   };
 

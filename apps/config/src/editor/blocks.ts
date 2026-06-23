@@ -371,6 +371,17 @@ export const TEXT_PROP: Partial<Record<WidgetType, string>> = {
   todaySpecial: "title",
   phoneNumber: "number",
   socialHandle: "handle",
+  // v9.0 — more in-place text blocks + two-column lists
+  dividerLabeled: "label",
+  link: "label",
+  readingNow: "title",
+  footnotes: "items",
+  glossary: "items",
+  directory: "items",
+  wayfinding: "items",
+  statRow: "items",
+  peopleList: "items",
+  bookList: "items",
 };
 
 // v8.0 — block types edited TRULY IN PLACE (contentEditable inside the live preview
@@ -383,8 +394,12 @@ export const INPLACE_EDIT = new Set<WidgetType>([
   "badge", "nameTag", "signature", "logoText", "kicker", "letterhead", "fieldRow", "profileCard",
   "definition", "frame", "eventBanner", "todaySpecial", "welcomeSign", "priceTag", "phoneNumber", "socialHandle",
   "quote", "pullquote", "stat", "metric", "bigNumber", "moneyStat", "unitStat",
+  // v9.0 — more single/multi-field text blocks made editable in place
+  "dividerLabeled", "link", "numberedHeading", "readingNow",
   // multi-item lists, edited per-item in place (Enter = new item, Backspace = merge)
-  "bulletList", "numberedList", "checklist", "steps",
+  "bulletList", "numberedList", "checklist", "steps", "footnotes",
+  // v9.0 — two-column lists, edited per-row in place (key + value nodes)
+  "keyValue", "hours", "menuList", "timeline", "faq", "glossary", "directory", "wayfinding", "statRow", "peopleList", "bookList",
   // tables, edited per-cell in place (Enter in the last cell grows a row)
   "table",
 ]);
@@ -412,6 +427,8 @@ export const SINGLE_LINE = new Set<WidgetType>([
   "heading", "subheading", "label", "banner", "stat", "badge", "nameTag", "numberedHeading",
   // v0.9
   "kicker", "ticker", "mantra", "logoText",
+  // v9.0
+  "dividerLabeled", "link",
 ]);
 
 // Prose types where pressing Enter starts a NEW text line below (Notion-style),

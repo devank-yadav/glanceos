@@ -150,6 +150,54 @@ describe("in-place edit layer — contentEditable + lock (v8.0)", () => {
   });
 });
 
+describe("in-place edit — v9.0 broad coverage", () => {
+  const pay = (layout: object): StreamPayloadT => ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
+  const wire = (block: object): Array<Record<string, unknown>> => {
+    const posted: Array<Record<string, unknown>> = [];
+    const doc = { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [block] }] };
+    renderPayload(pay(doc));
+    createEditLayer({ post: (m) => posted.push(m as Record<string, unknown>), getDoc: () => doc as never }).refresh();
+    return posted;
+  };
+
+  it("edits BOTH fields of a multi-field block (definition: term + meaning)", () => {
+    const posted = wire({ id: "d", type: "definition", width: 1, props: { term: "API", meaning: "interface" } });
+    const term = document.querySelector(".def-term") as HTMLElement;
+    expect(term.getAttribute("contenteditable")).toBeTruthy();
+    expect((document.querySelector(".def-meaning") as HTMLElement).getAttribute("contenteditable")).toBeTruthy();
+    term.dispatchEvent(new FocusEvent("focus"));
+    term.textContent = "REST";
+    term.dispatchEvent(new FocusEvent("blur"));
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "d", patch: { term: "REST" } });
+  });
+
+  it("edits a two-column list per-row and serializes `key: value` (keyValue)", async () => {
+    const posted = wire({ id: "kv", type: "keyValue", width: 1, props: { pairs: "Name: Ada\nRole: Eng" } });
+    const keys = document.querySelectorAll<HTMLElement>(".kv-key");
+    const vals = document.querySelectorAll<HTMLElement>(".kv-val");
+    expect(keys.length).toBe(2);
+    expect(keys[0]!.getAttribute("contenteditable")).toBeTruthy();
+    expect(vals[0]!.getAttribute("contenteditable")).toBeTruthy();
+    vals[0]!.dispatchEvent(new FocusEvent("focus"));
+    vals[0]!.textContent = "Grace";
+    vals[0]!.dispatchEvent(new FocusEvent("blur"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(posted.find((m) => m.type === "glanceos:edit")).toMatchObject({ id: "kv", patch: { pairs: "Name: Grace\nRole: Eng" } });
+  });
+
+  it("gives every list a '+ add' affordance (checklist)", () => {
+    wire({ id: "c", type: "checklist", width: 1, props: { items: "buy milk" } });
+    expect(document.querySelector(".list .gl-additem")?.textContent).toContain("add");
+  });
+
+  it("fixes the moneyStat / unitStat selectors so the value edits in place", () => {
+    wire({ id: "m", type: "moneyStat", width: 1, props: { label: "Rev", currency: "$", amount: "100" } });
+    expect((document.querySelector(".stat-value") as HTMLElement).getAttribute("contenteditable")).toBeTruthy();
+    wire({ id: "u", type: "unitStat", width: 1, props: { label: "Spd", value: "88", unit: "mph" } });
+    expect((document.querySelector(".metric-value") as HTMLElement).getAttribute("contenteditable")).toBeTruthy();
+  });
+});
+
 describe("deck / slideshow (v8.0 rotation)", () => {
   const pay = (layout: object): StreamPayloadT => ({ claimed: true, state: { layoutVersion: 1, data: {}, layout } }) as unknown as StreamPayloadT;
   it("renders one slide + a progress dot per slide, deterministically from the wall clock", () => {
