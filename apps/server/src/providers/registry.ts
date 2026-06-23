@@ -1191,3 +1191,161 @@ reg({
     return getJSON(`https://api.raindrop.io/rest/v1/raindrops/${coll}?perpage=${max}`, { Authorization: `Bearer ${ctx.secret}` });
   },
 });
+
+// ============================================================================
+// Integrations B5 — money / analytics providers (paste a secret/restricted key
+// or API key). Documented endpoints, raw payload → SourceMap.
+// ============================================================================
+
+reg({
+  id: "stripe", label: "Stripe", category: "money", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "stripe.balance", label: "Account balance", shape: "scalar" },
+    { id: "stripe.charges", label: "Recent charges", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // use a restricted (read-only) key
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "stripe.charges") {
+      const max = Math.min(Number(ctx.query.max) || 10, 50);
+      return getJSON(`https://api.stripe.com/v1/charges?limit=${max}`, h); // { data: [{ amount, currency, status, created }] }
+    }
+    const raw = (await getJSON("https://api.stripe.com/v1/balance", h)) as
+      { available?: { amount?: number; currency?: string }[] } | null;
+    const a = raw?.available?.[0];
+    return { value: a ? (a.amount ?? 0) / 100 : 0, label: (a?.currency ?? "usd").toUpperCase() + " available" };
+  },
+});
+
+reg({
+  id: "ynab", label: "YNAB", category: "money", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "ynab.budgets", label: "Budgets", shape: "list" },
+    { id: "ynab.accounts", label: "Accounts (budget_id, or last-used)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "ynab.accounts") {
+      const budget = (ctx.query.budget_id || "last-used").trim();
+      return getJSON(`https://api.ynab.com/v1/budgets/${encodeURIComponent(budget)}/accounts`, h); // { data: { accounts: [{ name, balance }] } }
+    }
+    return getJSON("https://api.ynab.com/v1/budgets", h); // { data: { budgets: [{ name }] } }
+  },
+});
+
+reg({
+  id: "plausible", label: "Plausible Analytics", category: "analytics", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "plausible.aggregate", label: "Site totals (site_id)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const site = (ctx.query.site_id || "").trim();
+    if (!site) return null;
+    const base = ((ctx.config.baseUrl as string) || "https://plausible.io").replace(/\/+$/, "");
+    const period = ["day", "7d", "30d", "month"].includes(ctx.query.period || "") ? ctx.query.period : "7d";
+    // payload: { results: { visitors: { value }, pageviews: { value } } }
+    return getJSON(`${base}/api/v1/stats/aggregate?site_id=${encodeURIComponent(site)}&period=${period}&metrics=visitors,pageviews,bounce_rate`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "umami", label: "Umami Analytics", category: "analytics", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "umami.stats", label: "Website stats (website_id)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const id = (ctx.query.website_id || "").trim();
+    const base = ((ctx.config.baseUrl as string) || "https://api.umami.is").replace(/\/+$/, "");
+    if (!id) return null;
+    const end = Date.now();
+    const start = end - 7 * 24 * 60 * 60 * 1000;
+    // payload: { pageviews: { value }, visitors: { value }, visits: { value } }
+    return getJSON(`${base}/api/websites/${encodeURIComponent(id)}/stats?startAt=${start}&endAt=${end}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "fathom", label: "Fathom Analytics", category: "analytics", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "fathom.aggregations", label: "Site aggregates (entity_id)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const site = (ctx.query.entity_id || ctx.query.site_id || "").trim();
+    if (!site) return null;
+    // payload: [{ visits, pageviews }]
+    return getJSON(`https://api.usefathom.com/v1/aggregations?entity=pageview&entity_id=${encodeURIComponent(site)}&aggregates=visits,pageviews,uniques&date_from=${new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "posthog", label: "PostHog", category: "analytics", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "posthog.insights", label: "Saved insights (project_id)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const project = (ctx.query.project_id || "").replace(/\D/g, "");
+    if (!project) return null;
+    const base = ((ctx.config.baseUrl as string) || "https://app.posthog.com").replace(/\/+$/, "");
+    // payload: { results: [{ name, derived_name }] }
+    return getJSON(`${base}/api/projects/${project}/insights/?limit=${Math.min(Number(ctx.query.max) || 12, 25)}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "simpleanalytics", label: "Simple Analytics", category: "analytics", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "simpleanalytics.stats", label: "Site stats (hostname)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const host = (ctx.query.hostname || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+    if (!host) return null;
+    const h: Record<string, string> = { "Api-Key": ctx.secret };
+    if (ctx.config.userId) h["User-Id"] = String(ctx.config.userId);
+    // payload: { pageviews, visitors }
+    return getJSON(`https://simpleanalytics.com/${encodeURIComponent(host)}.json?version=5&fields=pageviews,visitors&start=today-7d&end=today`, h);
+  },
+});
+
+reg({
+  id: "lemonsqueezy", label: "Lemon Squeezy", category: "money", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "lemonsqueezy.orders", label: "Recent orders", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    // payload: { data: [{ attributes: { total, status, created_at, user_email } }] }
+    return getJSON(`https://api.lemonsqueezy.com/v1/orders?page[size]=${max}`, {
+      Authorization: `Bearer ${ctx.secret}`, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json",
+    });
+  },
+});
+
+reg({
+  id: "paddle", label: "Paddle", category: "money", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "paddle.transactions", label: "Recent transactions", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = ((ctx.config.baseUrl as string) || "https://api.paddle.com").replace(/\/+$/, "");
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    // payload: { data: [{ id, status, details: { totals: { total, currency_code } }, created_at }] }
+    return getJSON(`${base}/transactions?per_page=${max}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "openexchangerates", label: "Open Exchange Rates", category: "finance", authKind: "apiKey",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10 * 60_000,
+  resources: [{ id: "openexchangerates.latest", label: "Latest rates", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // app_id
+    const base = (ctx.query.base || "USD").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) || "USD";
+    const syms = (ctx.query.symbols || "").toUpperCase().replace(/[^A-Z,]/g, "");
+    const symParam = syms ? `&symbols=${syms}` : "";
+    // payload: { base, rates: { EUR: …, GBP: … } } — free plan only supports base=USD
+    return getJSON(`https://openexchangerates.org/api/latest.json?app_id=${encodeURIComponent(ctx.secret)}&base=${base}${symParam}`);
+  },
+});

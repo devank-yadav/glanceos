@@ -3,8 +3,8 @@ import { AuthError } from "../fetchers/cache";
 import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fitbitSteps } from "./registry";
 
 describe("provider registry", () => {
-  it("registers the providers (incl. v5.0 smart-life + B1-B4 integrations)", () => {
-    expect(PROVIDERS.size).toBe(57);
+  it("registers the providers (incl. v5.0 smart-life + B1-B5 integrations)", () => {
+    expect(PROVIDERS.size).toBe(67);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
     // B1 — keyless social/dev/books/gaming/sports
@@ -21,6 +21,11 @@ describe("provider registry", () => {
     for (const id of ["clickup", "monday", "height", "shortcut", "harvest", "toggl", "wakatime", "airtable", "pinboard", "raindrop"]) expect(PROVIDERS.has(id)).toBe(true);
     expect(PROVIDERS.get("raindrop")?.category).toBe("bookmarks");
     expect(PROVIDERS.get("toggl")?.category).toBe("time-tracking");
+    // B5 — money / analytics token providers
+    for (const id of ["stripe", "ynab", "plausible", "umami", "fathom", "posthog", "simpleanalytics", "lemonsqueezy", "paddle", "openexchangerates"]) expect(PROVIDERS.has(id)).toBe(true);
+    expect(PROVIDERS.get("stripe")?.category).toBe("money");
+    expect(PROVIDERS.get("plausible")?.category).toBe("analytics");
+    expect(PROVIDERS.get("openexchangerates")?.authKind).toBe("apiKey");
     expect(PROVIDERS.get("npm")?.resources[0]?.shape).toBe("scalar");
     // every keyless integration provider must require no login
     for (const id of ["reddit", "devto", "lobsters", "npm", "bluesky", "mastodon", "openlibrary", "steam", "thesportsdb", "usgs", "diseasesh", "coingecko", "tvmaze", "jikan"]) {
