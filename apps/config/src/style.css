@@ -3299,7 +3299,7 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-dot.low_battery { background: var(--warn); }
 .notif-dot.online { background: var(--ok); }
 .notif-dot.conn_error, .notif-dot.conn_needs_auth { background: var(--warn); }
-.notif-msg { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.notif-msg { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; } /* override the button reset's nowrap so long messages wrap instead of spilling onto the timestamp */
 .notif-time { font-size: 11px; flex: none; white-space: nowrap; margin-top: 1px; }
 
 /* ---------- fleet dashboard ---------- */
