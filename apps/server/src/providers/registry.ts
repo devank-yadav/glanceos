@@ -1524,3 +1524,190 @@ reg({
     return getJSON(`${base}/api/v3/calendar?end=${encodeURIComponent(end)}`, h);
   },
 });
+
+// ============================================================================
+// Integrations B7 — OAuth scaffolds. Each declares an oauth spec (authorize/token
+// URLs + scopes) so it appears on the Integrations page and connects via the
+// existing /oauth flow; resolve() reads the bearer token. Verify-by-construction
+// (no creds to live-test). (reddit-oauth skipped — id collides with the keyless
+// reddit provider; withings/garmin remain deferred for non-standard OAuth.)
+// ============================================================================
+
+reg({
+  id: "discord", label: "Discord", category: "social", authKind: "oauth2",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://discord.com/api/oauth2/authorize",
+    tokenUrl: "https://discord.com/api/oauth2/token",
+    scopes: ["identify", "guilds"],
+    tokenAuth: "basic",
+  },
+  resources: [
+    { id: "discord.guilds", label: "My servers", shape: "list" },
+    { id: "discord.user", label: "My profile", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "discord.user") return getJSON("https://discord.com/api/users/@me", h); // { username, global_name }
+    return getJSON("https://discord.com/api/users/@me/guilds", h); // array of { name, id }
+  },
+});
+
+reg({
+  id: "twitch", label: "Twitch", category: "gaming", authKind: "oauth2",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://id.twitch.tv/oauth2/authorize",
+    tokenUrl: "https://id.twitch.tv/oauth2/token",
+    scopes: ["user:read:follows"],
+  },
+  resources: [{ id: "twitch.user", label: "My channel", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // Helix needs the app Client-Id header too; paste it as a config field (clientId).
+    const h: Record<string, string> = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.config.clientId) h["Client-Id"] = String(ctx.config.clientId);
+    // payload: { data: [{ display_name, view_count, broadcaster_type }] }
+    return getJSON("https://api.twitch.tv/helix/users", h);
+  },
+});
+
+reg({
+  id: "dropbox", label: "Dropbox", category: "docs", authKind: "oauth2",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://www.dropbox.com/oauth2/authorize",
+    tokenUrl: "https://api.dropboxapi.com/oauth2/token",
+    scopes: ["account_info.read"],
+    authParams: { token_access_type: "offline" },
+  },
+  resources: [{ id: "dropbox.space", label: "Storage usage", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // RPC endpoint: POST with a null body. payload: { used, allocation: { allocated } }
+    const raw = (await postJSON("https://api.dropboxapi.com/2/users/get_space_usage", null, { Authorization: `Bearer ${ctx.secret}` })) as
+      { used?: number; allocation?: { allocated?: number } } | null;
+    const used = Number(raw?.used ?? 0), total = Number(raw?.allocation?.allocated ?? 0);
+    return { value: Math.round(used / 1e9 * 10) / 10, label: total ? `of ${Math.round(total / 1e9)} GB used` : "GB used" };
+  },
+});
+
+reg({
+  id: "calendly", label: "Calendly", category: "calendar", authKind: "oauth2",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://auth.calendly.com/oauth/authorize",
+    tokenUrl: "https://auth.calendly.com/oauth/token",
+    scopes: [],
+  },
+  resources: [
+    { id: "calendly.me", label: "My account", shape: "scalar" },
+    { id: "calendly.events", label: "Scheduled events (user URI)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "calendly.events") {
+      const uri = (ctx.query.user || "").trim();
+      if (!uri) return null;
+      const max = Math.min(Number(ctx.query.max) || 10, 50);
+      // payload: { collection: [{ name, start_time, status }] }
+      return getJSON(`https://api.calendly.com/scheduled_events?user=${encodeURIComponent(uri)}&count=${max}&sort=start_time:asc`, h);
+    }
+    return getJSON("https://api.calendly.com/users/me", h); // { resource: { name, scheduling_url } }
+  },
+});
+
+reg({
+  id: "zoom", label: "Zoom", category: "calendar", authKind: "oauth2",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://zoom.us/oauth/authorize",
+    tokenUrl: "https://zoom.us/oauth/token",
+    scopes: ["meeting:read"],
+    tokenAuth: "basic",
+  },
+  resources: [{ id: "zoom.meetings", label: "Upcoming meetings", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { meetings: [{ topic, start_time, join_url }] }
+    return getJSON("https://api.zoom.us/v2/users/me/meetings?type=upcoming&page_size=20", { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "figma", label: "Figma", category: "dev", authKind: "oauth2",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://www.figma.com/oauth",
+    tokenUrl: "https://www.figma.com/api/oauth/token",
+    scopes: ["files:read"],
+  },
+  resources: [{ id: "figma.me", label: "My account", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { handle, email, img_url }
+    return getJSON("https://api.figma.com/v1/me", { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "coinbase", label: "Coinbase", category: "finance", authKind: "oauth2",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://www.coinbase.com/oauth/authorize",
+    tokenUrl: "https://api.coinbase.com/oauth/token",
+    scopes: ["wallet:accounts:read"],
+  },
+  resources: [{ id: "coinbase.accounts", label: "Wallet balances", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { data: [{ name, balance: { amount, currency } }] }
+    return getJSON("https://api.coinbase.com/v2/accounts", { Authorization: `Bearer ${ctx.secret}`, "CB-VERSION": "2024-01-01" });
+  },
+});
+
+reg({
+  id: "googletasks", label: "Google Tasks", category: "tasks", authKind: "oauth2",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  oauth: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: ["https://www.googleapis.com/auth/tasks.readonly"],
+    authParams: { access_type: "offline", prompt: "consent" },
+  },
+  resources: [{ id: "googletasks.tasks", label: "Default list tasks", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const list = (ctx.query.tasklist || "@default").trim();
+    // payload: { items: [{ title, status, due }] }
+    return getJSON(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(list)}/tasks?showCompleted=false&maxResults=${Math.min(Number(ctx.query.max) || 20, 100)}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "youtube", label: "YouTube", category: "media", authKind: "oauth2",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: ["https://www.googleapis.com/auth/youtube.readonly"],
+    authParams: { access_type: "offline", prompt: "consent" },
+  },
+  resources: [
+    { id: "youtube.stats", label: "My channel stats", shape: "scalar" },
+    { id: "youtube.subscriptions", label: "My subscriptions", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "youtube.subscriptions") {
+      const max = Math.min(Number(ctx.query.max) || 12, 50);
+      // payload: { items: [{ snippet: { title } }] }
+      return getJSON(`https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=${max}&order=unread`, h);
+    }
+    // payload: { items: [{ statistics: { subscriberCount, viewCount, videoCount } }] }
+    return getJSON("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true", h);
+  },
+});

@@ -82,6 +82,7 @@ const EXTRA_CONFIG: Record<string, ExtraField[]> = {
   tautulli: [{ key: "baseUrl", label: "Tautulli URL", placeholder: "http://192.168.1.10:8181", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
   sonarr: [{ key: "baseUrl", label: "Sonarr URL", placeholder: "http://192.168.1.10:8989", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
   radarr: [{ key: "baseUrl", label: "Radarr URL", placeholder: "http://192.168.1.10:7878", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
+  twitch: [{ key: "clientId", label: "Twitch app Client-ID", placeholder: "Helix API calls need this header" }],
 };
 
 export function IntegrationsPage() {
