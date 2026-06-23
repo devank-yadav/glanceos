@@ -1,6 +1,7 @@
+import { Widget } from "@glanceos/schema";
 import { describe, expect, it } from "vitest";
 import { BINDABLE, BLOCKS, type WidgetType } from "./blocks";
-import { INTEGRATION_OBJECTS, objectsForProvider, PROVIDERS_WITH_OBJECTS } from "./integrationObjects";
+import { buildPresetBlock, INTEGRATION_OBJECTS, objectsForProvider, PROVIDERS_WITH_OBJECTS } from "./integrationObjects";
 
 const BLOCK_TYPES = new Set<WidgetType>(BLOCKS.map((b) => b.type));
 
@@ -63,6 +64,18 @@ describe("integration preset objects (B8)", () => {
       } else {
         expect(SCALAR_TRANSFORMS.has(o.map.transform ?? ""), `${o.providerId}.${o.id} → scalar preset needs a value transform, got ${o.map.transform}`).toBe(true);
       }
+    }
+  });
+
+  it("buildPresetBlock yields a block that validates against the Widget schema", () => {
+    for (const o of INTEGRATION_OBJECTS) {
+      const block = buildPresetBlock(o);
+      const parsed = Widget.safeParse(block);
+      expect(parsed.success, `${o.providerId}.${o.id} → invalid block: ${parsed.success ? "" : JSON.stringify(parsed.error.issues[0])}`).toBe(true);
+      // the source survived validation with the preset's kind + transform
+      const b = parsed.success ? parsed.data : null;
+      expect(b?.source?.kind).toBe(o.sourceKind);
+      expect(b?.type).toBe(o.blockType);
     }
   });
 

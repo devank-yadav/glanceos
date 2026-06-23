@@ -1,4 +1,5 @@
-import type { WidgetType } from "./blocks";
+import type { WidgetT } from "@glanceos/schema";
+import { makeBlock, type WidgetType } from "./blocks";
 
 // v9.7 — per-integration preset "objects" (TRMNL-style): a one-click, ready-to-insert
 // block pre-bound to an integration's data source. ZERO screen-runtime cost — each
@@ -74,3 +75,24 @@ export const objectsForProvider = (providerId: string): IntegrationObject[] =>
 
 /** Provider ids that ship at least one preset object. */
 export const PROVIDERS_WITH_OBJECTS: string[] = [...new Set(INTEGRATION_OBJECTS.map((o) => o.providerId))];
+
+/**
+ * Build the ready-to-paste block for a preset: a valid base block (makeBlock) with
+ * the preset's name, merged props, and a fully-formed `source` (kind/query/map).
+ * The Integrations page copies this to the Studio clipboard; a schema test asserts
+ * every preset yields a block that parses against the Widget union.
+ */
+export function buildPresetBlock(o: IntegrationObject): WidgetT {
+  const base = makeBlock(o.blockType) as unknown as Record<string, unknown>;
+  const block: Record<string, unknown> = {
+    ...base,
+    name: o.label,
+    props: { ...((base.props as Record<string, unknown>) ?? {}), ...(o.props ?? {}) },
+    source: {
+      kind: o.sourceKind,
+      query: o.query ?? {},
+      map: { path: o.map.path ?? "", items: o.map.items, fields: o.map.fields, transform: o.map.transform ?? "none", transformArg: o.map.transformArg },
+    },
+  };
+  return block as unknown as WidgetT;
+}

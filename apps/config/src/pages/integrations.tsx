@@ -6,9 +6,8 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { SettingsTabs } from "../components/SettingsTabs";
 import { useToast } from "../components/Toast";
-import { makeBlock } from "../editor/blocks";
 import { Icon } from "../editor/icons";
-import { type IntegrationObject, objectsForProvider } from "../editor/integrationObjects";
+import { buildPresetBlock, type IntegrationObject, objectsForProvider } from "../editor/integrationObjects";
 
 const CLIP_KEY = "glanceos.clipboard"; // shared with the Studio's copy/paste
 
@@ -100,19 +99,8 @@ export function IntegrationsPage() {
   // Studio clipboard, so the user can paste it onto any board with ⌘V. Reuses the
   // proven paste path; the connection is chosen later in the block's Data tab.
   const addObject = (o: IntegrationObject) => {
-    const base = makeBlock(o.blockType) as Record<string, unknown>;
-    const block = {
-      ...base,
-      name: o.label,
-      props: { ...(base.props as Record<string, unknown>), ...(o.props ?? {}) },
-      source: {
-        kind: o.sourceKind,
-        query: o.query ?? {},
-        map: { path: o.map.path ?? "", items: o.map.items, fields: o.map.fields, transform: o.map.transform ?? "none", transformArg: o.map.transformArg },
-      },
-    };
     try {
-      localStorage.setItem(CLIP_KEY, JSON.stringify([block]));
+      localStorage.setItem(CLIP_KEY, JSON.stringify([buildPresetBlock(o)]));
       toast.success(`Copied “${o.label}” — open a board and press ⌘V to paste`);
     } catch { toast.error("Couldn't copy to clipboard"); }
   };
@@ -187,6 +175,7 @@ export function IntegrationsPage() {
               <input
                 class="integ-search"
                 type="search"
+                aria-label="Search integrations"
                 placeholder={`Search ${providers.length} integrations…`}
                 value={q}
                 onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)}
