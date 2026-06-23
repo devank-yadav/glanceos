@@ -52,6 +52,7 @@ export function Overlay({
   onDrop,
   onEdit,
   onHandleClick,
+  onOpenOptions,
   menuId,
 }: {
   doc: LayoutT;
@@ -64,6 +65,7 @@ export function Overlay({
   onDrop: (id: string, target: DropTarget) => void;
   onEdit: (id: string) => void;
   onHandleClick: (id: string) => void;
+  onOpenOptions: (id: string) => void;
   menuId: string | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -234,7 +236,12 @@ export function Overlay({
             }}
             onDblClick={(e) => {
               (e as unknown as MouseEvent).stopPropagation();
+              // text blocks: double-click edits the text; everything else: open Options
+              // (faster than the ⠿ menu). In-place text blocks are pointer-events:none so
+              // their double-click lands on the iframe (native word-select) — this fires
+              // only for non-in-place blocks.
               if (editable) onEdit(b.id);
+              else onOpenOptions(b.id);
             }}
           >
             <span class="widget-tag">{blockFor(widget.type).label}</span>

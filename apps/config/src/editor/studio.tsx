@@ -378,6 +378,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
     const ids = new Set(selectedRef.current);
     stageEdit((d) => { for (const r of d.rows) for (const blk of r.blocks) if (ids.has(blk.id)) blk.style = { ...st } as typeof blk.style; });
   };
+  // Apply a style patch to every selected block at once (used by the multi-select bar).
+  const styleSelected = (patch: Record<string, unknown>) => {
+    const ids = new Set(selectedRef.current);
+    if (!ids.size) return;
+    stageEdit((d) => { for (const r of d.rows) for (const blk of r.blocks) if (ids.has(blk.id)) blk.style = { ...blk.style, ...patch } as typeof blk.style; });
+  };
 
   const moveSelectedRow = (dir: "up" | "down") => {
     const id = primaryRef.current;
@@ -853,6 +859,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               onDrop={(id, target) => performDrop({ kind: "existing", id }, target)}
               onEdit={startEditing}
               onHandleClick={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
+              onOpenOptions={(id) => { dispatch({ type: "select", id }); setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
               menuId={menuId}
             />
             {loaded && state.present.rows.length === 0 && !editing && (
@@ -964,6 +971,18 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   insertBlock(type, row, true);
                 }}
               />
+            )}
+            {state.selectedIds.length >= 2 && !presenting && (
+              <div class="multi-bar" onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+                <span class="multi-count">{state.selectedIds.length} selected</span>
+                <span class="multi-sep" />
+                <button class="icon-btn" title="Align left" onClick={() => styleSelected({ align: "start" })}><Icon.alignLeft /></button>
+                <button class="icon-btn" title="Align center" onClick={() => styleSelected({ align: "center" })}><Icon.alignCenter /></button>
+                <button class="icon-btn" title="Align right" onClick={() => styleSelected({ align: "end" })}><Icon.alignRight /></button>
+                <span class="multi-sep" />
+                <button class="icon-btn" title="Duplicate (⌘D)" onClick={duplicateSelected}><Icon.copy /></button>
+                <button class="icon-btn danger" title="Delete (⌫)" onClick={removeSelected}><Icon.trash /></button>
+              </div>
             )}
           </PreviewStage>
         </div>

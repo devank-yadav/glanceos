@@ -6,6 +6,7 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ["/", "Insert a block"],
       ["Double-click", "Type text anywhere"],
       ["Enter", "Edit the selected block"],
+      ["Double-click block", "Edit text / open options"],
       ["⌘D", "Duplicate selection"],
       ["⌫", "Delete selection"],
     ],

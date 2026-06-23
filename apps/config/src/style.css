@@ -1823,6 +1823,30 @@ ul.tasks li:last-child {
   box-shadow: var(--shadow-sm);
 }
 
+/* v9.3 — floating action bar shown when 2+ objects are selected */
+.multi-bar {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  animation: multibar-in 0.14s var(--ease);
+}
+@keyframes multibar-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.multi-count { font-size: 12px; font-weight: 600; color: var(--fg); padding: 0 7px; white-space: nowrap; }
+.multi-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: var(--rule); }
+.multi-bar .icon-btn.danger:hover { color: #e5484d; }
+
 /* ---------- slash menu ---------- */
 
 .slash-backdrop {
