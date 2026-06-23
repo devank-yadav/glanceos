@@ -197,49 +197,15 @@ export function Overlay({
     }
   };
 
-  // ---- marquee (rubber-band) select ----
-  // A drag starting on the empty canvas draws a selection rect (imperative DOM, no
-  // re-render churn) and selects every block whose box it intersects; a plain click clears.
-  const marquee = useRef<{ x0: number; y0: number; el: HTMLDivElement; rect: { x: number; y: number; w: number; h: number }; moved: boolean } | null>(null);
-  const onBackgroundDown = (e: PointerEvent) => {
-    if (e.target !== rootRef.current) return;
-    const p = toPage(e);
-    const el = document.createElement("div");
-    el.className = "marquee";
-    rootRef.current!.appendChild(el);
-    marquee.current = { x0: p.x, y0: p.y, el, rect: { x: p.x, y: p.y, w: 0, h: 0 }, moved: false };
-    try { rootRef.current!.setPointerCapture(e.pointerId); } catch { /* tests */ }
-  };
-  const onBackgroundMove = (e: PointerEvent) => {
-    const m = marquee.current;
-    if (!m) return;
-    const p = toPage(e);
-    if (Math.abs(p.x - m.x0) + Math.abs(p.y - m.y0) > 3) m.moved = true;
-    m.rect = { x: Math.min(p.x, m.x0), y: Math.min(p.y, m.y0), w: Math.abs(p.x - m.x0), h: Math.abs(p.y - m.y0) };
-    Object.assign(m.el.style, { left: `${sx(m.rect.x)}px`, top: `${sx(m.rect.y)}px`, width: `${sx(m.rect.w)}px`, height: `${sx(m.rect.h)}px` });
-  };
-  const onBackgroundUp = () => {
-    const m = marquee.current;
-    marquee.current = null;
-    if (!m) return;
-    m.el.remove();
-    if (!m.moved) { dispatch({ type: "select", id: null }); return; } // a plain click clears
-    const r = m.rect;
-    const ids = geometry.blocks
-      .filter((b) => b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y)
-      .map((b) => b.id);
-    if (ids.length) dispatch({ type: "selectMany", ids });
-    else dispatch({ type: "select", id: null });
-  };
+  // Rubber-band marquee select lives in the iframe (apps/screen/src/edit.ts): the overlay
+  // root is pointer-events:none so empty-board drags land on the live preview, which draws
+  // the box, hit-tests the real cell rects, and posts the selected ids back as
+  // `glanceos:select` (→ selectMany). A plain empty click posts focus:null (→ deselect).
 
   return (
     <div
       ref={rootRef}
       class="studio-overlay"
-      onPointerDown={(e) => onBackgroundDown(e as unknown as PointerEvent)}
-      onPointerMove={(e) => onBackgroundMove(e as unknown as PointerEvent)}
-      onPointerUp={onBackgroundUp}
-      onPointerCancel={onBackgroundUp}
     >
       {geometry.blocks.map((b) => {
         const widget = doc.rows[b.rowIndex]!.blocks[b.blockIndex]!;

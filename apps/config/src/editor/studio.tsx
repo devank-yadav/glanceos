@@ -835,6 +835,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}
             editMode
             onFocus={(id) => dispatch({ type: "select", id })}
+            onSelect={(ids) => dispatch({ type: "selectMany", ids })}
             onEdit={(id, patch) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id); if (blk) Object.assign(blk.props as Record<string, unknown>, patch); })}
           >
             <div class="drag-halo" ref={haloRef} />

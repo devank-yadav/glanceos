@@ -170,13 +170,55 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   // inline style beats the stylesheet rule, so this wins without touching real screens.
   document.body.style.cursor = "default";
 
-  // The Studio overlay is click-through, so a click on empty board area lands here —
-  // tell the Studio to deselect. A click ANYWHERE inside an editable block keeps its
-  // selection (the cell focus handler drops the caret into the text), so we only
-  // deselect when the click misses every editable cell.
+  // The Studio overlay is click-through, so empty-board input lands HERE in the iframe.
+  // A press on empty board starts a rubber-band marquee: drag a box and every cell it
+  // touches is selected (the iframe owns the real cell rects, so it hit-tests itself and
+  // posts the ids up). A plain click (no drag) just deselects. A press inside an editable
+  // cell is left alone (the caret/affordance owns it). The marquee box + its live cell
+  // outlines are inline-styled (this chunk never ships to real screens, so 0 runtime cost).
+  const overlaps = (r: DOMRect, x: number, y: number, w: number, h: number): boolean =>
+    r.left < x + w && r.right > x && r.top < y + h && r.bottom > y;
+  const clearOutlines = (): void => { for (const [, c] of getCells()) { const el = c.el as HTMLElement; el.style.outline = ""; el.style.outlineOffset = ""; } };
+  let marquee: { x0: number; y0: number; box: HTMLDivElement | null; moved: boolean } | null = null;
   document.addEventListener("pointerdown", (e) => {
-    if (!(e.target as HTMLElement)?.closest?.(".glance-editcell")) opts.post({ type: "glanceos:focus", id: null });
+    const t = e.target as HTMLElement;
+    if (e.button !== 0 || t?.closest?.(".glance-editcell") || t?.closest?.(".gl-additem")) return;
+    marquee = { x0: e.clientX, y0: e.clientY, box: null, moved: false };
+    try { document.documentElement.setPointerCapture(e.pointerId); } catch { /* no real pointer (tests) */ }
   });
+  document.addEventListener("pointermove", (e) => {
+    const m = marquee;
+    if (!m) return;
+    const dx = e.clientX - m.x0, dy = e.clientY - m.y0;
+    if (!m.moved && Math.abs(dx) + Math.abs(dy) < 5) return; // a press, not yet a drag
+    if (!m.moved) {
+      m.moved = true;
+      const box = document.createElement("div");
+      box.className = "glance-marquee";
+      box.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;border:1.5px solid #2383e2;background:rgba(35,131,226,.10);border-radius:4px;box-shadow:0 1px 8px rgba(35,131,226,.30),inset 0 0 0 1px rgba(255,255,255,.45);";
+      document.body.appendChild(box);
+      document.body.style.userSelect = "none";
+      m.box = box;
+    }
+    const x = Math.min(e.clientX, m.x0), y = Math.min(e.clientY, m.y0), w = Math.abs(dx), h = Math.abs(dy);
+    Object.assign(m.box!.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+    for (const [, c] of getCells()) { const el = c.el as HTMLElement; const hit = overlaps(el.getBoundingClientRect(), x, y, w, h); el.style.outline = hit ? "2px solid rgba(35,131,226,.65)" : ""; el.style.outlineOffset = hit ? "2px" : ""; }
+  });
+  const endMarquee = (e: PointerEvent): void => {
+    const m = marquee;
+    marquee = null;
+    if (!m) return;
+    document.body.style.userSelect = "";
+    if (!m.moved) { opts.post({ type: "glanceos:focus", id: null }); return; } // plain click → deselect
+    const x = Math.min(e.clientX, m.x0), y = Math.min(e.clientY, m.y0), w = Math.abs(e.clientX - m.x0), h = Math.abs(e.clientY - m.y0);
+    const ids: string[] = [];
+    for (const [id, c] of getCells()) if (overlaps((c.el as HTMLElement).getBoundingClientRect(), x, y, w, h)) ids.push(id);
+    clearOutlines();
+    m.box?.remove();
+    opts.post({ type: "glanceos:select", ids });
+  };
+  document.addEventListener("pointerup", endMarquee);
+  document.addEventListener("pointercancel", () => { const m = marquee; marquee = null; if (!m) return; document.body.style.userSelect = ""; clearOutlines(); m.box?.remove(); });
 
   const blocksById = (): Map<string, Block> => {
     const m = new Map<string, Block>();

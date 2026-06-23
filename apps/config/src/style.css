@@ -1814,12 +1814,7 @@ ul.tasks li:last-child {
 }
 .widget-lock svg { width: 13px; height: 13px; }
 .widget-lock.has-menu { color: var(--indigo); border-color: rgba(35, 131, 226, 0.4); }
-.marquee {
-  position: absolute; z-index: 20; pointer-events: none;
-  border: 1px solid var(--indigo);
-  background: color-mix(in srgb, var(--indigo) 10%, transparent);
-  border-radius: 2px;
-}
+/* rubber-band marquee now lives in the iframe (apps/screen/src/edit.ts, inline-styled) */
 .resize-badge {
   position: absolute; z-index: 30; pointer-events: none;
   padding: 2px 7px; border-radius: 6px;
