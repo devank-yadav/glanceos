@@ -568,3 +568,15 @@ ADR-lite log. Every pinned choice gets an entry **when it's made** — context, 
 - **Double-click → Options:** double-clicking a non-text object opens its Options panel (new `onOpenOptions` on `<Overlay>` → `setOptionsOpen`); text blocks still edit on double-click, and in-place blocks (pointer-events:none) let the double-click reach the iframe (native word-select), so the new branch only fires for non-in-place blocks.
 - **Already existed (confirmed, no change):** Esc clears a multi-selection (`select id:null` empties it); delete/duplicate/copy/cut already batch across the whole selection (they read `selectedRef`); the ⠿ handle already carries a "Drag to move · click for options" tooltip. Arrow-nudge stays primary-only (multi-block grid nudge is ambiguous).
 - **Verified:** live — shift-selecting 2 blocks showed the bar (`2 selected` + 5 actions); Align center centered both and committed (Saved); marquee Shift-drag badge read `4 selected +` and posted `{add:true}`. config typecheck + tests clean; screen 27.0 / 30 KB (all config/edit-chunk only). All in the `?` cheat-sheet.
+
+### 074 — v9.4 draggable panels + quick wins (no migration)
+- **Status:** accepted · 2026-06-24
+- **Context:** A round of "minor but better" editor polish; all config/edit-chunk only, screen runtime untouched.
+- **Draggable Options / Live-data panels** (`DraggablePanel` in studio.tsx): each opens with a header (⠿ grip + title + ✕) you drag to move it off the block you're editing; the body scrolls.
+- **Panel overflow fix:** the panel had a fixed 340px body, so a tall panel (Delta-list report) or one anchored low clipped its lower controls (the DESIGN presets) off the viewport. Now it's a flex column whose height is capped to the viewport — measured from the panel's REAL on-screen top via a `useLayoutEffect` (it's `position:absolute` inside the stage, so the stage-relative `top` ≠ viewport) — and the body scrolls within. Verified: panel fits, presets reachable.
+- **Multi-select bar** gains **lock** + **invert** (toggle across the whole selection, `lockSelected`/`invertSelected`) beside align/duplicate/delete.
+- **⌥-drag duplicate:** ⌥ held while dragging a block by its ⠿ handle drops a copy at the target and keeps the original (`performDrop` `copy` path; overlay captures `altKey` at drop); plain drag still moves.
+- **Right-click → block menu:** in-place blocks are `pointer-events:none` so their right-click lands in the iframe → `edit.ts` posts `glanceos:menu` → studio opens the menu; non-in-place blocks use the overlay's own `onContextMenu`.
+- **Undo toast** after delete (`Deleted N objects · ⌘Z to undo`) via the existing `useToast`.
+- **Already existed (confirmed):** Esc clears a multi-selection; delete/duplicate/copy/cut batch the whole selection; the ⠿ handle has a tooltip. Deferred (bigger-than-quick): drag-to-reorder list items, resize-from-corners, recently-used blocks.
+- **Verified:** live — panel drags + fits viewport with scrolling body; multi-bar shows lock/invert; ⌥-drag duplicates; right-click opens the menu. 51 screen + 102 config tests; screen 27.0 / 30 KB.
