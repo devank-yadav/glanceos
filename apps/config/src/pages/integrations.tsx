@@ -15,6 +15,8 @@ const CAT_LABEL: Record<string, string> = {
   tasks: "Tasks", issues: "Issues", docs: "Docs & sheets", dev: "Developer", calendar: "Calendar",
   "smart-home": "Smart home", media: "Media", generic: "Generic", mail: "Mail",
   place: "Travel & place", health: "Health",
+  social: "Social", books: "Books", gaming: "Gaming", sports: "Sports",
+  finance: "Finance", news: "News", civic: "Civic & science", analytics: "Analytics", money: "Money",
 };
 
 interface ProviderInfo {

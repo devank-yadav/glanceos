@@ -563,3 +563,185 @@ reg({
     return { value: Number(raw?.data?.[0]?.steps ?? 0) };
   },
 });
+
+// ============================================================================
+// Integrations B1 — keyless social / dev / books / gaming / sports providers.
+// No login required: a friendly resource picker + a query param (subreddit,
+// package, handle…) is all the user needs. Each returns a normalized payload
+// ({items:[…]} or {value}) so existing list/stat blocks bind with little mapping.
+// ============================================================================
+
+const UA = { "User-Agent": "glanceos/1.0 (+https://github.com/devank-yadav/glanceos)" };
+
+reg({
+  id: "reddit", label: "Reddit", category: "social", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "reddit.posts", label: "Subreddit posts", shape: "list" }],
+  async resolve(ctx) {
+    const sub = (ctx.query.subreddit || "popular").replace(/[^\w+]/g, "");
+    const sort = ["hot", "new", "top", "rising"].includes(ctx.query.sort || "") ? ctx.query.sort : "hot";
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const t = ctx.query.t || "day";
+    const raw = (await getJSON(`https://www.reddit.com/r/${sub}/${sort}.json?limit=${max}&t=${t}`, UA)) as
+      { data?: { children?: { data?: { title?: string; score?: number; num_comments?: number; permalink?: string; subreddit?: string } }[] } } | null;
+    const items = (raw?.data?.children ?? []).map((c) => ({
+      title: c.data?.title ?? "",
+      score: Number(c.data?.score ?? 0),
+      comments: Number(c.data?.num_comments ?? 0),
+      url: c.data?.permalink ? `https://reddit.com${c.data.permalink}` : "",
+      label: c.data?.subreddit ? `r/${c.data.subreddit}` : "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "devto", label: "DEV.to", category: "dev", authKind: "none",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "devto.articles", label: "Articles", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const params = new URLSearchParams({ per_page: String(max) });
+    if (ctx.query.tag) params.set("tag", ctx.query.tag);
+    if (ctx.query.username) params.set("username", ctx.query.username);
+    if (ctx.query.top) params.set("top", ctx.query.top);
+    const raw = (await getJSON(`https://dev.to/api/articles?${params}`, UA)) as
+      { title?: string; url?: string; positive_reactions_count?: number; comments_count?: number; user?: { name?: string } }[] | null;
+    const items = (raw ?? []).map((a) => ({
+      title: a.title ?? "", url: a.url ?? "",
+      score: Number(a.positive_reactions_count ?? 0), comments: Number(a.comments_count ?? 0),
+      label: a.user?.name ?? "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "lobsters", label: "Lobsters", category: "dev", authKind: "none",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [{ id: "lobsters.hottest", label: "Hottest stories", shape: "list" }],
+  async resolve(ctx) {
+    const tag = (ctx.query.tag || "").replace(/[^\w-]/g, "");
+    const url = tag ? `https://lobste.rs/t/${tag}.json` : "https://lobste.rs/hottest.json";
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(url, UA)) as { title?: string; url?: string; score?: number; comment_count?: number; submitter_user?: string }[] | null;
+    const items = (raw ?? []).slice(0, max).map((s) => ({
+      title: s.title ?? "", url: s.url ?? "", score: Number(s.score ?? 0), comments: Number(s.comment_count ?? 0),
+      label: typeof s.submitter_user === "string" ? s.submitter_user : "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "npm", label: "npm", category: "dev", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60 * 60_000,
+  resources: [{ id: "npm.downloads", label: "Package downloads", shape: "scalar" }],
+  async resolve(ctx) {
+    const pkg = (ctx.query.package || "").trim();
+    if (!pkg) return null;
+    const period = ["last-day", "last-week", "last-month"].includes(ctx.query.period || "") ? ctx.query.period : "last-week";
+    const raw = (await getJSON(`https://api.npmjs.org/downloads/point/${period}/${encodeURIComponent(pkg)}`, UA)) as
+      { downloads?: number } | null;
+    return { value: Number(raw?.downloads ?? 0), label: `${pkg} · ${period?.replace("last-", "/")}` };
+  },
+});
+
+reg({
+  id: "bluesky", label: "Bluesky", category: "social", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [
+    { id: "bluesky.feed", label: "Account posts", shape: "list" },
+    { id: "bluesky.profile", label: "Profile stats", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    const actor = (ctx.query.handle || ctx.query.actor || "").trim().replace(/^@/, "");
+    if (!actor) return null;
+    if (ctx.resource === "bluesky.profile") {
+      const raw = (await getJSON(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`, UA)) as
+        { followersCount?: number; followsCount?: number; postsCount?: number; displayName?: string } | null;
+      return { value: Number(raw?.followersCount ?? 0), label: `${raw?.displayName ?? actor} · followers` };
+    }
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const raw = (await getJSON(`https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(actor)}&limit=${max}`, UA)) as
+      { feed?: { post?: { record?: { text?: string }; likeCount?: number; replyCount?: number } }[] } | null;
+    const items = (raw?.feed ?? []).map((f) => ({
+      title: f.post?.record?.text ?? "", score: Number(f.post?.likeCount ?? 0), comments: Number(f.post?.replyCount ?? 0), label: `@${actor}`,
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "mastodon", label: "Mastodon", category: "social", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "mastodon.timeline", label: "Public timeline", shape: "list" }],
+  async resolve(ctx) {
+    const instance = (ctx.query.instance || "mastodon.social").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const tag = (ctx.query.hashtag || "").replace(/[^\w]/g, "");
+    const path = tag ? `/api/v1/timelines/tag/${tag}` : "/api/v1/timelines/public";
+    const raw = (await getJSON(`https://${instance}${path}?limit=${max}`, UA)) as
+      { content?: string; favourites_count?: number; replies_count?: number; account?: { acct?: string } }[] | null;
+    const strip = (html: string) => html.replace(/<[^>]+>/g, "").trim();
+    const items = (raw ?? []).map((s) => ({
+      title: strip(s.content ?? ""), score: Number(s.favourites_count ?? 0), comments: Number(s.replies_count ?? 0),
+      label: s.account?.acct ? `@${s.account.acct}` : "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "openlibrary", label: "Open Library", category: "books", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 5 * 60_000,
+  resources: [{ id: "openlibrary.search", label: "Book search", shape: "list" }],
+  async resolve(ctx) {
+    const q = (ctx.query.q || ctx.query.query || "").trim();
+    if (!q) return null;
+    const max = Math.min(Number(ctx.query.max) || 8, 20);
+    const raw = (await getJSON(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=${max}&fields=title,author_name,first_publish_year`, UA)) as
+      { docs?: { title?: string; author_name?: string[]; first_publish_year?: number }[] } | null;
+    const items = (raw?.docs ?? []).map((d) => ({
+      title: d.title ?? "", label: (d.author_name ?? [])[0] ?? "", value: d.first_publish_year ?? "",
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "steam", label: "Steam", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "steam.players", label: "Players online (by app id)", shape: "scalar" }],
+  async resolve(ctx) {
+    const appid = (ctx.query.appid || "").replace(/\D/g, "");
+    if (!appid) return null;
+    const raw = (await getJSON(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appid}`, UA)) as
+      { response?: { player_count?: number } } | null;
+    return { value: Number(raw?.response?.player_count ?? 0), label: "players online" };
+  },
+});
+
+reg({
+  id: "thesportsdb", label: "TheSportsDB", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "thesportsdb.next", label: "Team's next events", shape: "list" },
+    { id: "thesportsdb.last", label: "Team's last results", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const teamId = (ctx.query.teamId || "").replace(/\D/g, "");
+    if (!teamId) return null;
+    const ep = ctx.resource === "thesportsdb.last" ? "eventslast.php?id=" : "eventsnext.php?id=";
+    type Ev = { strEvent?: string; dateEvent?: string; strTime?: string; intHomeScore?: string; intAwayScore?: string };
+    const raw = (await getJSON(`https://www.thesportsdb.com/api/v1/json/3/${ep}${teamId}`, UA)) as
+      { events?: Ev[]; results?: Ev[] } | null;
+    const list: Ev[] = raw?.events ?? raw?.results ?? [];
+    const items = list.map((e) => ({
+      title: e.strEvent ?? "",
+      label: [e.dateEvent, e.strTime?.slice(0, 5)].filter(Boolean).join(" "),
+      value: e.intHomeScore != null && e.intAwayScore != null ? `${e.intHomeScore}–${e.intAwayScore}` : "",
+    }));
+    return { items };
+  },
+});

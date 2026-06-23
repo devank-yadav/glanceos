@@ -3,10 +3,14 @@ import { AuthError } from "../fetchers/cache";
 import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fitbitSteps } from "./registry";
 
 describe("provider registry", () => {
-  it("registers the providers (22 total incl. v5.0 smart-life)", () => {
-    expect(PROVIDERS.size).toBe(22);
+  it("registers the providers (incl. v5.0 smart-life + B1 keyless integrations)", () => {
+    expect(PROVIDERS.size).toBe(31);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
+    // B1 — keyless social/dev/books/gaming/sports
+    for (const id of ["reddit", "devto", "lobsters", "npm", "bluesky", "mastodon", "openlibrary", "steam", "thesportsdb"]) expect(PROVIDERS.has(id)).toBe(true);
+    expect(PROVIDERS.get("reddit")?.authKind).toBe("none");
+    expect(PROVIDERS.get("npm")?.resources[0]?.shape).toBe("scalar");
   });
 
   it("v5.0 smart-life providers carry the right auth + category", () => {
