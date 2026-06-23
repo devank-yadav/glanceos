@@ -54,6 +54,7 @@ export function Overlay({
   onEdit,
   onHandleClick,
   onOpenOptions,
+  onRowInsert,
   menuId,
 }: {
   doc: LayoutT;
@@ -67,6 +68,7 @@ export function Overlay({
   onEdit: (id: string) => void;
   onHandleClick: (id: string) => void;
   onOpenOptions: (id: string) => void;
+  onRowInsert: (rowIndex: number) => void; // v9.6 — hover "+" between rows opens the slash menu there
   menuId: string | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -363,6 +365,16 @@ export function Overlay({
           </div>
         );
       })}
+      {/* v9.6 — a faint "+" in the gap below each row; click opens the slash menu at that index */}
+      {geometry.rows.map((r, i) => (
+        <div
+          key={`ins-${i}`}
+          class="row-insert-zone"
+          style={{ left: `${sx(r.x)}px`, top: `${sx(r.y + r.h) + sx(geometry.gap) / 2}px`, width: `${sx(r.w)}px`, height: `${Math.max(sx(geometry.gap), 12)}px`, transform: "translateY(-50%)" }}
+        >
+          <button class="row-insert-plus" title="Insert a block here" onClick={(e) => { e.stopPropagation(); onRowInsert(i + 1); }}>+</button>
+        </div>
+      ))}
     </div>
   );
 }

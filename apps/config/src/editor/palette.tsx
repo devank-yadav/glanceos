@@ -1,7 +1,7 @@
 import type { LayoutT } from "@glanceos/schema";
 import type { RefObject } from "preact";
 import { useMemo, useRef, useState } from "preact/hooks";
-import { BLOCKS, CATEGORIES, type BlockDef, type WidgetType } from "./blocks";
+import { BLOCKS, CATEGORIES, type BlockDef, recentBlocks, type WidgetType } from "./blocks";
 import { BlockIcon } from "./blockIcons";
 import { hitTest, indicatorBox, type DropTarget, type PageGeometry } from "./geometry";
 import type { DragLayer } from "./studio";
@@ -40,6 +40,13 @@ export function Palette({
     const match = (b: BlockDef) => !query || `${b.label} ${b.keywords} ${b.category}`.toLowerCase().includes(query);
     return CATEGORIES.map((cat) => ({ cat, items: BLOCKS.filter((b) => b.category === cat && match(b)) })).filter((g) => g.items.length);
   }, [q]);
+
+  // v9.6 — a "Recent" group atop the palette (mirrors the slash menu). Computed each render
+  // (not memoized) so it refreshes after an insert re-renders the editor. Hidden while searching.
+  const recents: BlockDef[] = q.trim()
+    ? []
+    : recentBlocks().map((t) => BLOCKS.find((b) => b.type === t)).filter((b): b is BlockDef => !!b);
+  const shown = recents.length ? [{ cat: "Recent", items: recents }, ...groups] : groups;
 
   const sx = (v: number) => v * scale;
 
@@ -96,7 +103,7 @@ export function Palette({
       <input class="palette-search" placeholder="Search blocks…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
       <p class="muted palette-hint">Drag onto the board (edges make columns) or click to append. Press <kbd>/</kbd> on the board too.</p>
       <div class="palette-scroll">
-        {groups.map((g) => (
+        {shown.map((g) => (
           <div key={g.cat} class="palette-group">
             <div class="palette-cat">{g.cat}</div>
             <div class="palette-grid">
@@ -117,7 +124,7 @@ export function Palette({
             </div>
           </div>
         ))}
-        {groups.length === 0 && <p class="muted">No blocks match.</p>}
+        {shown.length === 0 && <p class="muted">No blocks match.</p>}
       </div>
     </section>
   );

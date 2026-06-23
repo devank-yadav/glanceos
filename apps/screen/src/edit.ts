@@ -353,7 +353,33 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
       }, 0); });
       t.addEventListener("keydown", (e) => {
         e.stopPropagation();
-        if (e.key === "Enter") {
+        if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
+          e.preventDefault(); // ⌘D — duplicate this row below (checklist copy starts unchecked)
+          const li = t.closest("." + cfg.row);
+          if (li && !li.classList.contains("gl-additem")) {
+            const row = makeRow(t.textContent ?? "");
+            li.after(row);
+            renumber(); setCaret(row.querySelector<HTMLElement>("." + cfg.text)!, 0); s.update();
+          }
+        } else if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
+          e.preventDefault(); // ⌘⌫ — delete this whole row (distinct from caret-0 merge)
+          const li = t.closest("." + cfg.row);
+          if (li && !li.classList.contains("gl-additem")) {
+            const nextEl = li.nextElementSibling as HTMLElement | null;
+            const prevEl = li.previousElementSibling as HTMLElement | null;
+            li.remove();
+            let focus = (nextEl && !nextEl.classList.contains("gl-additem") ? nextEl : prevEl)?.querySelector<HTMLElement>("." + cfg.text) ?? null;
+            if (!focus) { // deleted the last data row — seed a fresh empty row so the caret stays in the list
+              const fresh = makeRow("");
+              const g = cw.querySelector(".gl-additem");
+              if (g) cw.insertBefore(fresh, g); else cw.appendChild(fresh);
+              focus = fresh.querySelector<HTMLElement>("." + cfg.text);
+            }
+            renumber();
+            if (focus) setCaret(focus, (focus.textContent ?? "").length);
+            s.update();
+          }
+        } else if (e.key === "Enter") {
           e.preventDefault();
           // Enter on a blank trailing row exits the list (Notion) instead of stacking empties.
           const liEl = t.closest("." + cfg.row), after = liEl?.nextElementSibling;

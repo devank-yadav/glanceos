@@ -1786,6 +1786,39 @@ ul.tasks li:last-child {
 .resize-l { left: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
 .resize-corner { right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; cursor: nwse-resize; } /* v9.5 — drag the corner to resize height + width together */
 
+/* v9.6 — insert-below "+" between rows. The zone is non-interactive (clicks fall through to
+   the iframe); only the centered "+" button is clickable and it fades in on hover. */
+.row-insert-zone {
+  position: absolute;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.row-insert-plus {
+  pointer-events: auto;
+  width: 46px;
+  height: 100%;
+  min-height: 16px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.row-insert-plus:hover,
+.row-insert-plus:focus-visible {
+  opacity: 1;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+.row-insert-plus:active { transform: scale(0.92); }
+
 /* ---------- "choose your layout" picker ---------- */
 .layout-intro { margin: 0 0 12px; }
 .layout-keep { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--muted); cursor: pointer; }

@@ -462,6 +462,52 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (next) commitDoc(next);
   };
 
+  // v9.6 — ⌥+Arrow keyboard resize of the primary block: ↕ steps row height by one unit,
+  // ↔ trades weight with the adjacent column. Routed through stageEdit so a burst of presses
+  // collapses into one undo step (and never interleaves a bare commit with an open gesture).
+  const WIDTH_STEP = 0.2;
+  const resizeSelected = (key: string) => {
+    const id = primaryRef.current;
+    if (!id) return;
+    const doc = docRef.current;
+    const ri = doc.rows.findIndex((r) => r.blocks.some((b) => b.id === id));
+    if (ri < 0) return;
+    const row = doc.rows[ri]!;
+    const bi = row.blocks.findIndex((b) => b.id === id);
+    // Match the drag affordance (overlay only shows grips when !locked && !source).
+    if (bi < 0 || row.blocks[bi]!.locked || row.blocks[bi]!.source) return;
+    if (key === "ArrowUp" || key === "ArrowDown") {
+      stageEdit((d) => { const r = d.rows[ri]; if (r) r.h = Math.max(1, Math.min(24, r.h + (key === "ArrowDown" ? 1 : -1))); });
+      return;
+    }
+    if (row.blocks.length < 2) return; // a single column fills the row — nothing to trade against
+    const ni = bi < row.blocks.length - 1 ? bi + 1 : bi - 1; // the column we shift weight with
+    if (row.blocks[ni]!.locked) return; // never resize a locked neighbour
+    const grow = key === "ArrowRight";
+    stageEdit((d) => {
+      const r = d.rows[ri]; if (!r) return;
+      const f = r.blocks[bi]!, n = r.blocks[ni]!;
+      const total = (f.width ?? 1) + (n.width ?? 1); // keep the pair's sum invariant across the clamp
+      const newF = Math.min(Math.max(0.2, (f.width ?? 1) + (grow ? WIDTH_STEP : -WIDTH_STEP)), total - 0.2);
+      f.width = Math.round(newF * 100) / 100;
+      n.width = Math.round((total - newF) * 100) / 100;
+    });
+  };
+
+  // v9.6 — make a row's columns equal width. Single-block helper drives the block menu;
+  // equalizeSelected handles every row that has a selected block (multi-select bar). A row
+  // holding a locked block is skipped — equalizing would resize the locked block.
+  const equalizeRowOf = (id: string) => {
+    stageEdit((d) => { const row = d.rows.find((r) => r.blocks.some((b) => b.id === id)); if (row && row.blocks.length >= 2 && !row.blocks.some((b) => b.locked)) for (const b of row.blocks) b.width = 1; });
+  };
+  const equalizeSelected = () => {
+    const ids = new Set(selectedRef.current);
+    if (!ids.size) return;
+    stageEdit((d) => { for (const row of d.rows) if (row.blocks.length >= 2 && !row.blocks.some((b) => b.locked) && row.blocks.some((b) => ids.has(b.id))) for (const b of row.blocks) b.width = 1; });
+  };
+  // True when at least one selected block sits in a >=2-column row with no locked block.
+  const canEqualizeSelection = () => state.present.rows.some((r) => r.blocks.length >= 2 && !r.blocks.some((b) => b.locked) && r.blocks.some((b) => state.selectedIds.includes(b.id)));
+
   const performDrop = (source: { kind: "existing"; id: string } | { kind: "new"; type: WidgetType }, target: DropTarget, copy = false) => {
     const doc = docRef.current;
     let block: WidgetT, rowHeight: number, existingId: string | undefined;
@@ -676,6 +722,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
         else if (o.popover) { setOptionsOpen(false); setDataOpen(false); setConvertId(null); }
         else if (o.slashOpen) setSlashRow(null);
         else dispatch({ type: "select", id: null });
+      } else if (e.altKey && e.key.startsWith("Arrow") && primaryRef.current) {
+        e.preventDefault(); // ⌥+Arrow resizes the selected block (↕ height, ↔ width) by one step
+        resizeSelected(e.key);
       } else if (e.key.startsWith("Arrow") && primaryRef.current) {
         e.preventDefault();
         const dir = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : e.key === "ArrowLeft" ? "left" : "right";
@@ -934,6 +983,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               onEdit={startEditing}
               onHandleClick={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
               onOpenOptions={(id) => { dispatch({ type: "select", id }); setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
+              onRowInsert={(rowIndex) => openSlash(rowIndex)}
               menuId={menuId}
             />
             {loaded && state.present.rows.length === 0 && !editing && (
@@ -1006,12 +1056,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   canBind={BINDABLE.has(primaryBlock.type)}
                   bound={!!primaryBlock.source}
                   locked={!!primaryBlock.locked}
+                  canEqualize={(() => { const r = state.present.rows.find((rr) => rr.blocks.some((b) => b.id === primary)); return !!r && r.blocks.length >= 2 && !r.blocks.some((b) => b.locked); })()}
                   editItems={primaryBlock.type === "tasks" ? "tasks" : primaryBlock.type === "queue" ? "queue" : null}
                   onEdit={() => { if (primary) startEditing(primary); setMenuId(null); }}
                   onConvert={() => { setOptionsOpen(false); setDataOpen(false); setMenuId(null); setConvertId(primary); }}
                   onData={() => { setConvertId(null); setOptionsOpen(false); setMenuId(null); setDataOpen(true); }}
                   onOptions={() => { setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
                   onToggleLock={() => { setMenuId(null); if (primary) stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((bb) => bb.id === primary); if (blk) blk.locked = blk.locked ? undefined : true; }); }}
+                  onEqualize={() => { setMenuId(null); if (primary) equalizeRowOf(primary); }}
                   onDelete={() => { setMenuId(null); removeSelected(); }}
                 />
               </>
@@ -1050,6 +1102,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <span class="multi-sep" />
                 <button class="icon-btn" title="Invert (black)" onClick={invertSelected}><Icon.moon /></button>
                 <button class="icon-btn" title="Lock / unlock" onClick={lockSelected}><Icon.lock /></button>
+                <button class="icon-btn" title="Equalize column widths" disabled={!canEqualizeSelection()} onClick={equalizeSelected}><Icon.grid /></button>
                 <span class="multi-sep" />
                 <button class="icon-btn" title="Duplicate (⌘D)" onClick={duplicateSelected}><Icon.copy /></button>
                 <button class="icon-btn danger" title="Delete (⌫)" onClick={removeSelected}><Icon.trash /></button>
@@ -1078,7 +1131,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             docRef={docRef}
             dragLayer={dragLayer}
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
-            onClickInsert={(type) => insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type])}
+            onClickInsert={(type) => { pushRecentBlock(type); insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type]); }}
           />
           <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
             <Icon.list /> <span>Objects</span>

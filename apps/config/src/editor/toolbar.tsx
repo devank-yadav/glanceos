@@ -13,18 +13,20 @@ interface Props {
   canBind: boolean;
   bound: boolean;
   locked: boolean;
+  canEqualize: boolean; // the block shares its row with others → offer equal-width
   editItems?: "tasks" | "queue" | null; // interactive blocks edit their items/counter in Options
   onEdit: () => void;
   onConvert: () => void;
   onData: () => void;
   onOptions: () => void;
   onToggleLock: () => void;
+  onEqualize: () => void;
   onDelete: () => void;
 }
 
 const MENU_W = 188;
 
-export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, locked, editItems, onEdit, onConvert, onData, onOptions, onToggleLock, onDelete }: Props) {
+export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, locked, canEqualize, editItems, onEdit, onConvert, onData, onOptions, onToggleLock, onEqualize, onDelete }: Props) {
   const left = Math.min(Math.max(2, box.x * scale), Math.max(2, stageW - MENU_W));
   const top = Math.max(4, box.y * scale + 6);
   const stop = (e: Event) => e.stopPropagation();
@@ -37,6 +39,9 @@ export function BlockMenu({ box, scale, stageW, canEdit, canBind, bound, locked,
         <li><button class="bm-item" onClick={onEdit}><Icon.pencil /> Edit text</button></li>
       )}
       <li><button class="bm-item" onClick={onConvert}><Icon.convert /> Change type</button></li>
+      {canEqualize && (
+        <li><button class="bm-item" onClick={onEqualize}><Icon.grid /> Equalize widths</button></li>
+      )}
       {canBind && (
         <li><button class={`bm-item${bound ? " bm-on" : ""}`} onClick={onData}><Icon.link /> {bound ? "Edit data source" : "Connect data"}</button></li>
       )}
