@@ -2006,6 +2006,48 @@ ul.tasks li:last-child {
   letter-spacing: 0.06em;
 }
 
+/* v9.1 — one-click object "looks" (presets) at the top of the Design section */
+.style-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.style-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  min-width: 56px;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  transition: border-color 0.12s var(--ease), color 0.12s var(--ease), background 0.12s var(--ease);
+}
+.style-preset:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+.style-preset.active {
+  border-color: var(--indigo);
+  color: var(--fg);
+  background: rgba(35, 131, 226, 0.08);
+}
+.sp-swatch {
+  width: 30px;
+  height: 19px;
+  box-sizing: border-box;
+}
+.sp-plain { border: 1px dashed var(--rule); border-radius: 3px; }
+.sp-card { border-radius: 7px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.sp-outline { border: 1.5px solid var(--fg); border-radius: 4px; }
+.sp-filled { border-radius: 4px; background: color-mix(in srgb, var(--fg) 18%, transparent); }
+.sp-label { line-height: 1; }
+
 .data-panel h3 {
   margin: 0 0 9px;
   font-size: 14px;

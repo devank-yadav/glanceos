@@ -14,6 +14,19 @@ const GEO_DEFAULT_LAT = 28.6139, GEO_DEFAULT_LON = 77.209;
 const isInheritGeo = (lat: unknown, lon: unknown): boolean =>
   typeof lat === "number" && typeof lon === "number" && Math.abs(lat - GEO_DEFAULT_LAT) < 1e-4 && Math.abs(lon - GEO_DEFAULT_LON) < 1e-4;
 
+// v9.1 — one-click object "looks": set the four container style fields (padding / border /
+// corners / background) in a single tap instead of dialling each select. Built from the
+// existing BlockStyle fields (v8.1), so a preset is just a normal style edit — no schema
+// change, no migration; the screen already renders these classes.
+const STYLE_PRESETS: { id: string; label: string; style: { pad: string; border: string; radius: string; bg: string } }[] = [
+  { id: "plain", label: "Plain", style: { pad: "none", border: "none", radius: "none", bg: "none" } },
+  { id: "card", label: "Card", style: { pad: "m", border: "none", radius: "l", bg: "subtle" } },
+  { id: "outline", label: "Outline", style: { pad: "m", border: "strong", radius: "m", bg: "none" } },
+  { id: "filled", label: "Filled", style: { pad: "m", border: "none", radius: "m", bg: "strong" } },
+];
+const presetActive = (style: { pad?: string; border?: string; radius?: string; bg?: string }, p: (typeof STYLE_PRESETS)[number]): boolean =>
+  (style.pad ?? "none") === p.style.pad && (style.border ?? "none") === p.style.border && (style.radius ?? "none") === p.style.radius && (style.bg ?? "none") === p.style.bg;
+
 // The right-hand panel: props of the selected block, or board settings when
 // nothing is selected. Position is structural (lines and columns), so there
 // are no placement fields. Edits flow through stageEdit() — the typing-burst
@@ -411,6 +424,20 @@ export function BlockFields({
         <Segmented label="Vertical" value={style.valign} options={["top", "middle", "bottom"]} icons={[<Icon.alignTop />, <Icon.alignMiddle />, <Icon.alignBottom />]} onChange={(v) => editStyle({ valign: v })} />
       </div>
       <h4>Design</h4>
+      <div class="style-presets">
+        {STYLE_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            class={`style-preset${presetActive(style, p) ? " active" : ""}`}
+            onClick={() => editStyle(p.style)}
+            title={`${p.label} look`}
+          >
+            <span class={`sp-swatch sp-${p.id}`} aria-hidden="true" />
+            <span class="sp-label">{p.label}</span>
+          </button>
+        ))}
+      </div>
       <div class="row wrap">
         <label class="field">
           <span>Padding</span>
