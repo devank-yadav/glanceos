@@ -1046,3 +1046,148 @@ reg({
     });
   },
 });
+
+// ============================================================================
+// Integrations B4 — productivity / project-management / time-tracking / bookmarks
+// (paste a personal token / API key). Documented endpoints, raw payload → SourceMap.
+// (Basecamp deferred to the OAuth batch — it's OAuth + account-scoped.)
+// ============================================================================
+
+reg({
+  id: "clickup", label: "ClickUp", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "clickup.tasks", label: "List tasks (list_id)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const list = (ctx.query.list_id || "").trim();
+    if (!list) return null;
+    // payload: { tasks: [{ name, status: { status }, due_date }] }
+    return getJSON(`https://api.clickup.com/api/v2/list/${encodeURIComponent(list)}/task?archived=false`, { Authorization: ctx.secret });
+  },
+});
+
+reg({
+  id: "monday", label: "monday.com", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "monday.items", label: "Board items (board_id)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const board = (ctx.query.board_id || "").replace(/\D/g, "");
+    if (!board) return null;
+    const max = Math.min(Number(ctx.query.max) || 25, 100);
+    // payload: { data: { boards: [{ items_page: { items: [{ name }] } }] } }
+    return postJSON(
+      "https://api.monday.com/v2",
+      { query: `query { boards (ids: ${board}) { items_page (limit: ${max}) { items { name } } } }` },
+      { Authorization: ctx.secret },
+    );
+  },
+});
+
+reg({
+  id: "height", label: "Height", category: "tasks", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "height.tasks", label: "Tasks", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    // payload: { list: [{ name, status, index }] }
+    return getJSON("https://api.height.app/tasks", { Authorization: `api-key ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "shortcut", label: "Shortcut", category: "issues", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "shortcut.stories", label: "Story search (query)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const q = (ctx.query.query || ctx.query.q || "owner:me !is:done").trim();
+    // payload: { data: [{ name, story_type, app_url }] }
+    return getJSON(`https://api.app.shortcut.com/api/v3/search/stories?query=${encodeURIComponent(q)}&page_size=${Math.min(Number(ctx.query.max) || 15, 25)}`, { "Shortcut-Token": ctx.secret });
+  },
+});
+
+reg({
+  id: "harvest", label: "Harvest", category: "time-tracking", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "harvest.timeEntries", label: "Recent time entries", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const account = (ctx.config.accountId as string) || ctx.query.account_id || "";
+    if (!account) return null;
+    // payload: { time_entries: [{ hours, notes, spent_date, client: { name } }] }
+    return getJSON("https://api.harvestapp.com/v2/time_entries", {
+      Authorization: `Bearer ${ctx.secret}`, "Harvest-Account-Id": String(account), "User-Agent": "glanceos",
+    });
+  },
+});
+
+reg({
+  id: "toggl", label: "Toggl Track", category: "time-tracking", authKind: "token",
+  defaultTtlMs: TTL.min, minRefreshMs: 60_000,
+  resources: [{ id: "toggl.current", label: "Running timer", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const auth = `Basic ${Buffer.from(`${ctx.secret}:api_token`).toString("base64")}`;
+    // payload: { description, duration, start } or null when no timer is running
+    const raw = (await getJSON("https://api.track.toggl.com/api/v9/me/time_entries/current", { Authorization: auth })) as
+      { description?: string; duration?: number; start?: string } | null;
+    return { value: raw?.description || "No timer running", running: !!raw, start: raw?.start ?? "" };
+  },
+});
+
+reg({
+  id: "wakatime", label: "WakaTime", category: "dev", authKind: "token",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  resources: [{ id: "wakatime.stats", label: "Coding stats (last 7 days)", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const auth = `Basic ${Buffer.from(ctx.secret).toString("base64")}`;
+    const range = ["last_7_days", "last_30_days", "today"].includes(ctx.query.range || "") ? ctx.query.range : "last_7_days";
+    // payload: { data: { human_readable_total, languages: [{ name, percent }] } }
+    const raw = (await getJSON(`https://wakatime.com/api/v1/users/current/stats/${range}`, { Authorization: auth })) as
+      { data?: { human_readable_total?: string; languages?: { name?: string; percent?: number }[] } } | null;
+    const langs = (raw?.data?.languages ?? []).slice(0, 6).map((l) => ({ title: l.name ?? "", value: `${Math.round(l.percent ?? 0)}%` }));
+    return { value: raw?.data?.human_readable_total || "—", label: "coding time", items: langs };
+  },
+});
+
+reg({
+  id: "airtable", label: "Airtable", category: "docs", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "airtable.records", label: "Table records (base_id, table)", shape: "table" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = (ctx.query.base_id || "").trim();
+    const table = (ctx.query.table || "").trim();
+    if (!base || !table) return null;
+    const max = Math.min(Number(ctx.query.max) || 20, 100);
+    // payload: { records: [{ fields: {...} }] }
+    return getJSON(`https://api.airtable.com/v0/${encodeURIComponent(base)}/${encodeURIComponent(table)}?maxRecords=${max}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
+
+reg({
+  id: "pinboard", label: "Pinboard", category: "bookmarks", authKind: "token",
+  defaultTtlMs: TTL.m15, minRefreshMs: 5 * 60_000,
+  resources: [{ id: "pinboard.recent", label: "Recent bookmarks", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // secret is the "user:TOKEN" auth token
+    const count = Math.min(Number(ctx.query.max) || 12, 100);
+    // payload: { posts: [{ description, href, tags }] }
+    return getJSON(`https://api.pinboard.in/v1/posts/recent?count=${count}&format=json&auth_token=${encodeURIComponent(ctx.secret)}`);
+  },
+});
+
+reg({
+  id: "raindrop", label: "Raindrop.io", category: "bookmarks", authKind: "token",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "raindrop.bookmarks", label: "Bookmarks (collection_id, 0 = all)", shape: "list" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const coll = (ctx.query.collection_id || "0").replace(/[^\d-]/g, "") || "0";
+    const max = Math.min(Number(ctx.query.max) || 15, 50);
+    // payload: { items: [{ title, link, excerpt }] }
+    return getJSON(`https://api.raindrop.io/rest/v1/raindrops/${coll}?perpage=${max}`, { Authorization: `Bearer ${ctx.secret}` });
+  },
+});
