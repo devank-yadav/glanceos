@@ -70,6 +70,20 @@ export function Overlay({
   const handleDrag = useRef<HandleDrag | null>(null);
   const gutterDrag = useRef<GutterDrag | null>(null);
   const rowDrag = useRef<RowDrag | null>(null);
+  const resizeBadge = useRef<HTMLDivElement | null>(null);
+
+  // A live numeric readout that follows the cursor during a resize ("50% · 50%", "h 6/24").
+  const showBadge = (text: string, cx: number, cy: number) => {
+    const root = rootRef.current;
+    if (!root) return;
+    let el = resizeBadge.current;
+    if (!el) { el = document.createElement("div"); el.className = "resize-badge"; root.appendChild(el); resizeBadge.current = el; }
+    el.textContent = text;
+    const box = root.getBoundingClientRect();
+    el.style.left = `${cx - box.left + 14}px`;
+    el.style.top = `${cy - box.top + 14}px`;
+  };
+  const hideBadge = () => { resizeBadge.current?.remove(); resizeBadge.current = null; };
 
   const toPage = (e: PointerEvent | MouseEvent) => {
     const box = rootRef.current!.getBoundingClientRect();
@@ -144,7 +158,15 @@ export function Overlay({
     const d = gutterDrag.current;
     if (!d) return;
     const dWeight = ((e.clientX - d.startX) / scale) * d.weightPerPx;
-    dispatch({ type: "gestureUpdate", doc: resizeColumns(docRef.current!, d.rowIndex, d.leftIndex, d.leftW0 + dWeight, d.rightW0 - dWeight) });
+    let leftW = d.leftW0 + dWeight, rightW = d.rightW0 - dWeight;
+    // Gentle snap to clean splits (⅓ · ½ · ⅔) when the ratio lands within ~2.5%.
+    const sum = leftW + rightW;
+    if (sum > 0) {
+      const frac = leftW / sum;
+      for (const s of [1 / 3, 1 / 2, 2 / 3]) if (Math.abs(frac - s) < 0.025) { leftW = sum * s; rightW = sum * (1 - s); break; }
+      showBadge(`${Math.round((leftW / sum) * 100)}% · ${Math.round((rightW / sum) * 100)}%`, e.clientX, e.clientY);
+    }
+    dispatch({ type: "gestureUpdate", doc: resizeColumns(docRef.current!, d.rowIndex, d.leftIndex, leftW, rightW) });
   };
 
   // ---- row gutter (height) ----
@@ -160,6 +182,8 @@ export function Overlay({
     const d = rowDrag.current;
     if (!d || geometry.unit === 0) return;
     const dUnits = ((e.clientY - d.startY) / scale) / geometry.unit;
+    const h = Math.max(1, Math.min(24, Math.round(d.h0 + dUnits)));
+    showBadge(`h ${h}/24`, e.clientX, e.clientY);
     dispatch({ type: "gestureUpdate", doc: resizeRow(docRef.current!, d.rowIndex, d.h0 + dUnits) });
   };
 
@@ -167,6 +191,7 @@ export function Overlay({
     if (gutterDrag.current || rowDrag.current) {
       gutterDrag.current = null;
       rowDrag.current = null;
+      hideBadge();
       rootRef.current?.classList.remove("resizing");
       dispatch({ type: commit ? "gestureEnd" : "gestureCancel" });
     }

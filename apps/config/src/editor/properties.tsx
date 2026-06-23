@@ -302,7 +302,7 @@ export function BlockFields({
       for (let n = 2; taken.has(nm.toLowerCase()); n++) nm = `${desired} ${n}`;
       target.name = nm;
     });
-  const editStyle = (patch: Partial<{ invert: boolean; align: string; valign: string; pad: string; border: string; radius: string; bg: string }>) =>
+  const editStyle = (patch: Partial<{ invert: boolean; align: string; valign: string; pad: string; border: string; radius: string; bg: string; size: string }>) =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.style = { ...target.style, ...patch } as typeof target.style;
@@ -434,6 +434,12 @@ export function BlockFields({
           <span>Background</span>
           <select value={style.bg ?? "none"} onChange={(e) => editStyle({ bg: (e.currentTarget as HTMLSelectElement).value })}>
             <option value="none">None</option><option value="subtle">Subtle</option><option value="strong">Strong</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Text size</span>
+          <select value={style.size ?? "m"} onChange={(e) => editStyle({ size: (e.currentTarget as HTMLSelectElement).value })}>
+            <option value="xs">XS</option><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">XL</option>
           </select>
         </label>
       </div>

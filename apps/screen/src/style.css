@@ -110,6 +110,13 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
 .widget.rad-l { border-radius: 4vmin; }
 .widget.bg-subtle { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .widget.bg-strong { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+/* Per-block text size: scale the board's font factor for this cell only. We multiply the
+   constant --fs-base (set on body) — never --font-scale itself — so there's no self-reference
+   cycle, and every child's calc(Nvmin * var(--font-scale)) picks up the multiplied value. */
+.widget.bsize-xs { --font-scale: calc(var(--fs-base, 1) * 0.7); }
+.widget.bsize-s { --font-scale: calc(var(--fs-base, 1) * 0.85); }
+.widget.bsize-l { --font-scale: calc(var(--fs-base, 1) * 1.25); }
+.widget.bsize-xl { --font-scale: calc(var(--fs-base, 1) * 1.6); }
 
 /* clock */
 .clock-time {

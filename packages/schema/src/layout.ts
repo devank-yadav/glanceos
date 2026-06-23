@@ -117,6 +117,7 @@ export const BlockStyle = z.object({
   border: z.enum(["none", "thin", "strong"]).optional(),
   radius: z.enum(["none", "s", "m", "l"]).optional(),
   bg: z.enum(["none", "subtle", "strong"]).optional(),
+  size: z.enum(["xs", "s", "m", "l", "xl"]).optional(), // per-block text-size multiplier (m = unchanged)
 });
 export type BlockStyleT = z.infer<typeof BlockStyle>;
 

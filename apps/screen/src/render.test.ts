@@ -425,13 +425,14 @@ describe("designable objects — per-block style classes (v9.0)", () => {
     const st = (extra: object) => ({ invert: false, align: "start", valign: "top", ...extra });
     renderPayload(pay({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
       { id: "plain", type: "stat", width: 1, style: st({}), props: { label: "P", value: "1" } },
-      { id: "card", type: "stat", width: 1, style: st({ pad: "m", border: "strong", radius: "l", bg: "subtle" }), props: { label: "C", value: "2" } },
+      { id: "card", type: "stat", width: 1, style: st({ pad: "m", border: "strong", radius: "l", bg: "subtle", size: "l" }), props: { label: "C", value: "2" } },
     ] }] }));
     const cells = document.querySelectorAll<HTMLElement>(".widget-stat");
-    expect(cells[0]!.className).not.toMatch(/pad-|bd-|rad-|bg-/); // plain → no decoration
+    expect(cells[0]!.className).not.toMatch(/pad-|bd-|rad-|bg-|bsize-/); // plain → no decoration
     expect(cells[1]!.className).toContain("pad-m");
     expect(cells[1]!.className).toContain("bd-strong");
     expect(cells[1]!.className).toContain("rad-l");
     expect(cells[1]!.className).toContain("bg-subtle");
+    expect(cells[1]!.className).toContain("bsize-l");
   });
 });

@@ -92,12 +92,13 @@ const blockSig = (block: RowT["blocks"][number], datum: unknown) => JSON.stringi
 function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown): (() => void) | undefined {
   const st = block.style ?? { invert: false, align: "start", valign: "top" };
   // v9.0 designable objects — optional per-block style as CSS classes (absent = unchanged).
-  const d = st as { pad?: string; border?: string; radius?: string; bg?: string };
+  const d = st as { pad?: string; border?: string; radius?: string; bg?: string; size?: string };
   const deco =
     (d.pad && d.pad !== "none" ? ` pad-${d.pad}` : "") +
     (d.border && d.border !== "none" ? ` bd-${d.border}` : "") +
     (d.radius && d.radius !== "none" ? ` rad-${d.radius}` : "") +
-    (d.bg && d.bg !== "none" ? ` bg-${d.bg}` : "");
+    (d.bg && d.bg !== "none" ? ` bg-${d.bg}` : "") +
+    (d.size && d.size !== "m" ? ` bsize-${d.size}` : "");
   cell.className = `widget widget-${block.type} halign-${st.align} valign-${st.valign}${st.invert ? " is-invert" : ""}${deco}`;
   cell.style.flexGrow = String(block.width ?? 1); // zod-free runtime: default the weight (the "thin strip" bug)
   const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
@@ -163,7 +164,9 @@ export function renderPayload(payload: StreamPayloadT): void {
   // Look is opt-in: no look → the default sans (existing boards unchanged).
   if (layout.theme.look) document.body.dataset.look = layout.theme.look; else delete document.body.dataset.look;
   const FONT_SCALE: Record<string, number> = { s: 0.85, m: 1, l: 1.18 };
-  document.body.style.setProperty("--font-scale", String(FONT_SCALE[layout.theme.fontScale ?? "m"] ?? 1));
+  const fs = String(FONT_SCALE[layout.theme.fontScale ?? "m"] ?? 1);
+  document.body.style.setProperty("--font-scale", fs);
+  document.body.style.setProperty("--fs-base", fs); // v9.0: constant board scale a per-block `bsize-*` cell multiplies (no self-reference)
 
   // Same skeleton as last tick → diff in place (no flash); else full rebuild.
   const sig = structuralSig(layout, state.data);
