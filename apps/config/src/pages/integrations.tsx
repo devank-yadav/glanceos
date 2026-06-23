@@ -72,6 +72,16 @@ const EXTRA_CONFIG: Record<string, ExtraField[]> = {
     { key: "email", label: "Account email", placeholder: "you@example.com" },
   ],
   trello: [{ key: "key", label: "API key", placeholder: "your Trello API key" }],
+  gitlab: [{ key: "baseUrl", label: "GitLab URL (self-hosted)", placeholder: "https://gitlab.com" }],
+  harvest: [{ key: "accountId", label: "Harvest Account ID", placeholder: "1234567" }],
+  plausible: [{ key: "baseUrl", label: "Plausible URL (self-hosted)", placeholder: "https://plausible.io" }],
+  umami: [{ key: "baseUrl", label: "Umami API URL", placeholder: "https://api.umami.is" }],
+  posthog: [{ key: "baseUrl", label: "PostHog host", placeholder: "https://app.posthog.com" }],
+  simpleanalytics: [{ key: "userId", label: "User ID", placeholder: "sa_user_id_…" }],
+  plex: [{ key: "baseUrl", label: "Plex server URL", placeholder: "http://192.168.1.10:32400", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code> on the server.</> }],
+  tautulli: [{ key: "baseUrl", label: "Tautulli URL", placeholder: "http://192.168.1.10:8181", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
+  sonarr: [{ key: "baseUrl", label: "Sonarr URL", placeholder: "http://192.168.1.10:8989", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
+  radarr: [{ key: "baseUrl", label: "Radarr URL", placeholder: "http://192.168.1.10:7878", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code>.</> }],
 };
 
 export function IntegrationsPage() {

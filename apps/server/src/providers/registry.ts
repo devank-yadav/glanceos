@@ -1349,3 +1349,178 @@ reg({
     return getJSON(`https://openexchangerates.org/api/latest.json?app_id=${encodeURIComponent(ctx.secret)}&base=${base}${symParam}`);
   },
 });
+
+// ============================================================================
+// Integrations B6 — health / fitness / media providers. OAuth (strava, whoop)
+// scaffold an oauth spec + bearer resolve; the rest take an API key / token.
+// Self-hosted media servers (plex, tautulli, sonarr, radarr) need a baseUrl and,
+// for private hosts, GLANCEOS_ALLOW_PRIVATE_EGRESS=1. (Withings deferred —
+// non-standard OAuth token exchange the generic flow can't do.)
+// ============================================================================
+
+reg({
+  id: "strava", label: "Strava", category: "health", authKind: "oauth2",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://www.strava.com/oauth/authorize",
+    tokenUrl: "https://www.strava.com/oauth/token",
+    scopes: ["activity:read_all"],
+    authParams: { approval_prompt: "auto" },
+  },
+  resources: [
+    { id: "strava.activities", label: "Recent activities", shape: "list" },
+    { id: "strava.stats", label: "Athlete totals (athlete_id)", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    if (ctx.resource === "strava.stats") {
+      const id = (ctx.query.athlete_id || "").replace(/\D/g, "");
+      if (!id) return null;
+      return getJSON(`https://www.strava.com/api/v3/athletes/${id}/stats`, h); // { recent_run_totals, ytd_run_totals, … }
+    }
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    // payload: array of { name, distance, moving_time, type, start_date }
+    return getJSON(`https://www.strava.com/api/v3/athlete/activities?per_page=${max}`, h);
+  },
+});
+
+reg({
+  id: "whoop", label: "WHOOP", category: "health", authKind: "oauth2",
+  defaultTtlMs: TTL.m30, minRefreshMs: 5 * 60_000,
+  oauth: {
+    authorizeUrl: "https://api.prod.whoop.com/oauth/oauth2/auth",
+    tokenUrl: "https://api.prod.whoop.com/oauth/oauth2/token",
+    scopes: ["read:recovery", "read:sleep", "read:cycles", "offline"],
+  },
+  resources: [
+    { id: "whoop.recovery", label: "Recovery", shape: "list" },
+    { id: "whoop.sleep", label: "Sleep", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const h = { Authorization: `Bearer ${ctx.secret}` };
+    const max = Math.min(Number(ctx.query.max) || 7, 25);
+    const ep = ctx.resource === "whoop.sleep" ? "activity/sleep" : "recovery";
+    // payload: { records: [{ score: { … } }] }
+    return getJSON(`https://api.prod.whoop.com/developer/v1/${ep}?limit=${max}`, h);
+  },
+});
+
+reg({
+  id: "lastfm", label: "Last.fm", category: "media", authKind: "apiKey",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "lastfm.recent", label: "Recent tracks (user)", shape: "list" },
+    { id: "lastfm.topartists", label: "Top artists (user)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // api_key
+    const user = (ctx.query.user || "").trim();
+    if (!user) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    const method = ctx.resource === "lastfm.topartists" ? "user.gettopartists" : "user.getrecenttracks";
+    // payload: { recenttracks: { track: [{ name, artist: { #text } }] } } or { topartists: { artist: [...] } }
+    return getJSON(`https://ws.audioscrobbler.com/2.0/?method=${method}&user=${encodeURIComponent(user)}&api_key=${encodeURIComponent(ctx.secret)}&format=json&limit=${max}`);
+  },
+});
+
+reg({
+  id: "trakt", label: "Trakt", category: "media", authKind: "apiKey",
+  defaultTtlMs: TTL.h1, minRefreshMs: 5 * 60_000,
+  resources: [
+    { id: "trakt.trendingShows", label: "Trending shows", shape: "list" },
+    { id: "trakt.trendingMovies", label: "Trending movies", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // client_id
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const kind = ctx.resource === "trakt.trendingMovies" ? "movies" : "shows";
+    const h = { "trakt-api-version": "2", "trakt-api-key": ctx.secret };
+    // payload: array of { watchers, show|movie: { title, year } }
+    return getJSON(`https://api.trakt.tv/${kind}/trending?limit=${max}`, h);
+  },
+});
+
+reg({
+  id: "listenbrainz", label: "ListenBrainz", category: "media", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [{ id: "listenbrainz.listens", label: "Recent listens (user)", shape: "list" }],
+  async resolve(ctx) {
+    const user = (ctx.query.user || "").trim();
+    if (!user) return null;
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    const h: Record<string, string> = ctx.secret ? { Authorization: `Token ${ctx.secret}` } : {};
+    // payload: { payload: { listens: [{ track_metadata: { track_name, artist_name } }] } }
+    return getJSON(`https://api.listenbrainz.org/1/user/${encodeURIComponent(user)}/listens?count=${max}`, h);
+  },
+});
+
+reg({
+  id: "plex", label: "Plex", category: "media", authKind: "token",
+  defaultTtlMs: TTL.m5, minRefreshMs: 60_000,
+  resources: [
+    { id: "plex.recentlyAdded", label: "Recently added", shape: "list" },
+    { id: "plex.sessions", label: "Now playing", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null; // X-Plex-Token
+    const base = ((ctx.config.baseUrl as string) || "").replace(/\/+$/, "");
+    if (!base) return null;
+    const path = ctx.resource === "plex.sessions" ? "/status/sessions" : "/library/recentlyAdded?X-Plex-Container-Size=12";
+    const sep = path.includes("?") ? "&" : "?";
+    // payload: { MediaContainer: { Metadata: [{ title, type, year }] } }
+    return getJSON(`${base}${path}${sep}X-Plex-Token=${encodeURIComponent(ctx.secret)}`, { Accept: "application/json" });
+  },
+});
+
+reg({
+  id: "tautulli", label: "Tautulli", category: "media", authKind: "apiKey",
+  defaultTtlMs: TTL.min, minRefreshMs: 60_000,
+  resources: [{ id: "tautulli.activity", label: "Current activity", shape: "scalar" }],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = ((ctx.config.baseUrl as string) || "").replace(/\/+$/, "");
+    if (!base) return null;
+    // payload: { response: { data: { stream_count, sessions: [...] } } }
+    return getJSON(`${base}/api/v2?apikey=${encodeURIComponent(ctx.secret)}&cmd=get_activity`);
+  },
+});
+
+reg({
+  id: "sonarr", label: "Sonarr", category: "media", authKind: "apiKey",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [
+    { id: "sonarr.calendar", label: "Upcoming episodes", shape: "list" },
+    { id: "sonarr.queue", label: "Download queue", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = ((ctx.config.baseUrl as string) || "").replace(/\/+$/, "");
+    if (!base) return null;
+    const h = { "X-Api-Key": ctx.secret };
+    if (ctx.resource === "sonarr.queue") return getJSON(`${base}/api/v3/queue`, h);
+    const end = new Date(Date.now() + 14 * 864e5).toISOString();
+    // payload: array of { title, airDateUtc, series: { title } }
+    return getJSON(`${base}/api/v3/calendar?end=${encodeURIComponent(end)}`, h);
+  },
+});
+
+reg({
+  id: "radarr", label: "Radarr", category: "media", authKind: "apiKey",
+  defaultTtlMs: TTL.m15, minRefreshMs: 60_000,
+  resources: [
+    { id: "radarr.calendar", label: "Upcoming releases", shape: "list" },
+    { id: "radarr.queue", label: "Download queue", shape: "list" },
+  ],
+  async resolve(ctx) {
+    if (!ctx.secret) return null;
+    const base = ((ctx.config.baseUrl as string) || "").replace(/\/+$/, "");
+    if (!base) return null;
+    const h = { "X-Api-Key": ctx.secret };
+    if (ctx.resource === "radarr.queue") return getJSON(`${base}/api/v3/queue`, h);
+    const end = new Date(Date.now() + 30 * 864e5).toISOString();
+    // payload: array of { title, inCinemas, digitalRelease }
+    return getJSON(`${base}/api/v3/calendar?end=${encodeURIComponent(end)}`, h);
+  },
+});
