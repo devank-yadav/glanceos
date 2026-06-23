@@ -31,6 +31,8 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ["⌘⇧↑ / ⌘⇧↓", "Move the whole line"],
       ["Drag ⠿", "Move · edges make columns"],
       ["Drag a seam", "Resize width / height"],
+      ["Drag a corner", "Resize width + height"],
+      ["Drag list ⠿", "Reorder list / to-do items"],
     ],
   },
   {
