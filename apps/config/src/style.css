@@ -1643,16 +1643,17 @@ ul.tasks li:last-child {
   border-color: rgba(35, 131, 226, 0.4);
 }
 
-/* the blue drop line */
+/* the blue drop line — calm + instant. NO position/size transition: the indicator changes
+   shape between targets (a horizontal line between rows ⇄ a vertical line beside a block),
+   and animating left/top/width/height made it visibly morph/stretch through L-shapes as you
+   moved — that was the "glitch." It now snaps cleanly. No glow either (it read as an overlay). */
 .drop-indicator {
   position: absolute;
   display: none;
   background: var(--indigo);
   border-radius: 2px;
-  box-shadow: 0 0 0 1px rgba(35, 131, 226, 0.25), 0 0 12px rgba(35, 131, 226, 0.35);
   pointer-events: none;
   z-index: 25;
-  transition: left 0.08s var(--ease), top 0.08s var(--ease), width 0.08s var(--ease), height 0.08s var(--ease);
 }
 
 /* translucent halo over the row a drop is targeting */
