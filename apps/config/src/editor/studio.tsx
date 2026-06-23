@@ -402,7 +402,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
     const next = applyDrop(doc, block, target, source.kind === "existing" ? source.id : undefined, rowHeight);
     if (!next) return;
     commitDoc(next);
-    dispatch({ type: "select", id: block.id });
+    // A NEW block stays selected so you can configure it; MOVING an existing block leaves a
+    // clean board — otherwise its selection chrome (type tag, ⠿ handle, resize grips) lingers
+    // after the drop until you click empty space, which read as a stuck "overlay".
+    dispatch({ type: "select", id: source.kind === "new" ? block.id : null });
   };
 
   const insertBlock = (type: WidgetType, rowIndex: number, edit = false): string | null => {
