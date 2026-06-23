@@ -2586,6 +2586,34 @@ ul.tasks li:last-child {
 .provider-card:hover {
   border-color: var(--indigo);
 }
+/* v9.7 — a grid cell wraps the connect button + its preset "objects" */
+.provider-cell { display: flex; flex-direction: column; gap: 5px; }
+.provider-cell .provider-card { width: 100%; }
+.provider-objects { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 2px; }
+.obj-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1.5;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.obj-chip:hover { color: var(--fg); border-color: var(--indigo); background: color-mix(in srgb, var(--indigo) 8%, transparent); }
+/* v9.7 — integrations search */
+.integ-head { align-items: center; gap: 12px; flex-wrap: wrap; }
+.integ-search {
+  flex: 0 1 280px;
+  padding: 7px 11px;
+  font-size: 13px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.integ-search:focus { outline: none; border-color: var(--indigo); }
 .conn-card {
   display: flex;
   flex-direction: column;

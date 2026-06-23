@@ -6,7 +6,11 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { SettingsTabs } from "../components/SettingsTabs";
 import { useToast } from "../components/Toast";
+import { makeBlock } from "../editor/blocks";
 import { Icon } from "../editor/icons";
+import { type IntegrationObject, objectsForProvider } from "../editor/integrationObjects";
+
+const CLIP_KEY = "glanceos.clipboard"; // shared with the Studio's copy/paste
 
 // Connect apps once here; bind blocks to them from the Studio's ⟿ Data tab.
 // Tokens/URLs are sent once, encrypted server-side, and never returned.
@@ -89,7 +93,29 @@ export function IntegrationsPage() {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
   const [conns, setConns] = useState<Connection[] | null>(null);
   const [adding, setAdding] = useState<ProviderInfo | null>(null);
+  const [q, setQ] = useState("");
   const toast = useToast();
+
+  // Copy a preset "object" (a block pre-bound to this integration's source) to the
+  // Studio clipboard, so the user can paste it onto any board with ⌘V. Reuses the
+  // proven paste path; the connection is chosen later in the block's Data tab.
+  const addObject = (o: IntegrationObject) => {
+    const base = makeBlock(o.blockType) as Record<string, unknown>;
+    const block = {
+      ...base,
+      name: o.label,
+      props: { ...(base.props as Record<string, unknown>), ...(o.props ?? {}) },
+      source: {
+        kind: o.sourceKind,
+        query: o.query ?? {},
+        map: { path: o.map.path ?? "", items: o.map.items, fields: o.map.fields, transform: o.map.transform ?? "none", transformArg: o.map.transformArg },
+      },
+    };
+    try {
+      localStorage.setItem(CLIP_KEY, JSON.stringify([block]));
+      toast.success(`Copied “${o.label}” — open a board and press ⌘V to paste`);
+    } catch { toast.error("Couldn't copy to clipboard"); }
+  };
 
   const refresh = async () => {
     try {
@@ -156,20 +182,50 @@ export function IntegrationsPage() {
               </div>
             )}
 
-            <h2>Add a connection</h2>
-            {cats.map((cat) => (
-              <div key={cat} class="provider-cat">
-                <div class="cat-label">{CAT_LABEL[cat] ?? cat}</div>
-                <div class="cards provider-grid">
-                  {providers.filter((p) => p.category === cat).sort((a, b) => a.label.localeCompare(b.label)).map((p) => (
-                    <button class="card provider-card" key={p.id} onClick={() => setAdding(p)}>
-                      <strong>{p.label}</strong>
-                      <span class="muted">{p.authKind === "oauth2" ? "OAuth" : p.authKind === "url" ? "URL" : p.authKind === "none" ? "No key" : "Token"}</span>
-                    </button>
-                  ))}
+            <div class="row spread integ-head">
+              <h2>Add a connection</h2>
+              <input
+                class="integ-search"
+                type="search"
+                placeholder={`Search ${providers.length} integrations…`}
+                value={q}
+                onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)}
+              />
+            </div>
+            {(() => {
+              const ql = q.trim().toLowerCase();
+              const match = (p: ProviderInfo) =>
+                !ql ||
+                `${p.label} ${p.category} ${CAT_LABEL[p.category] ?? ""}`.toLowerCase().includes(ql) ||
+                objectsForProvider(p.id).some((o) => `${o.label} ${o.description}`.toLowerCase().includes(ql));
+              const shownCats = cats.map((cat) => ({ cat, items: providers.filter((p) => p.category === cat && match(p)).sort((a, b) => a.label.localeCompare(b.label)) })).filter((g) => g.items.length);
+              if (shownCats.length === 0) return <p class="muted">No integrations match “{q}”.</p>;
+              return shownCats.map(({ cat, items }) => (
+                <div key={cat} class="provider-cat">
+                  <div class="cat-label">{CAT_LABEL[cat] ?? cat}</div>
+                  <div class="cards provider-grid">
+                    {items.map((p) => {
+                      const objs = objectsForProvider(p.id);
+                      return (
+                        <div class="provider-cell" key={p.id}>
+                          <button class="card provider-card" onClick={() => setAdding(p)}>
+                            <strong>{p.label}</strong>
+                            <span class="muted">{p.authKind === "oauth2" ? "OAuth" : p.authKind === "url" ? "URL" : p.authKind === "none" ? "No key" : "Token"}</span>
+                          </button>
+                          {objs.length > 0 && (
+                            <div class="provider-objects">
+                              {objs.map((o) => (
+                                <button key={o.id} class="obj-chip" title={`${o.description} — copy this object, then ⌘V on a board`} onClick={() => addObject(o)}>+ {o.label}</button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ));
+            })()}
           </>
         )}
 
