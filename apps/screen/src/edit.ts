@@ -229,6 +229,15 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   document.addEventListener("pointerup", endMarquee);
   document.addEventListener("pointercancel", () => { const m = marquee; marquee = null; if (!m) return; document.body.style.userSelect = ""; clearOutlines(); m.box?.remove(); m.badge?.remove(); });
 
+  // Right-click an in-place block (its clicks fall through to the iframe) → open the Studio's
+  // block menu for it. Non-in-place blocks are handled by the overlay's own onContextMenu.
+  document.addEventListener("contextmenu", (e) => {
+    const t = e.target as HTMLElement;
+    for (const [id, c] of getCells()) {
+      if ((c.el as HTMLElement).contains(t)) { e.preventDefault(); opts.post({ type: "glanceos:menu", id }); return; }
+    }
+  });
+
   const blocksById = (): Map<string, Block> => {
     const m = new Map<string, Block>();
     const doc = opts.getDoc();

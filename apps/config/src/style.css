@@ -2011,8 +2011,10 @@ ul.tasks li:last-child {
   box-shadow: var(--shadow-lg);
   animation: rise 0.16s var(--ease) both;
 }
-/* v9.4 — draggable Options / Data panels: header is the drag handle, body scrolls */
-.block-popover.draggable { padding: 0; overflow: visible; }
+/* v9.4 — draggable Options / Data panels: header is the drag handle, body scrolls; the panel
+   is capped to the viewport (inline max-height) and lays out as a flex column so the body
+   takes the remaining room and scrolls — nothing is ever clipped off-screen. */
+.block-popover.draggable { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .panel-drag {
   display: flex;
   align-items: center;

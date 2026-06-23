@@ -1,6 +1,6 @@
 import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
-import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
 import { editorOrigin } from "../router";
 import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, INPLACE_EDIT, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
@@ -17,6 +17,7 @@ import { encodeQR, qrSvg } from "../qr";
 import { PreviewStage } from "./preview";
 import { createPortal } from "preact/compat";
 import { Modal } from "../components/Modal";
+import { useToast } from "../components/Toast";
 import { LAYOUTS, applyLayout, type LayoutPreset } from "./layouts";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
@@ -93,7 +94,10 @@ const KNOWN = new Set(BLOCKS.map((b) => b.type));
 // A floating panel (Options / Live data) you can drag by its header out of the way of the
 // block you're editing. Opens at (x, y); remount (via a `key`) re-anchors it for a new block.
 function DraggablePanel({ x, y, title, onClose, children }: { x: number; y: number; title: string; onClose: () => void; children: ComponentChildren }) {
-  const [pos, setPos] = useState({ x, y });
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const clamp = (px: number, py: number) => ({ x: Math.min(Math.max(4, px), vw - 80), y: Math.min(Math.max(4, py), vh - 56) });
+  const [pos, setPos] = useState(() => clamp(x, y));
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   const onDown = (e: PointerEvent) => {
     drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
@@ -103,13 +107,22 @@ function DraggablePanel({ x, y, title, onClose, children }: { x: number; y: numb
   const onMove = (e: PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    setPos({ x: Math.max(4, e.clientX - d.dx), y: Math.max(4, e.clientY - d.dy) });
+    setPos(clamp(e.clientX - d.dx, e.clientY - d.dy));
   };
   const onUp = () => { drag.current = null; };
+  // Cap the panel to the viewport so nothing is clipped off-screen. The panel is positioned
+  // absolutely within the stage, so we measure its REAL viewport top after layout (not the
+  // stage-relative `top`) and cap height from there; flex column → the body scrolls within.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [maxH, setMaxH] = useState(vh);
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (el) setMaxH(Math.max(180, window.innerHeight - el.getBoundingClientRect().top - 8));
+  }, [pos.x, pos.y]);
   return (
     <>
       <div class="popover-backdrop" onPointerDown={onClose} />
-      <div class="block-popover draggable" style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+      <div ref={panelRef} class="block-popover draggable" style={{ left: `${pos.x}px`, top: `${pos.y}px`, maxHeight: `${maxH}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
         <div
           class="panel-drag"
           onPointerDown={(e) => onDown(e as unknown as PointerEvent)}
@@ -162,6 +175,7 @@ function autoNameObjects(doc: LayoutT): void {
 
 export function Studio({ layoutId }: { layoutId: number }) {
   const [state, dispatch] = useReducer(editorReducer, PLACEHOLDER, initialEditor);
+  const toast = useToast();
   const [loaded, setLoaded] = useState(false);
   const [missing, setMissing] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -379,9 +393,25 @@ export function Studio({ layoutId }: { layoutId: number }) {
   };
 
   const removeSelected = () => {
-    if (!selectedRef.current.length) return;
+    const n = selectedRef.current.length;
+    if (!n) return;
     commitDoc(removeBlocks(docRef.current, new Set(selectedRef.current)));
     dispatch({ type: "select", id: null });
+    toast.info(`Deleted ${n} ${n === 1 ? "object" : "objects"} · ⌘Z to undo`);
+  };
+  // Toggle lock / invert across the whole selection (used by the multi-select bar).
+  const lockSelected = () => {
+    const ids = new Set(selectedRef.current);
+    if (!ids.size) return;
+    const blocks = docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+    const allLocked = blocks.length > 0 && blocks.every((b) => b.locked);
+    stageEdit((d) => { for (const r of d.rows) for (const blk of r.blocks) if (ids.has(blk.id)) blk.locked = allLocked ? undefined : true; });
+  };
+  const invertSelected = () => {
+    const ids = new Set(selectedRef.current);
+    const blocks = docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+    const allInv = blocks.length > 0 && blocks.every((b) => b.style?.invert);
+    styleSelected({ invert: !allInv });
   };
   const duplicateSelected = () => insertBlocksAfter(selectedBlocks().map(clone));
   const copySelected = () => {
@@ -431,25 +461,27 @@ export function Studio({ layoutId }: { layoutId: number }) {
     if (next) commitDoc(next);
   };
 
-  const performDrop = (source: { kind: "existing"; id: string } | { kind: "new"; type: WidgetType }, target: DropTarget) => {
+  const performDrop = (source: { kind: "existing"; id: string } | { kind: "new"; type: WidgetType }, target: DropTarget, copy = false) => {
     const doc = docRef.current;
-    let block, rowHeight: number;
+    let block: WidgetT, rowHeight: number, existingId: string | undefined;
     if (source.kind === "new") {
       block = makeBlock(source.type);
       rowHeight = blockFor(source.type).defaultH;
+      existingId = undefined;
     } else {
-      block = doc.rows.flatMap((r) => r.blocks).find((b) => b.id === source.id);
-      if (!block) return;
+      const orig = doc.rows.flatMap((r) => r.blocks).find((b) => b.id === source.id);
+      if (!orig) return;
       const srcRow = doc.rows.find((r) => r.blocks.some((b) => b.id === source.id))!;
-      rowHeight = srcRow.blocks.length === 1 ? srcRow.h : blockFor(block.type).defaultH;
+      rowHeight = srcRow.blocks.length === 1 ? srcRow.h : blockFor(orig.type).defaultH;
+      // ⌥-drag drops a fresh copy and keeps the original; a plain drag moves the block.
+      if (copy) { block = clone(orig); existingId = undefined; } else { block = orig; existingId = source.id; }
     }
-    const next = applyDrop(doc, block, target, source.kind === "existing" ? source.id : undefined, rowHeight);
+    const next = applyDrop(doc, block, target, existingId, rowHeight);
     if (!next) return;
     commitDoc(next);
-    // A NEW block stays selected so you can configure it; MOVING an existing block leaves a
-    // clean board — otherwise its selection chrome (type tag, ⠿ handle, resize grips) lingers
-    // after the drop until you click empty space, which read as a stuck "overlay".
-    dispatch({ type: "select", id: source.kind === "new" ? block.id : null });
+    // A NEW block (or an ⌥-copy) stays selected so you can keep working with it; MOVING an
+    // existing block leaves a clean board (no lingering selection chrome to click away).
+    dispatch({ type: "select", id: source.kind === "new" || copy ? block.id : null });
   };
 
   const insertBlock = (type: WidgetType, rowIndex: number, edit = false): string | null => {
@@ -883,6 +915,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             editMode
             onFocus={(id) => dispatch({ type: "select", id })}
             onSelect={(ids, add) => dispatch({ type: "selectMany", ids: add ? [...new Set([...selectedRef.current, ...ids])] : ids })}
+            onMenu={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
             onEdit={(id, patch) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id); if (blk) Object.assign(blk.props as Record<string, unknown>, patch); })}
           >
             <div class="drag-halo" ref={haloRef} />
@@ -894,7 +927,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               docRef={docRef}
               dispatch={dispatch}
               dragLayer={dragLayer}
-              onDrop={(id, target) => performDrop({ kind: "existing", id }, target)}
+              onDrop={(id, target, copy) => performDrop({ kind: "existing", id }, target, copy)}
               onEdit={startEditing}
               onHandleClick={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
               onOpenOptions={(id) => { dispatch({ type: "select", id }); setConvertId(null); setDataOpen(false); setMenuId(null); setOptionsOpen(true); }}
@@ -1011,6 +1044,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <button class="icon-btn" title="Align left" onClick={() => styleSelected({ align: "start" })}><Icon.alignLeft /></button>
                 <button class="icon-btn" title="Align center" onClick={() => styleSelected({ align: "center" })}><Icon.alignCenter /></button>
                 <button class="icon-btn" title="Align right" onClick={() => styleSelected({ align: "end" })}><Icon.alignRight /></button>
+                <span class="multi-sep" />
+                <button class="icon-btn" title="Invert (black)" onClick={invertSelected}><Icon.moon /></button>
+                <button class="icon-btn" title="Lock / unlock" onClick={lockSelected}><Icon.lock /></button>
                 <span class="multi-sep" />
                 <button class="icon-btn" title="Duplicate (⌘D)" onClick={duplicateSelected}><Icon.copy /></button>
                 <button class="icon-btn danger" title="Delete (⌫)" onClick={removeSelected}><Icon.trash /></button>

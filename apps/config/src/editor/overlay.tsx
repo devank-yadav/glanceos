@@ -26,6 +26,7 @@ interface HandleDrag {
   startX: number;
   startY: number;
   node: HTMLElement;
+  alt: boolean; // ⌥ held → drop a copy instead of moving
 }
 interface GutterDrag {
   rowIndex: number;
@@ -62,7 +63,7 @@ export function Overlay({
   docRef: RefObject<LayoutT>;
   dispatch: Dispatch<EditorAction>;
   dragLayer: DragLayer;
-  onDrop: (id: string, target: DropTarget) => void;
+  onDrop: (id: string, target: DropTarget, copy?: boolean) => void;
   onEdit: (id: string) => void;
   onHandleClick: (id: string) => void;
   onOpenOptions: (id: string) => void;
@@ -98,12 +99,13 @@ export function Overlay({
     if (e.button !== 0) return;
     e.stopPropagation();
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* no active pointer (e.g. tests) */ }
-    handleDrag.current = { id, label, glyph, target: null, started: false, startX: e.clientX, startY: e.clientY, node };
+    handleDrag.current = { id, label, glyph, target: null, started: false, startX: e.clientX, startY: e.clientY, node, alt: e.altKey };
     dispatch({ type: "select", id });
   };
   const onHandleMove = (e: PointerEvent) => {
     const d = handleDrag.current;
     if (!d) return;
+    d.alt = e.altKey; // ⌥ at drop time = duplicate
     if (!d.started) {
       if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 4) return;
       d.started = true;
@@ -131,9 +133,9 @@ export function Overlay({
     rootRef.current?.classList.remove("dragging");
     dragLayer.hide();
     if (!commit) return;
-    // Notion-style: drag past the threshold MOVES the block; a plain click on the
-    // ⠿ handle (no movement) OPENS the block's options menu.
-    if (d.started && d.target) onDrop(d.id, d.target);
+    // Notion-style: drag past the threshold MOVES the block (⌥ = drop a copy); a plain click
+    // on the ⠿ handle (no movement) OPENS the block's options menu.
+    if (d.started && d.target) onDrop(d.id, d.target, d.alt);
     else if (!d.started) onHandleClick(d.id);
   };
 
@@ -242,6 +244,13 @@ export function Overlay({
               // only for non-in-place blocks.
               if (editable) onEdit(b.id);
               else onOpenOptions(b.id);
+            }}
+            onContextMenu={(e) => {
+              // right-click a (non-in-place) block → its block menu; in-place blocks are
+              // pointer-events:none so their right-click is handled in the iframe instead.
+              (e as unknown as MouseEvent).preventDefault();
+              (e as unknown as Event).stopPropagation();
+              onHandleClick(b.id);
             }}
           >
             <span class="widget-tag">{blockFor(widget.type).label}</span>

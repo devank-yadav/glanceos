@@ -25,6 +25,7 @@ export function PreviewStage({
   onEdit,
   onFocus,
   onSelect,
+  onMenu,
   children,
 }: {
   W: number;
@@ -38,6 +39,7 @@ export function PreviewStage({
   onEdit?: (id: string, patch: Record<string, unknown>) => void;
   onFocus?: (id: string | null) => void;
   onSelect?: (ids: string[], add?: boolean) => void; // v9.2 — rubber-band marquee selection from the board (add = Shift-drag)
+  onMenu?: (id: string) => void; // v9.4 — right-click an in-place block → open its block menu
   children: ComponentChildren;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -52,10 +54,11 @@ export function PreviewStage({
       else if (m?.type === "glanceos:edit" && m.id && m.patch) onEdit?.(m.id, m.patch);
       else if (m?.type === "glanceos:focus") onFocus?.(m.id ?? null);
       else if (m?.type === "glanceos:select" && Array.isArray(m.ids)) onSelect?.(m.ids, m.add);
+      else if (m?.type === "glanceos:menu" && m.id) onMenu?.(m.id);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onEdit, onFocus, onSelect]);
+  }, [onEdit, onFocus, onSelect, onMenu]);
 
   useEffect(() => {
     if (!ready) return;
