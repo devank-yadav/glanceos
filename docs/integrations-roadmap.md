@@ -28,7 +28,7 @@ Architecture per provider: add a `reg({...})` block (id, label, category, authKi
 
 ## After integrations (priority order)
 - [x] **Big feature — Data inspector** (a deferred Studio direction; chosen for being self-contained, additive, no-migration, zero screen cost, and directly serving the 85 new integrations). The Data tab's "Test" preview now pretty-prints the live payload (was a 260-char string) and derives **clickable path suggestions** from it: `List` chips (array paths + row counts) fill the items mapping, `Field`/`Value` chips fill the field mapping — so binding an arbitrary provider is point-and-click instead of guessing dotted paths. Pure shape helpers extracted to `inspectShape.ts` + 5 unit tests. Config-only (uses the existing `/api/source/preview`). 114 config tests; screen 27045/30000. (Live Studio-flow drive deferred to a morning spot-check; logic unit-verified.)
-- [ ] Studio polish + adversarial bug hunt
+- [x] **Studio polish + adversarial bug hunt** — found & fixed a real B8 bug: the preset "objects" omitted `map.transform`, so list presets resolved to an *array of `{text}` objects* instead of the newline string the list renderer wants (and scalar presets to a raw value), because `applyMap` only short-circuits `transform:"none"` when there's no `items`/`path`. Now the `LIST`/`VALUE` helpers emit `transform:"join"` / `transform:"first"` to match databind.tsx's own binding contract; locked in with a contract unit test (every list preset → join + items; every scalar preset → a value transform). Fixed the one inline preset (plausible) too. 115 config tests; screen 27045/30000.
 - [ ] Quality & hardening (a11y, perf, docs honesty)
 - [ ] Landing / marketing polish
 - [ ] **LAST: 100+ new full-page templates** across many use-cases

@@ -51,6 +51,21 @@ describe("integration preset objects (B8)", () => {
     }
   });
 
+  it("the map.transform matches the block's binding contract (list→join, scalar→a scalar transform)", () => {
+    // Mirror databind.tsx: list blocks bind with transform 'join'; scalar blocks
+    // use a value transform. The wrong transform renders an array instead of text.
+    const LIST_BLOCKS = new Set(["bulletList", "numberedList", "checklist"]);
+    const SCALAR_TRANSFORMS = new Set(["first", "last", "count", "sum", "round", "currency", "duration", "percent", "rangeToWords"]);
+    for (const o of INTEGRATION_OBJECTS) {
+      if (LIST_BLOCKS.has(o.blockType)) {
+        expect(o.map.transform, `${o.providerId}.${o.id} → list preset must use transform:"join"`).toBe("join");
+        expect(o.map.items, `${o.providerId}.${o.id} → list preset must set an items path`).toBeDefined();
+      } else {
+        expect(SCALAR_TRANSFORMS.has(o.map.transform ?? ""), `${o.providerId}.${o.id} → scalar preset needs a value transform, got ${o.map.transform}`).toBe(true);
+      }
+    }
+  });
+
   it("objectsForProvider filters correctly", () => {
     const reddit = objectsForProvider("reddit");
     expect(reddit.length).toBeGreaterThan(0);

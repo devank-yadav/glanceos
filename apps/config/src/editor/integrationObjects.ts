@@ -31,8 +31,11 @@ export interface IntegrationObject {
   defaultH: number; // /24
 }
 
-const LIST = (fields: Record<string, string> = { text: "title" }, items = "items"): SourceMapPreset => ({ items, fields });
-const VALUE = (path = "value"): SourceMapPreset => ({ path });
+// Match the Data tab's own binding contract (databind.tsx build()): a list block
+// wants transform "join" (array → newline text via each item's `text` field); a
+// scalar block wants a scalar transform ("first" returns the value at the path).
+const LIST = (fields: Record<string, string> = { text: "title" }, items = "items"): SourceMapPreset => ({ items, fields, transform: "join" });
+const VALUE = (path = "value"): SourceMapPreset => ({ path, transform: "first" });
 
 export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   // ---- keyless (render immediately) ----
@@ -58,7 +61,7 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "gitlab", id: "issues", label: "GitLab issues", description: "Issues assigned to you", blockType: "bulletList", sourceKind: "gitlab.issues", query: { max: "10" }, map: LIST({ text: "title" }, ""), defaultH: 8 },
   { providerId: "linear", id: "issues", label: "Linear issues", description: "Your assigned issues", blockType: "bulletList", sourceKind: "linear.issues", query: {}, map: LIST({ text: "title" }, "items"), defaultH: 8 },
   { providerId: "stripe", id: "balance", label: "Stripe balance", description: "Available account balance", blockType: "stat", sourceKind: "stripe.balance", query: {}, map: VALUE(), props: { label: "available" }, defaultH: 4 },
-  { providerId: "plausible", id: "visitors", label: "Visitors (7d)", description: "Unique visitors, last 7 days", blockType: "stat", sourceKind: "plausible.aggregate", query: { site_id: "", period: "7d" }, map: { path: "results.visitors.value" }, props: { label: "visitors · 7d" }, defaultH: 4 },
+  { providerId: "plausible", id: "visitors", label: "Visitors (7d)", description: "Unique visitors, last 7 days", blockType: "stat", sourceKind: "plausible.aggregate", query: { site_id: "", period: "7d" }, map: { path: "results.visitors.value", transform: "first" }, props: { label: "visitors · 7d" }, defaultH: 4 },
   { providerId: "strava", id: "activities", label: "Recent activities", description: "Your latest workouts", blockType: "bulletList", sourceKind: "strava.activities", query: { max: "8" }, map: LIST({ text: "name" }, ""), defaultH: 8 },
   { providerId: "lastfm", id: "recent", label: "Recent tracks", description: "What you've been listening to", blockType: "bulletList", sourceKind: "lastfm.recent", query: { user: "", max: "8" }, map: LIST({ text: "name" }, "recenttracks.track"), defaultH: 8 },
   { providerId: "clickup", id: "tasks", label: "ClickUp tasks", description: "Tasks from a list", blockType: "checklist", sourceKind: "clickup.tasks", query: { list_id: "" }, map: LIST({ text: "name" }, "tasks"), defaultH: 8 },
