@@ -37,7 +37,7 @@ export function PreviewStage({
   editMode?: boolean; // load the in-iframe edit layer + accept edits back (v8.0)
   onEdit?: (id: string, patch: Record<string, unknown>) => void;
   onFocus?: (id: string | null) => void;
-  onSelect?: (ids: string[]) => void; // v9.2 — rubber-band marquee selection from the board
+  onSelect?: (ids: string[], add?: boolean) => void; // v9.2 — rubber-band marquee selection from the board (add = Shift-drag)
   children: ComponentChildren;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -47,11 +47,11 @@ export function PreviewStage({
     const onMessage = (e: MessageEvent) => {
       // Only trust messages from OUR preview iframe origin (cross-origin in dev).
       if (e.origin !== targetOrigin()) return;
-      const m = e.data as { type?: string; id?: string | null; patch?: Record<string, unknown>; ids?: string[] };
+      const m = e.data as { type?: string; id?: string | null; patch?: Record<string, unknown>; ids?: string[]; add?: boolean };
       if (m?.type === "glanceos:ready") setReady(true);
       else if (m?.type === "glanceos:edit" && m.id && m.patch) onEdit?.(m.id, m.patch);
       else if (m?.type === "glanceos:focus") onFocus?.(m.id ?? null);
-      else if (m?.type === "glanceos:select" && Array.isArray(m.ids)) onSelect?.(m.ids);
+      else if (m?.type === "glanceos:select" && Array.isArray(m.ids)) onSelect?.(m.ids, m.add);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

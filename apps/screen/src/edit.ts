@@ -179,11 +179,11 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   const overlaps = (r: DOMRect, x: number, y: number, w: number, h: number): boolean =>
     r.left < x + w && r.right > x && r.top < y + h && r.bottom > y;
   const clearOutlines = (): void => { for (const [, c] of getCells()) { const el = c.el as HTMLElement; el.style.outline = ""; el.style.outlineOffset = ""; } };
-  let marquee: { x0: number; y0: number; box: HTMLDivElement | null; moved: boolean } | null = null;
+  let marquee: { x0: number; y0: number; box: HTMLDivElement | null; badge: HTMLSpanElement | null; moved: boolean; add: boolean } | null = null;
   document.addEventListener("pointerdown", (e) => {
     const t = e.target as HTMLElement;
     if (e.button !== 0 || t?.closest?.(".glance-editcell") || t?.closest?.(".gl-additem")) return;
-    marquee = { x0: e.clientX, y0: e.clientY, box: null, moved: false };
+    marquee = { x0: e.clientX, y0: e.clientY, box: null, badge: null, moved: false, add: e.shiftKey }; // Shift = add to selection
     try { document.documentElement.setPointerCapture(e.pointerId); } catch { /* no real pointer (tests) */ }
   });
   document.addEventListener("pointermove", (e) => {
@@ -196,29 +196,38 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
       const box = document.createElement("div");
       box.className = "glance-marquee";
       box.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;border:1.5px solid #2383e2;background:rgba(35,131,226,.10);border-radius:4px;box-shadow:0 1px 8px rgba(35,131,226,.30),inset 0 0 0 1px rgba(255,255,255,.45);";
-      document.body.appendChild(box);
+      const badge = document.createElement("span"); // a live "N selected" count that follows the cursor
+      badge.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;background:#2383e2;color:#fff;font:600 11px/1 ui-sans-serif,system-ui,sans-serif;padding:4px 8px;border-radius:999px;box-shadow:0 1px 5px rgba(0,0,0,.25);white-space:nowrap;";
+      document.body.append(box, badge);
       document.body.style.userSelect = "none";
-      m.box = box;
+      m.box = box; m.badge = badge;
     }
     const x = Math.min(e.clientX, m.x0), y = Math.min(e.clientY, m.y0), w = Math.abs(dx), h = Math.abs(dy);
     Object.assign(m.box!.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
-    for (const [, c] of getCells()) { const el = c.el as HTMLElement; const hit = overlaps(el.getBoundingClientRect(), x, y, w, h); el.style.outline = hit ? "2px solid rgba(35,131,226,.65)" : ""; el.style.outlineOffset = hit ? "2px" : ""; }
+    let n = 0;
+    for (const [, c] of getCells()) { const el = c.el as HTMLElement; const hit = overlaps(el.getBoundingClientRect(), x, y, w, h); if (hit) n++; el.style.outline = hit ? "2px solid rgba(35,131,226,.65)" : ""; el.style.outlineOffset = hit ? "2px" : ""; }
+    const b = m.badge!;
+    b.textContent = n ? `${n} selected${m.add ? " +" : ""}` : "";
+    b.style.display = n ? "block" : "none";
+    b.style.left = `${e.clientX + 14}px`;
+    b.style.top = `${e.clientY + 14}px`;
   });
   const endMarquee = (e: PointerEvent): void => {
     const m = marquee;
     marquee = null;
     if (!m) return;
     document.body.style.userSelect = "";
+    m.badge?.remove();
     if (!m.moved) { opts.post({ type: "glanceos:focus", id: null }); return; } // plain click → deselect
     const x = Math.min(e.clientX, m.x0), y = Math.min(e.clientY, m.y0), w = Math.abs(e.clientX - m.x0), h = Math.abs(e.clientY - m.y0);
     const ids: string[] = [];
     for (const [id, c] of getCells()) if (overlaps((c.el as HTMLElement).getBoundingClientRect(), x, y, w, h)) ids.push(id);
     clearOutlines();
     m.box?.remove();
-    opts.post({ type: "glanceos:select", ids });
+    opts.post({ type: "glanceos:select", ids, add: m.add });
   };
   document.addEventListener("pointerup", endMarquee);
-  document.addEventListener("pointercancel", () => { const m = marquee; marquee = null; if (!m) return; document.body.style.userSelect = ""; clearOutlines(); m.box?.remove(); });
+  document.addEventListener("pointercancel", () => { const m = marquee; marquee = null; if (!m) return; document.body.style.userSelect = ""; clearOutlines(); m.box?.remove(); m.badge?.remove(); });
 
   const blocksById = (): Map<string, Block> => {
     const m = new Map<string, Block>();
