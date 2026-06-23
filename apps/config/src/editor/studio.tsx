@@ -375,6 +375,20 @@ export function Studio({ layoutId }: { layoutId: number }) {
       /* invalid clipboard — ignore */
     }
   };
+  // v9.0 paint-format: copy the primary block's style, paste it onto every selected block.
+  const copyStyle = () => {
+    const id = primaryRef.current;
+    const b = id ? docRef.current.rows.flatMap((r) => r.blocks).find((x) => x.id === id) : null;
+    if (b) localStorage.setItem("glanceos.copiedStyle", JSON.stringify(b.style ?? {}));
+  };
+  const pasteStyle = () => {
+    const raw = localStorage.getItem("glanceos.copiedStyle");
+    if (!raw || !selectedRef.current.length) return;
+    let st: object;
+    try { st = JSON.parse(raw) as object; } catch { return; }
+    const ids = new Set(selectedRef.current);
+    stageEdit((d) => { for (const r of d.rows) for (const blk of r.blocks) if (ids.has(blk.id)) blk.style = { ...st } as typeof blk.style; });
+  };
 
   const moveSelectedRow = (dir: "up" | "down") => {
     const id = primaryRef.current;
@@ -552,6 +566,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
       } else if (meta && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelected();
+      } else if (meta && e.shiftKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        copyStyle();
+      } else if (meta && e.shiftKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        pasteStyle();
       } else if (meta && e.key.toLowerCase() === "c") {
         copySelected();
       } else if (meta && e.key.toLowerCase() === "x") {

@@ -16,7 +16,9 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ["⌘C", "Copy blocks"],
       ["⌘X", "Cut blocks"],
       ["⌘V", "Paste (any board)"],
+      ["⌘⇧C / ⌘⇧V", "Copy / paste style"],
       ["Shift-click", "Add to selection"],
+      ["Drag canvas", "Marquee-select"],
     ],
   },
   {
