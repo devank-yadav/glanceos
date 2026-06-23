@@ -203,24 +203,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
       el.style.height = `${box.h}px`;
     };
     return {
-      show(label) {
-        const g = ghostRef.current;
-        if (!g) return;
-        g.innerHTML = "";
-        const lb = document.createElement("span");
-        lb.className = "drag-card-label";
-        lb.textContent = label;
-        g.append(lb);
-        g.style.display = "flex";
-      },
-      move(x, y) {
-        const g = ghostRef.current;
-        if (g) g.style.transform = `translate(${x - g.offsetWidth / 2}px, ${y - g.offsetHeight - 12}px)`;
-      },
+      // v9.0 — calm drag: no floating card, no halo box, no whole-board dim. Just a subtle
+      // ghost of the block being moved (CSS) + a crisp drop-line showing where it lands.
+      show() { /* intentionally no cursor-following card */ },
+      move() { /* — */ },
       indicate: (box) => place(indicatorRef, box),
-      halo: (box) => place(haloRef, box),
+      halo() { /* no halo box */ },
       hide() {
-        if (ghostRef.current) ghostRef.current.style.display = "none";
         place(indicatorRef, null);
         place(haloRef, null);
       },

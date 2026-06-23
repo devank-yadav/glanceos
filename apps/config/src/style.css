@@ -1557,15 +1557,11 @@ ul.tasks li:last-child {
 
 /* during a drag, the rest of the board fades back; the block being moved fades
    further and goes dashed — so the drag preview is clearly the thing moving */
-.studio-overlay.dragging .widget-box {
-  border-color: var(--rule);
-  opacity: 0.5;
-}
-
+/* v9.0 calm drag: the rest of the board stays fully visible (no dim overlay); only the
+   block being moved shows a subtle ghost, with the drop-line indicating where it lands. */
 .studio-overlay.dragging .widget-box.is-dragging-source {
-  opacity: 0.15;
-  border-style: dashed;
-  border-color: var(--muted);
+  opacity: 0.45;
+  border: 1px dashed var(--indigo);
 }
 
 .studio-overlay.resizing .widget-box {
