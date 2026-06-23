@@ -2,6 +2,7 @@ import type { BlockSourceT, WidgetT } from "@glanceos/schema";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { LIST_BLOCKS, PASSTHROUGH_BLOCKS, SERIES_BLOCKS } from "./blocks";
+import { arrayPaths, atPath, itemKeys, scalarPaths } from "./inspectShape";
 import { compileNotionFilter, NOTION_OPERATORS, type NotionFilterRow, type NotionFilterType } from "./notionFilter";
 
 // The ⟿ Data tab: point a block at a live source. Two ways in:
@@ -71,6 +72,7 @@ export function DataPanel({
   const [transform, setTransform] = useState<string>(existing?.map?.transform ?? "first");
   const [transformArg, setTransformArg] = useState<string>(existing?.map?.transformArg ?? "");
   const [preview, setPreview] = useState("");
+  const [previewData, setPreviewData] = useState<unknown>(undefined); // raw payload → shape inspector
   const [busy, setBusy] = useState(false);
   const [nf, setNf] = useState<NotionFilterRow[]>([]);
   const [nfComb, setNfComb] = useState<"and" | "or">("and");
@@ -111,15 +113,23 @@ export function DataPanel({
   const test = async () => {
     setBusy(true);
     setPreview("");
+    setPreviewData(undefined);
     try {
       const r = await api.post<{ data: unknown }>("/api/source/preview", { source: build() });
-      setPreview(r.data == null ? "— (no data / unreachable / needs auth)" : JSON.stringify(r.data).slice(0, 260));
+      setPreviewData(r.data);
+      setPreview(r.data == null ? "— (no data / unreachable / needs auth)" : JSON.stringify(r.data, null, 2).slice(0, 3000));
     } catch (e) {
       setPreview(`error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
   };
+
+  // ---- shape inspector: turn the previewed payload into clickable path suggestions ----
+  const arrSugg = previewData != null ? arrayPaths(previewData).slice(0, 8) : [];
+  const fieldSugg = (isSeries || isList)
+    ? itemKeys(atPath(previewData, items) ?? (arrSugg[0] ? atPath(previewData, arrSugg[0].path) : previewData))
+    : previewData != null ? scalarPaths(previewData).slice(0, 16) : [];
 
   return (
     <div class="data-panel">
@@ -236,6 +246,27 @@ export function DataPanel({
           <button disabled={!ready} onClick={() => { setSource(build()); onClose(); }}>Bind</button>
         </div>
       </div>
+      {previewData != null && shaped && (arrSugg.length > 0 || fieldSugg.length > 0) && (
+        <div class="data-inspect">
+          <span class="muted data-inspect-hint">Click a path to fill the mapping:</span>
+          {(isSeries || isList) && arrSugg.length > 0 && (
+            <div class="di-row">
+              <span class="di-label">List</span>
+              {arrSugg.map((a) => (
+                <button key={a.path || "root"} class="di-chip" title={`${a.n} rows`} onClick={() => setItems(a.path)}>{a.path || "(root)"} · {a.n}</button>
+              ))}
+            </div>
+          )}
+          {fieldSugg.length > 0 && (
+            <div class="di-row">
+              <span class="di-label">{isSeries || isList ? "Field" : "Value"}</span>
+              {fieldSugg.map((f) => (
+                <button key={f} class="di-chip" onClick={() => setField(f)}>{f}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {preview && <pre class="data-preview">{preview}</pre>}
     </div>
   );

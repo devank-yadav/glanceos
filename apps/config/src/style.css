@@ -2186,17 +2186,34 @@ ul.tasks li:last-child {
 }
 
 .data-preview {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 8px 9px;
   font-size: 11px;
   line-height: 1.4;
   background: var(--soft); /* token so the preview box has contrast in dark too (was a fixed light grey) */
   border-radius: 7px;
-  max-height: 96px;
+  max-height: 200px;
   overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: pre;
+  tab-size: 2;
 }
+/* v9.8 — data inspector: clickable path suggestions derived from the previewed payload */
+.data-inspect { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.data-inspect-hint { font-size: 11px; }
+.di-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.di-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); min-width: 42px; }
+.di-chip {
+  font-size: 11px;
+  font-family: var(--mono, ui-monospace, monospace);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.di-chip:hover { border-color: var(--indigo); background: color-mix(in srgb, var(--indigo) 8%, transparent); }
 
 /* ---------- sidebar: palette + properties ---------- */
 
