@@ -1,4 +1,5 @@
 import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
+import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
 import { editorOrigin } from "../router";
@@ -88,6 +89,43 @@ const ZOOMS: Array<{ label: string; value: number | null }> = [
 
 const PLACEHOLDER: LayoutT = { schemaVersion: 3, name: "Loading…", theme: { mode: "light", fontScale: "m" }, gap: 2, align: "top", rows: [] };
 const KNOWN = new Set(BLOCKS.map((b) => b.type));
+
+// A floating panel (Options / Live data) you can drag by its header out of the way of the
+// block you're editing. Opens at (x, y); remount (via a `key`) re-anchors it for a new block.
+function DraggablePanel({ x, y, title, onClose, children }: { x: number; y: number; title: string; onClose: () => void; children: ComponentChildren }) {
+  const [pos, setPos] = useState({ x, y });
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const onDown = (e: PointerEvent) => {
+    drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* tests */ }
+    e.preventDefault();
+  };
+  const onMove = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    setPos({ x: Math.max(4, e.clientX - d.dx), y: Math.max(4, e.clientY - d.dy) });
+  };
+  const onUp = () => { drag.current = null; };
+  return (
+    <>
+      <div class="popover-backdrop" onPointerDown={onClose} />
+      <div class="block-popover draggable" style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+        <div
+          class="panel-drag"
+          onPointerDown={(e) => onDown(e as unknown as PointerEvent)}
+          onPointerMove={(e) => onMove(e as unknown as PointerEvent)}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+        >
+          <Icon.grip />
+          <span class="panel-drag-title">{title}</span>
+          <button class="icon-btn panel-close" title="Close" onClick={onClose} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}><Icon.x /></button>
+        </div>
+        <div class="panel-body">{children}</div>
+      </div>
+    </>
+  );
+}
 
 export interface DragLayer {
   show(label: string): void;
@@ -943,20 +981,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
               </>
             )}
             {optionsOpen && optionsPos && primaryBlock && (
-              <>
-                <div class="popover-backdrop" onPointerDown={() => setOptionsOpen(false)} />
-                <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
-                  <BlockFields block={primaryBlock} stageEdit={stageEdit} onMakeLive={() => { setOptionsOpen(false); setDataOpen(true); }} />
-                </div>
-              </>
+              <DraggablePanel key={`opt-${primary}`} x={optionsPos.x} y={optionsPos.y} title={blockFor(primaryBlock.type).label} onClose={() => setOptionsOpen(false)}>
+                <BlockFields block={primaryBlock} stageEdit={stageEdit} onMakeLive={() => { setOptionsOpen(false); setDataOpen(true); }} />
+              </DraggablePanel>
             )}
             {dataOpen && optionsPos && primaryBlock && (
-              <>
-                <div class="popover-backdrop" onPointerDown={() => setDataOpen(false)} />
-                <div class="block-popover" style={{ left: `${optionsPos.x}px`, top: `${optionsPos.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
-                  <DataPanel block={primaryBlock} setSource={(src) => setSource(primaryBlock.id, src)} onClose={() => setDataOpen(false)} />
-                </div>
-              </>
+              <DraggablePanel key={`data-${primary}`} x={optionsPos.x} y={optionsPos.y} title="Live data" onClose={() => setDataOpen(false)}>
+                <DataPanel block={primaryBlock} setSource={(src) => setSource(primaryBlock.id, src)} onClose={() => setDataOpen(false)} />
+              </DraggablePanel>
             )}
             {convertId && convertPos && (
               <SlashMenu at={convertPos} onClose={() => setConvertId(null)} onInsert={(type) => convertBlock(convertId, type)} />

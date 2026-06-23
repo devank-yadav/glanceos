@@ -2011,6 +2011,24 @@ ul.tasks li:last-child {
   box-shadow: var(--shadow-lg);
   animation: rise 0.16s var(--ease) both;
 }
+/* v9.4 — draggable Options / Data panels: header is the drag handle, body scrolls */
+.block-popover.draggable { padding: 0; overflow: visible; }
+.panel-drag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 7px 7px 11px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 13px 13px 0 0;
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
+}
+.panel-drag > svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
+.panel-drag-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-close { width: 24px; height: 24px; flex: none; }
+.panel-body { padding: 12px 13px; max-height: 340px; overflow: auto; }
 
 .block-fields h3 {
   margin: 0 0 9px;
