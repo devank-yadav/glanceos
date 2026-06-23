@@ -73,6 +73,9 @@ export function Overlay({
   const handleDrag = useRef<HandleDrag | null>(null);
   const gutterDrag = useRef<GutterDrag | null>(null);
   const rowDrag = useRef<RowDrag | null>(null);
+  // corner grip = resize height + (if a right neighbour exists) width together, from a doc
+  // snapshot so both axes compose without racing each other's gestureUpdate.
+  const cornerDrag = useRef<{ base: LayoutT; rowIndex: number; blockIndex: number; h0: number; startX: number; startY: number; hasRight: boolean; leftW0: number; rightW0: number; weightPerPx: number } | null>(null);
   const resizeBadge = useRef<HTMLDivElement | null>(null);
 
   // A live numeric readout that follows the cursor during a resize ("50% · 50%", "h 6/24").
@@ -191,10 +194,47 @@ export function Overlay({
     dispatch({ type: "gestureUpdate", doc: resizeRow(docRef.current!, d.rowIndex, d.h0 + dUnits) });
   };
 
+  // ---- corner grip (height + width together) ----
+  const onCornerDown = (e: PointerEvent, rowIndex: number, blockIndex: number) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
+    const doc = docRef.current!;
+    const row = doc.rows[rowIndex]!;
+    const hasRight = blockIndex < row.blocks.length - 1;
+    const totalWeight = row.blocks.reduce((s, b) => s + b.width, 0);
+    const usable = geometry.rows[rowIndex]!.w - geometry.gap * (row.blocks.length - 1);
+    cornerDrag.current = {
+      base: doc, rowIndex, blockIndex, h0: row.h, startX: e.clientX, startY: e.clientY,
+      hasRight, leftW0: row.blocks[blockIndex]!.width, rightW0: hasRight ? row.blocks[blockIndex + 1]!.width : 0,
+      weightPerPx: totalWeight / usable,
+    };
+    rootRef.current?.classList.add("resizing");
+    dispatch({ type: "gestureStart" });
+  };
+  const onCornerMove = (e: PointerEvent) => {
+    const d = cornerDrag.current;
+    if (!d || geometry.unit === 0) return;
+    let doc = d.base;
+    if (d.hasRight) {
+      const dWeight = ((e.clientX - d.startX) / scale) * d.weightPerPx;
+      let leftW = d.leftW0 + dWeight, rightW = d.rightW0 - dWeight;
+      const sum = leftW + rightW;
+      if (sum > 0) { const frac = leftW / sum; for (const s of [1 / 3, 1 / 2, 2 / 3]) if (Math.abs(frac - s) < 0.025) { leftW = sum * s; rightW = sum * (1 - s); break; } }
+      doc = resizeColumns(doc, d.rowIndex, d.blockIndex, leftW, rightW);
+    }
+    const dUnits = ((e.clientY - d.startY) / scale) / geometry.unit;
+    const h = Math.max(1, Math.min(24, Math.round(d.h0 + dUnits)));
+    doc = resizeRow(doc, d.rowIndex, d.h0 + dUnits);
+    showBadge(d.hasRight ? `↔ · h ${h}/24` : `h ${h}/24`, e.clientX, e.clientY);
+    dispatch({ type: "gestureUpdate", doc });
+  };
+
   const endGesture = (commit: boolean) => {
-    if (gutterDrag.current || rowDrag.current) {
+    if (gutterDrag.current || rowDrag.current || cornerDrag.current) {
       gutterDrag.current = null;
       rowDrag.current = null;
+      cornerDrag.current = null;
       hideBadge();
       rootRef.current?.classList.remove("resizing");
       dispatch({ type: commit ? "gestureEnd" : "gestureCancel" });
@@ -310,6 +350,14 @@ export function Overlay({
                     onPointerCancel={() => endGesture(false)}
                   />
                 )}
+                <span
+                  class="widget-resize resize-corner"
+                  title="Drag to resize"
+                  onPointerDown={(e) => onCornerDown(e as unknown as PointerEvent, b.rowIndex, b.blockIndex)}
+                  onPointerMove={(e) => onCornerMove(e as unknown as PointerEvent)}
+                  onPointerUp={() => endGesture(true)}
+                  onPointerCancel={() => endGesture(false)}
+                />
               </>
             )}
           </div>

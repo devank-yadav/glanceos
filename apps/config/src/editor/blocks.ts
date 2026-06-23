@@ -289,6 +289,22 @@ export const CATEGORIES: BlockCategory[] = ["Text", "Media", "Numbers", "Charts"
 
 export const blockFor = (type: WidgetType): BlockDef => BLOCKS.find((b) => b.type === type)!;
 
+// v9.5 — recently-used blocks (localStorage), surfaced atop the slash menu + palette.
+const RECENT_KEY = "glanceos.recentBlocks";
+const BLOCK_TYPES = new Set(BLOCKS.map((b) => b.type));
+export const recentBlocks = (): WidgetType[] => {
+  try {
+    const r = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(r) ? (r as WidgetType[]).filter((t) => BLOCK_TYPES.has(t)) : [];
+  } catch { return []; }
+};
+export const pushRecentBlock = (type: WidgetType): void => {
+  try {
+    const next = [type, ...recentBlocks().filter((t) => t !== type)].slice(0, 6);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch { /* private mode / quota — recents are best-effort */ }
+};
+
 let counter = 0;
 export function newWidgetId(): string {
   counter += 1;

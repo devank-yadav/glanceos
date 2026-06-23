@@ -3,7 +3,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
 import { editorOrigin } from "../router";
-import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, INPLACE_EDIT, makeBlock, newWidgetId, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
+import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, INPLACE_EDIT, makeBlock, newWidgetId, pushRecentBlock, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
 import { DataPanel } from "./databind";
 import {
   applyDrop, indicatorBox, moveBlock, moveRow, pageGeometry, removeBlocks, type DropTarget,
@@ -211,6 +211,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [convertId, setConvertId] = useState<string | null>(null);
   // The block whose ⠿-handle menu is open (Notion-style: click handle → menu).
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [canvasMenu, setCanvasMenu] = useState<{ x: number; y: number } | null>(null); // empty-board right-click menu
   // The blocks panel is always docked (no floating mode); the top-bar button
   // just shows/hides it. Remembers the last shown/hidden choice.
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -468,6 +469,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
       block = makeBlock(source.type);
       rowHeight = blockFor(source.type).defaultH;
       existingId = undefined;
+      pushRecentBlock(source.type); // surface in the slash menu's "Recent"
     } else {
       const orig = doc.rows.flatMap((r) => r.blocks).find((b) => b.id === source.id);
       if (!orig) return;
@@ -916,6 +918,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onFocus={(id) => dispatch({ type: "select", id })}
             onSelect={(ids, add) => dispatch({ type: "selectMany", ids: add ? [...new Set([...selectedRef.current, ...ids])] : ids })}
             onMenu={(id) => { dispatch({ type: "select", id }); setMenuId(id); }}
+            onCanvasMenu={(x, y) => { const r = stageRef.current?.getBoundingClientRect(); setCanvasMenu({ x: (r?.left ?? 0) + x * scale, y: (r?.top ?? 0) + y * scale }); }}
             onEdit={(id, patch) => stageEdit((d) => { const blk = d.rows.flatMap((r) => r.blocks).find((b) => b.id === id); if (blk) Object.assign(blk.props as Record<string, unknown>, patch); })}
           >
             <div class="drag-halo" ref={haloRef} />
@@ -1051,6 +1054,16 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <button class="icon-btn" title="Duplicate (⌘D)" onClick={duplicateSelected}><Icon.copy /></button>
                 <button class="icon-btn danger" title="Delete (⌫)" onClick={removeSelected}><Icon.trash /></button>
               </div>
+            )}
+            {canvasMenu && !presenting && (
+              <>
+                <div class="popover-backdrop" onPointerDown={() => setCanvasMenu(null)} />
+                <div class="canvas-menu" style={{ left: `${canvasMenu.x}px`, top: `${canvasMenu.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
+                  <button onClick={() => { paste(); setCanvasMenu(null); }}><Icon.copy /> Paste</button>
+                  <button onClick={() => { dispatch({ type: "selectMany", ids: docRef.current.rows.flatMap((r) => r.blocks).map((b) => b.id) }); setCanvasMenu(null); }}><Icon.grid /> Select all</button>
+                  <button onClick={() => { setCanvasMenu(null); openSlash(); }}><Icon.plus /> Add block</button>
+                </div>
+              </>
             )}
           </PreviewStage>
         </div>

@@ -26,6 +26,7 @@ export function PreviewStage({
   onFocus,
   onSelect,
   onMenu,
+  onCanvasMenu,
   children,
 }: {
   W: number;
@@ -40,6 +41,7 @@ export function PreviewStage({
   onFocus?: (id: string | null) => void;
   onSelect?: (ids: string[], add?: boolean) => void; // v9.2 — rubber-band marquee selection from the board (add = Shift-drag)
   onMenu?: (id: string) => void; // v9.4 — right-click an in-place block → open its block menu
+  onCanvasMenu?: (x: number, y: number) => void; // v9.5 — right-click empty board → canvas menu (iframe coords)
   children: ComponentChildren;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -49,16 +51,17 @@ export function PreviewStage({
     const onMessage = (e: MessageEvent) => {
       // Only trust messages from OUR preview iframe origin (cross-origin in dev).
       if (e.origin !== targetOrigin()) return;
-      const m = e.data as { type?: string; id?: string | null; patch?: Record<string, unknown>; ids?: string[]; add?: boolean };
+      const m = e.data as { type?: string; id?: string | null; patch?: Record<string, unknown>; ids?: string[]; add?: boolean; x?: number; y?: number };
       if (m?.type === "glanceos:ready") setReady(true);
       else if (m?.type === "glanceos:edit" && m.id && m.patch) onEdit?.(m.id, m.patch);
       else if (m?.type === "glanceos:focus") onFocus?.(m.id ?? null);
       else if (m?.type === "glanceos:select" && Array.isArray(m.ids)) onSelect?.(m.ids, m.add);
       else if (m?.type === "glanceos:menu" && m.id) onMenu?.(m.id);
+      else if (m?.type === "glanceos:canvasmenu" && typeof m.x === "number" && typeof m.y === "number") onCanvasMenu?.(m.x, m.y);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onEdit, onFocus, onSelect, onMenu]);
+  }, [onEdit, onFocus, onSelect, onMenu, onCanvasMenu]);
 
   useEffect(() => {
     if (!ready) return;

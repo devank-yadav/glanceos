@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { BLOCKS, type WidgetType } from "./blocks";
+import { BLOCKS, type BlockDef, pushRecentBlock, recentBlocks, type WidgetType } from "./blocks";
 import { BlockIcon } from "./blockIcons";
 
 /**
@@ -21,10 +21,13 @@ export function SlashMenu({
 
   useEffect(() => inputRef.current?.focus(), []);
 
-  const matches = BLOCKS.filter((b) =>
-    `${b.label} ${b.keywords}`.toLowerCase().includes(q.toLowerCase()),
-  );
+  // No query → show recently-used first, then the full list. With a query → just matches.
+  const recents: BlockDef[] = q ? [] : recentBlocks().map((t) => BLOCKS.find((b) => b.type === t)).filter((b): b is BlockDef => !!b);
+  const matches = q
+    ? BLOCKS.filter((b) => `${b.label} ${b.keywords}`.toLowerCase().includes(q.toLowerCase()))
+    : [...recents, ...BLOCKS];
   const current = Math.min(active, Math.max(0, matches.length - 1));
+  const pick = (type: WidgetType) => { pushRecentBlock(type); onInsert(type); };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -35,7 +38,7 @@ export function SlashMenu({
       setActive((current - 1 + matches.length) % Math.max(1, matches.length));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (matches[current]) onInsert(matches[current].type);
+      if (matches[current]) pick(matches[current].type);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onClose();
@@ -59,18 +62,22 @@ export function SlashMenu({
         />
         <ul>
           {matches.map((b, i) => (
-            <li
-              key={b.type}
-              class={i === current ? "active" : ""}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => onInsert(b.type)}
-            >
-              <span class="slash-glyph"><BlockIcon type={b.type} /></span>
-              <span>
-                <strong>{b.label}</strong>
-                <small>{b.description}</small>
-              </span>
-            </li>
+            <>
+              {recents.length > 0 && i === 0 && <li class="slash-head muted">Recent</li>}
+              {recents.length > 0 && i === recents.length && <li class="slash-head muted">All blocks</li>}
+              <li
+                key={`${i}-${b.type}`}
+                class={i === current ? "active" : ""}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(b.type)}
+              >
+                <span class="slash-glyph"><BlockIcon type={b.type} /></span>
+                <span>
+                  <strong>{b.label}</strong>
+                  <small>{b.description}</small>
+                </span>
+              </li>
+            </>
           ))}
           {matches.length === 0 && <li class="muted none">No matching block</li>}
         </ul>

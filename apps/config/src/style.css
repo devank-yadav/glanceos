@@ -1784,6 +1784,7 @@ ul.tasks li:last-child {
 .resize-b { bottom: -5px; left: 50%; transform: translateX(-50%); width: 34px; height: 8px; cursor: ns-resize; }
 .resize-r { right: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
 .resize-l { left: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 34px; cursor: ew-resize; }
+.resize-corner { right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; cursor: nwse-resize; } /* v9.5 — drag the corner to resize height + width together */
 
 /* ---------- "choose your layout" picker ---------- */
 .layout-intro { margin: 0 0 12px; }
@@ -1847,6 +1848,40 @@ ul.tasks li:last-child {
 .multi-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: var(--rule); }
 .multi-bar .icon-btn.danger:hover { color: #e5484d; }
 
+/* v9.5 — empty-board right-click menu */
+.canvas-menu {
+  position: fixed;
+  z-index: 41;
+  min-width: 154px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  animation: rise 0.12s var(--ease) both;
+}
+.canvas-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg);
+  text-align: left;
+}
+.canvas-menu button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.canvas-menu button svg { width: 15px; height: 15px; color: var(--muted); flex: none; }
+
 /* ---------- slash menu ---------- */
 
 .slash-backdrop {
@@ -1906,6 +1941,18 @@ ul.tasks li:last-child {
 
 .slash-menu li.none {
   cursor: default;
+}
+
+/* v9.5 — section label (Recent / All blocks) in the slash menu */
+.slash-menu li.slash-head {
+  display: block;
+  padding: 8px 9px 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: default;
+  pointer-events: none;
 }
 
 .slash-menu small {

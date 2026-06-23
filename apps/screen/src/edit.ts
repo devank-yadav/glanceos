@@ -230,12 +230,15 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
   document.addEventListener("pointercancel", () => { const m = marquee; marquee = null; if (!m) return; document.body.style.userSelect = ""; clearOutlines(); m.box?.remove(); m.badge?.remove(); });
 
   // Right-click an in-place block (its clicks fall through to the iframe) → open the Studio's
-  // block menu for it. Non-in-place blocks are handled by the overlay's own onContextMenu.
+  // block menu for it; right-click empty board → a canvas menu (paste / select all / add).
+  // Non-in-place blocks are handled by the overlay's own onContextMenu.
   document.addEventListener("contextmenu", (e) => {
     const t = e.target as HTMLElement;
     for (const [id, c] of getCells()) {
       if ((c.el as HTMLElement).contains(t)) { e.preventDefault(); opts.post({ type: "glanceos:menu", id }); return; }
     }
+    e.preventDefault();
+    opts.post({ type: "glanceos:canvasmenu", x: e.clientX, y: e.clientY });
   });
 
   const blocksById = (): Map<string, Block> => {
@@ -374,20 +377,42 @@ export function createEditLayer(opts: { post: (m: unknown) => void; getDoc: () =
       });
     };
     items().forEach(wireItem);
-    // Checklist: tapping the box toggles done (so a to-do actually works in place).
-    if (cfg.check) {
-      cw.querySelectorAll<HTMLElement>("." + cfg.marker).forEach((m) => { m.style.cursor = "pointer"; });
-      cw.addEventListener("pointerdown", (e) => {
-        const marker = (e.target as HTMLElement)?.closest?.("." + cfg.marker);
-        if (!marker) return;
-        e.preventDefault();
-        const t = marker.parentElement?.querySelector<HTMLElement>("." + cfg.text);
-        if (!t) return;
-        const done = t.classList.toggle("li-done");
-        marker.innerHTML = done ? CHECK_ON : CHECK_OFF;
-        editing.add(id); s.commit(); editing.delete(id);
-      });
-    }
+    // Marker = the row's drag-to-reorder grip; a TAP on a checklist marker (no drag) toggles
+    // done. Movement past a small threshold reorders the rows (DOM order → serialize).
+    cw.querySelectorAll<HTMLElement>("." + cfg.marker).forEach((m) => { m.style.cursor = cfg.check ? "pointer" : "grab"; });
+    let rdrag: { row: HTMLElement; marker: HTMLElement; y0: number; moved: boolean } | null = null;
+    const rowMove = (e: PointerEvent): void => {
+      const d = rdrag;
+      if (!d) return;
+      if (!d.moved) { if (Math.abs(e.clientY - d.y0) < 4) return; d.moved = true; d.row.style.opacity = "0.5"; }
+      const others = [...cw.querySelectorAll<HTMLElement>("." + cfg.row)].filter((r) => r !== d.row);
+      let placed = false;
+      for (const r of others) { const rect = r.getBoundingClientRect(); if (e.clientY < rect.top + rect.height / 2) { cw.insertBefore(d.row, r); placed = true; break; } }
+      if (!placed) { const g = cw.querySelector(".gl-additem"); if (g) cw.insertBefore(d.row, g); else cw.appendChild(d.row); }
+    };
+    const rowUp = (): void => {
+      document.removeEventListener("pointermove", rowMove);
+      document.removeEventListener("pointerup", rowUp);
+      const d = rdrag;
+      rdrag = null;
+      if (!d) return;
+      d.row.style.opacity = "";
+      if (d.moved) { renumber(); editing.add(id); s.commit(); editing.delete(id); return; }
+      if (cfg.check) { // a tap (no drag) toggles the checkbox
+        const t = d.row.querySelector<HTMLElement>("." + cfg.text);
+        if (t) { const done = t.classList.toggle("li-done"); d.marker.innerHTML = done ? CHECK_ON : CHECK_OFF; editing.add(id); s.commit(); editing.delete(id); }
+      }
+    };
+    cw.addEventListener("pointerdown", (e) => {
+      const marker = (e.target as HTMLElement)?.closest?.("." + cfg.marker) as HTMLElement | null;
+      if (!marker) return;
+      const row = marker.closest("." + cfg.row) as HTMLElement | null;
+      if (!row || row.classList.contains("gl-additem")) return;
+      e.preventDefault();
+      rdrag = { row, marker, y0: e.clientY, moved: false };
+      document.addEventListener("pointermove", rowMove);
+      document.addEventListener("pointerup", rowUp);
+    });
     // An empty list is otherwise a dead block — give it one row to click into. The "+ add"
     // ghost makes adding discoverable (no need to know Enter splits a row).
     if (items().length === 0) cw.appendChild(makeRow(""));
