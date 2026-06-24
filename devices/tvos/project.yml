@@ -1,0 +1,40 @@
+# XcodeGen spec — generate the Apple TV app project with one command, so this
+# target is one-command-buildable like the other shells (no hand-authored,
+# half-formed .pbxproj committed to the repo).
+#
+#   brew install xcodegen            # once
+#   cd devices/tvos && xcodegen generate   # → GlanceOS.xcodeproj
+#   open GlanceOS.xcodeproj          # then Run (⌘R)
+#
+# The Simulator needs no Apple account; a physical Apple TV needs a signing team
+# (set it on the target's Signing & Capabilities — a free personal team works for
+# personal sideloading). Uses the existing Sources/ and Info.plist as-is.
+name: GlanceOS
+options:
+  bundleIdPrefix: com.example.glanceos
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  GlanceOS:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_NAME: GlanceOS
+        # Change to a bundle id you own (reverse-DNS of your Apple ID works for a
+        # free personal team), then re-run `xcodegen generate`:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.glanceos.tv
+        # Use the hand-written Info.plist (ATS LAN exception + full-screen), not a
+        # generated one:
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "3" # tvOS
+        CODE_SIGN_STYLE: Automatic

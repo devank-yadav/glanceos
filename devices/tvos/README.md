@@ -19,8 +19,9 @@ The living-room endpoint: an Apple TV that boots into your GlanceOS dashboard on
 - `Sources/ContentView.swift` — hosts the WebView fullscreen (`ignoresSafeArea`); holds the configurable `host` constant and builds the contract URL.
 - `Sources/WebView.swift` — a `UIViewRepresentable` `WKWebView` wrapper (JS enabled via `WKWebpagePreferences`, inline media playback, and `isIdleTimerDisabled = true` to keep the screen awake).
 - `Info.plist` — app metadata, `UIRequiresFullScreen`, and the ATS exception for LAN HTTP.
+- `project.yml` — an [XcodeGen](https://github.com/yonyon/XcodeGen) spec that generates the `.xcodeproj` from the sources + `Info.plist` with **one command** (below).
 
-There is intentionally **no** `.xcodeproj` here — a `project.pbxproj` is a generated artifact that should not be hand-authored or committed half-formed. You create the project in Xcode (below) and drop these sources in.
+The `.xcodeproj` is **generated, not committed** — a `project.pbxproj` shouldn't be hand-authored or committed half-formed, so `project.yml` is the source of truth and the generated project is `.gitignore`d.
 
 ## Prerequisites
 
@@ -28,15 +29,20 @@ There is intentionally **no** `.xcodeproj` here — a `project.pbxproj` is a gen
 - An **Apple Developer account** is required **only** to install on a *physical* Apple TV (Xcode needs a signing team; a free personal team works for personal sideloading).
 - A reachable, running GlanceOS server on your LAN (e.g. `http://glanceos.local:8080`). See the project's `docs/DEVICE-API.md`.
 
-## Create the Xcode project and add these sources
+## Generate the Xcode project (one command)
 
-1. Open Xcode → **File ▸ New ▸ Project… ▸ tvOS ▸ App**. Interface: **SwiftUI**, Language: **Swift**.
-2. Product Name: `GlanceOS`. Set the **Bundle Identifier** to something you own, e.g. `com.yourname.glanceos.tv` (anything unique; for a free personal team, reverse-DNS of your Apple ID works).
-3. Save the project anywhere (e.g. inside this `devices/tvos/` folder, or outside the repo — your call).
-4. Xcode generates a starter `GlanceOSApp.swift` and `ContentView.swift`. **Delete those two** from the project (move to Trash), then drag in the three files from `Sources/` here. When prompted, leave **"Copy items if needed"** *unchecked* if you want them to stay tracked in this repo, or *checked* to copy into the project — either works.
-5. Replace the project's generated `Info.plist` settings with the keys from this folder's `Info.plist`. The two that matter:
-   - `App Transport Security` → `Allow Local Networking` = YES (this is `NSAllowsLocalNetworking`). In modern Xcode templates you add ATS keys under the target's **Info** tab, or set **"Generate Info.plist File"** to No and point `INFOPLIST_FILE` at this `Info.plist`.
-   - `Requires full screen` = YES (`UIRequiresFullScreen`).
+```sh
+brew install xcodegen          # once
+cd devices/tvos
+xcodegen generate              # reads project.yml → GlanceOS.xcodeproj
+open GlanceOS.xcodeproj
+```
+
+`project.yml` wires the three `Sources/` files, points `INFOPLIST_FILE` at this folder's `Info.plist` (so the ATS LAN exception + full-screen keys are used as-is), and sets a placeholder bundle id. **Change `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`** to one you own (reverse-DNS of your Apple ID works for a free personal team), then re-run `xcodegen generate`.
+
+Prefer not to install XcodeGen? You can still create the project by hand: **File ▸ New ▸ Project… ▸ tvOS ▸ App** (SwiftUI/Swift), delete the generated `GlanceOSApp.swift`/`ContentView.swift`, drag in the three files from `Sources/`, set **Generate Info.plist File = No** and point `INFOPLIST_FILE` at this `Info.plist`.
+
+> No app icon asset catalog ships yet — the **Simulator runs without one**; a real-device build may warn until a brand icon is added (tracked separately).
 
 ## Set the host URL
 
@@ -63,5 +69,5 @@ On first launch the runtime auto-registers and shows a big **QR + short claim co
 
 - Requires a Mac with **Xcode**; on-device install requires an **Apple Developer account** (a free personal team is enough for personal sideloading, with the usual 7-day resign cadence). The Simulator needs neither.
 - The ATS exception (`NSAllowsLocalNetworking`) exists because GlanceOS is **LAN HTTP by default**. It permits cleartext only to local-network hosts; serve over HTTPS and you can drop it.
-- **Not CI-built.** These are hand-authored sources; there is no `.xcodeproj` and no build pipeline in this repo. You assemble the project in Xcode as above.
+- **Not CI-built** (Apple signing needs a developer account/cert that generic CI lacks). But the project is now **one command to generate** (`xcodegen generate` from `project.yml`) and then builds/runs in Xcode — no hand-assembly required.
 - The app keeps the screen awake (`isIdleTimerDisabled`); the Apple TV will not sleep while it's foregrounded. The runtime's own wake/sleep blanking (its dark "asleep" screen during off-hours) still applies inside the web page.

@@ -1,0 +1,6 @@
+# The Xcode project is generated from project.yml by XcodeGen — don't commit it.
+GlanceOS.xcodeproj/
+*.xcworkspace/
+build/
+DerivedData/
+.DS_Store
