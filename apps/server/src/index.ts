@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { buildApp } from "./api";
 import { validateConfig } from "./config";
+import { snapshotDatabase, pruneSnapshots } from "./backup-db";
 import { checkpoint, migrate } from "./db";
 import { runAlertChecks } from "./notifications";
 import { runAutomationTick } from "./automation/engine";
@@ -78,6 +79,19 @@ setInterval(() => {
 
 // Fold the WAL back into the DB so it can't grow unbounded on a busy fleet.
 setInterval(() => checkpoint(), 10 * 60 * 1000);
+
+// Optional scheduled DB snapshots (online better-sqlite3 backup) for operated/
+// hosted deployments. Off by default; set GLANCEOS_BACKUP_INTERVAL_HOURS to
+// enable. Keeps the newest GLANCEOS_BACKUP_KEEP (default 14) snapshots.
+const BACKUP_HOURS = Number(process.env.GLANCEOS_BACKUP_INTERVAL_HOURS) || 0;
+if (BACKUP_HOURS > 0) {
+  const keep = Math.max(1, Number(process.env.GLANCEOS_BACKUP_KEEP) || 14);
+  setInterval(() => {
+    snapshotDatabase()
+      .then((p) => { pruneSnapshots(keep); console.log(`[backup] snapshot ${p}`); })
+      .catch((e) => console.error("[backup] scheduled snapshot failed:", e));
+  }, BACKUP_HOURS * 60 * 60 * 1000);
+}
 
 // Prune proof-of-play beyond the retention window (default 90 days) so the log
 // can't grow without bound on a busy signage fleet.

@@ -17,7 +17,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 
 ## Track A — Launch hardening (model-agnostic; do first)
 - [x] **A1 — Security holes.** ✅ `Secure` cookies on session/CSRF/share-unlock + `Strict-Transport-Security` header, both gated on `SECURE_COOKIES` (GLANCEOS_PUBLIC_URL=https… or GLANCEOS_SECURE_COOKIES=on) so local http still works; added `/api/public/*` IP limiter (240/min) + per-board-token `/unlock` limiter (12/min) for share-password brute-force defense; the three 500 handlers now return `{error:"internal error", ref}` (uuid, logged server-side) instead of echoing `e.message`. server tsc clean, 238 tests green.
-- [ ] **A2 — Backup/restore.** Online `VACUUM INTO` snapshot (CLI script + optional admin endpoint) + documented restore + docker-compose volume-backup guidance. + test.
+- [x] **A2 — Backup/restore.** ✅ `src/backup-db.ts`: online `db.backup()` snapshots (consistent, safe while running) → `snapshotDatabase()` + `pruneSnapshots()` + CLI (`pnpm --filter @glanceos/server backup`). Optional in-process scheduled snapshots via `GLANCEOS_BACKUP_INTERVAL_HOURS`/`_KEEP`/`_DIR` (off by default). `docs/BACKUP.md` documents logical snapshots, full volume backup, and the stop→swap→start restore (incl. the secret-key caveat). +2 tests (valid queryable snapshot + retention prune). server tsc clean, 240 tests.
 - [ ] **A3 — QR claim deep-link.** Config reads `?claim=<code>` (search/hash) on boot → prefill + auto-submit ClaimForm (the screen already encodes it). qr round-trip test. Fixes the false "no typing URLs" promise.
 - [ ] **A4 — PWA icons.** Real PNG icons (192/512 + maskable + apple-touch) generated from the brand SVG (sharp); wire manifest + index. iOS/Android installability.
 - [ ] **A5 — README + landing accuracy + unfurl.** Fix counts everywhere → **213 blocks / 153 templates / 85 integrations**; trim the giant changelog blob to a crisp value prop; add a GitHub repo link + one-line positioning on the landing; add OG/Twitter card meta + a baked `og:image` to config index + server-injected meta for `/`.
@@ -61,3 +61,5 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 ## MORNING SUMMARY
 *(updated each batch by the build loop)*
 - Audit complete (12-agent recon, cross-verified): core product is launch-grade; gaps are packaging, polish, and the (now-chosen) SaaS spine. This roadmap is the plan.
+- **A1 ✅** security holes (Secure cookies+HSTS TLS-gated, public/unlock rate limits, opaque 500s). server 238 tests.
+- **A2 ✅** backup/restore (online snapshots + CLI + optional scheduler + docs/BACKUP.md). server 240 tests.
