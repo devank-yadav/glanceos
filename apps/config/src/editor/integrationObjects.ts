@@ -91,6 +91,18 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "datamuse", id: "related", label: "Related words", description: "Words related to a word", blockType: "bulletList", sourceKind: "datamuse.related", query: { word: "calm", max: "12" }, map: LIST({ text: "text", value: "value" }, "items"), defaultH: 8 },
   { providerId: "openbrewerydb", id: "byCity", label: "Breweries", description: "Breweries in a city", blockType: "bulletList", sourceKind: "openbrewerydb.byCity", query: { city: "portland", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
   { providerId: "f1", id: "next", label: "Next F1 race", description: "The next Formula 1 race", blockType: "bulletList", sourceKind: "f1.next", query: {}, map: LIST({ text: "text", value: "value" }, "items"), defaultH: 6 },
+
+  // ---- E3 keyless providers ----
+  { providerId: "nws", id: "alerts", label: "Weather alerts", description: "Active US weather alerts for a state", blockType: "bulletList", sourceKind: "nws.alerts", query: { area: "CA", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
+  { providerId: "eonet", id: "events", label: "Natural events", description: "Open natural events (wildfires, storms…)", blockType: "bulletList", sourceKind: "eonet.events", query: { max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
+  { providerId: "sunrise", id: "times", label: "Sun times", description: "Sunrise, sunset and day length", blockType: "bulletList", sourceKind: "sunrise.times", query: { lat: "51.5", lng: "-0.12" }, map: LIST({ text: "text", value: "value" }, "items"), defaultH: 6 },
+  { providerId: "zippopotam", id: "place", label: "Postcode place", description: "The place for a postal code", blockType: "bulletList", sourceKind: "zippopotam.place", query: { country: "us", code: "10001" }, map: LIST({ text: "title" }, "items"), defaultH: 5 },
+  { providerId: "itunes", id: "search", label: "iTunes search", description: "Songs / podcasts / apps", blockType: "bulletList", sourceKind: "itunes.search", query: { q: "daft punk", entity: "song", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 9 },
+  { providerId: "deezer", id: "search", label: "Deezer tracks", description: "Track search", blockType: "bulletList", sourceKind: "deezer.search", query: { q: "lofi", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 9 },
+  { providerId: "musicbrainz", id: "artists", label: "Artist search", description: "Artists from MusicBrainz", blockType: "bulletList", sourceKind: "musicbrainz.artists", query: { q: "", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
+  { providerId: "pokeapi", id: "list", label: "Pokémon", description: "A list of Pokémon", blockType: "bulletList", sourceKind: "pokeapi.list", query: { max: "20" }, map: LIST({ text: "title" }, "items"), defaultH: 9 },
+  { providerId: "scryfall", id: "search", label: "MTG cards", description: "Magic cards matching a query", blockType: "bulletList", sourceKind: "scryfall.search", query: { q: "t:goblin", max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 9 },
+  { providerId: "opendota", id: "heroes", label: "Top Dota heroes", description: "Most-picked pro heroes", blockType: "bulletList", sourceKind: "opendota.heroes", query: { max: "10" }, map: LIST({ text: "text", value: "value" }, "items"), defaultH: 8 },
 ];
 
 /** Presets for a given provider id (drives the Integrations page "objects" section). */
