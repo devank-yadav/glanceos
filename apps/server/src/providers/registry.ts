@@ -1711,3 +1711,198 @@ reg({
     return getJSON("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true", h);
   },
 });
+
+// ---- E1: more keyless public-data providers (render immediately, no login) ----
+
+reg({
+  id: "hackernews", label: "Hacker News", category: "news", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [
+    { id: "hackernews.top", label: "Front page", shape: "list" },
+    { id: "hackernews.search", label: "Search stories", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const q = (ctx.query.q || "").trim();
+    const url = q
+      ? `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(q)}&tags=story&hitsPerPage=${max}`
+      : `https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=${max}`;
+    const raw = (await getJSON(url, UA)) as { hits?: { title?: string; points?: number; num_comments?: number; url?: string; objectID?: string }[] } | null;
+    const items = (raw?.hits ?? []).map((h) => ({
+      title: h.title ?? "",
+      score: Number(h.points ?? 0),
+      comments: Number(h.num_comments ?? 0),
+      url: h.url || (h.objectID ? `https://news.ycombinator.com/item?id=${h.objectID}` : ""),
+    }));
+    return { items };
+  },
+});
+
+reg({
+  id: "wikipedia", label: "Wikipedia", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [
+    { id: "wikipedia.onthisday", label: "On this day", shape: "list" },
+    { id: "wikipedia.search", label: "Search", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    if (ctx.resource === "wikipedia.search") {
+      const q = (ctx.query.q || "").trim();
+      const raw = (await getJSON(`https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(q)}&limit=${max}`, UA)) as
+        { pages?: { title?: string; description?: string }[] } | null;
+      return { items: (raw?.pages ?? []).map((p) => ({ title: p.title ?? "", label: p.description ?? "" })) };
+    }
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const raw = (await getJSON(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`, UA)) as
+      { events?: { year?: number; text?: string }[] } | null;
+    return { items: (raw?.events ?? []).slice(0, max).map((e) => ({ title: `${e.year ?? ""} — ${e.text ?? ""}` })) };
+  },
+});
+
+reg({
+  id: "frankfurter", label: "Frankfurter (FX)", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 60_000,
+  resources: [{ id: "frankfurter.rates", label: "Exchange rates", shape: "list" }],
+  async resolve(ctx) {
+    const from = ((ctx.query.from || "USD").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3)) || "USD";
+    const to = (ctx.query.to || "EUR,GBP,INR,JPY").toUpperCase().replace(/[^A-Z,]/g, "");
+    const raw = (await getJSON(`https://api.frankfurter.app/latest?from=${from}&to=${encodeURIComponent(to)}`, UA)) as
+      { base?: string; rates?: Record<string, number> } | null;
+    const items = Object.entries(raw?.rates ?? {}).map(([code, value]) => ({ text: `${from}→${code}`, value: Number(value) }));
+    return { items, base: raw?.base ?? from };
+  },
+});
+
+reg({
+  id: "iss", label: "ISS tracker", category: "space", authKind: "none",
+  defaultTtlMs: TTL.min, minRefreshMs: 15_000,
+  resources: [{ id: "iss.position", label: "Live position", shape: "list" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.wheretheiss.at/v1/satellites/25544", UA)) as
+      { latitude?: number; longitude?: number; altitude?: number; velocity?: number } | null;
+    const r = (n: unknown, p = 2) => Number(Number(n ?? 0).toFixed(p));
+    const items = [
+      { text: "Latitude", value: r(raw?.latitude) },
+      { text: "Longitude", value: r(raw?.longitude) },
+      { text: "Altitude (km)", value: r(raw?.altitude, 1) },
+      { text: "Speed (km/h)", value: r(raw?.velocity, 0) },
+    ];
+    return { items, value: r(raw?.altitude, 1) };
+  },
+});
+
+reg({
+  id: "spaceflightnews", label: "Spaceflight News", category: "space", authKind: "none",
+  defaultTtlMs: TTL.m30, minRefreshMs: 60_000,
+  resources: [{ id: "spaceflightnews.articles", label: "Articles", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const raw = (await getJSON(`https://api.spaceflightnewsapi.net/v4/articles/?limit=${max}`, UA)) as
+      { results?: { title?: string; news_site?: string; url?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((a) => ({ title: a.title ?? "", label: a.news_site ?? "", url: a.url ?? "" })) };
+  },
+});
+
+reg({
+  id: "nager", label: "Public Holidays", category: "calendar", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "nager.next", label: "Upcoming holidays", shape: "list" }],
+  async resolve(ctx) {
+    const country = ((ctx.query.country || "US").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2)) || "US";
+    const max = Math.min(Number(ctx.query.max) || 10, 24);
+    const raw = (await getJSON(`https://date.nager.at/api/v3/NextPublicHolidays/${country}`, UA)) as
+      { date?: string; localName?: string; name?: string }[] | null;
+    return { items: (raw ?? []).slice(0, max).map((h) => ({ title: h.localName || h.name || "", label: h.date ?? "" })) };
+  },
+});
+
+reg({
+  id: "gutendex", label: "Project Gutenberg", category: "books", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [{ id: "gutendex.search", label: "Book search", shape: "list" }],
+  async resolve(ctx) {
+    const q = (ctx.query.q || "").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 24);
+    const raw = (await getJSON(`https://gutendex.com/books?search=${encodeURIComponent(q)}`, UA)) as
+      { results?: { title?: string; authors?: { name?: string }[]; download_count?: number }[] } | null;
+    return { items: (raw?.results ?? []).slice(0, max).map((b) => ({ title: b.title ?? "", label: b.authors?.[0]?.name ?? "", value: Number(b.download_count ?? 0) })) };
+  },
+});
+
+reg({
+  id: "dictionary", label: "Dictionary", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "dictionary.define", label: "Definitions", shape: "list" }],
+  async resolve(ctx) {
+    const word = (ctx.query.word || "serendipity").trim().replace(/[^\w'-]/g, "");
+    const raw = (await getJSON(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, UA)) as
+      { word?: string; meanings?: { partOfSpeech?: string; definitions?: { definition?: string }[] }[] }[] | null;
+    const items: { title: string }[] = [];
+    for (const m of raw?.[0]?.meanings ?? []) {
+      for (const def of m.definitions ?? []) {
+        if (def.definition) items.push({ title: `(${m.partOfSpeech ?? ""}) ${def.definition}` });
+      }
+    }
+    return { items, word: raw?.[0]?.word ?? word };
+  },
+});
+
+reg({
+  id: "quotable", label: "Quotable", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.m30, minRefreshMs: 15_000,
+  resources: [{ id: "quotable.random", label: "Random quotes", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 1, 20);
+    const tags = (ctx.query.tags || "").trim();
+    const url = `https://api.quotable.io/quotes/random?limit=${max}${tags ? `&tags=${encodeURIComponent(tags)}` : ""}`;
+    const raw = (await getJSON(url, UA)) as { content?: string; author?: string }[] | null;
+    return { items: (raw ?? []).map((q) => ({ title: q.content ?? "", label: q.author ?? "" })) };
+  },
+});
+
+reg({
+  id: "xkcd", label: "xkcd", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [{ id: "xkcd.latest", label: "Latest comic", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://xkcd.com/info.0.json", UA)) as
+      { num?: number; title?: string; alt?: string; img?: string } | null;
+    return { value: raw?.title ? `#${raw.num}: ${raw.title}` : "", title: raw?.title ?? "", num: raw?.num ?? 0, alt: raw?.alt ?? "", img: raw?.img ?? "" };
+  },
+});
+
+reg({
+  id: "freetogame", label: "Free-to-Play Games", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [{ id: "freetogame.games", label: "Games", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const params = new URLSearchParams({ "sort-by": ctx.query.sort || "popularity" });
+    if (ctx.query.platform) params.set("platform", ctx.query.platform);
+    if (ctx.query.category) params.set("category", ctx.query.category);
+    const raw = (await getJSON(`https://www.freetogame.com/api/games?${params.toString()}`, UA)) as
+      { title?: string; genre?: string; game_url?: string }[] | null;
+    return { items: (raw ?? []).slice(0, max).map((g) => ({ title: g.title ?? "", label: g.genre ?? "", url: g.game_url ?? "" })) };
+  },
+});
+
+reg({
+  id: "binance", label: "Binance (crypto)", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 15_000,
+  resources: [{ id: "binance.tickers", label: "24h tickers", shape: "list" }],
+  async resolve(ctx) {
+    const syms = (ctx.query.symbols || "BTCUSDT,ETHUSDT,SOLUSDT").toUpperCase().replace(/[^A-Z0-9,]/g, "").split(",").filter(Boolean).slice(0, 20);
+    const param = encodeURIComponent(JSON.stringify(syms));
+    const raw = (await getJSON(`https://api.binance.com/api/v3/ticker/24hr?symbols=${param}`, UA)) as
+      { symbol?: string; lastPrice?: string; priceChangePercent?: string }[] | null;
+    const items = (raw ?? []).map((t) => ({
+      text: t.symbol ?? "",
+      value: Number(t.lastPrice ?? 0),
+      label: t.priceChangePercent ? `${Number(t.priceChangePercent).toFixed(2)}%` : "",
+    }));
+    return { items };
+  },
+});

@@ -155,3 +155,37 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 
 ### chat (1)
 - **Slack** `slack` · OAuth · slack.messages, slack.channels
+
+---
+
+## E1 additions — more keyless public-data providers (97 total)
+
+All keyless (render immediately, no login):
+
+### news
+- **Hacker News** `hackernews` · keyless · hackernews.top, hackernews.search
+
+### reference
+- **Wikipedia** `wikipedia` · keyless · wikipedia.onthisday, wikipedia.search
+- **Dictionary** `dictionary` · keyless · dictionary.define
+- **Quotable** `quotable` · keyless · quotable.random
+
+### finance
+- **Frankfurter (FX)** `frankfurter` · keyless · frankfurter.rates
+- **Binance (crypto)** `binance` · keyless · binance.tickers
+
+### space
+- **ISS tracker** `iss` · keyless · iss.position
+- **Spaceflight News** `spaceflightnews` · keyless · spaceflightnews.articles
+
+### calendar
+- **Public Holidays** `nager` · keyless · nager.next
+
+### books
+- **Project Gutenberg** `gutendex` · keyless · gutendex.search
+
+### gaming
+- **Free-to-Play Games** `freetogame` · keyless · freetogame.games
+
+### fun
+- **xkcd** `xkcd` · keyless · xkcd.latest
