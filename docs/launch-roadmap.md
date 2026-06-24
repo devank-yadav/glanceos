@@ -4,7 +4,7 @@
 
 **Operating rules (every batch = one commit):**
 - Stay safe & reviewable: server+config typecheck clean + ALL tests green + `pnpm --filter @glanceos/screen size` ≤ 30000 gzip.
-- Scrub every staged diff for attribution (`git diff --cached | grep -iE "claude|anthropic|co-authored|generated with"`).
+- Scrub every staged diff for AI/tool/vendor attribution and co-author trailers before committing — remove any; all credit to the owner.
 - Migrations must be **additive + backfilled** (no data loss; existing single-tenant users get a default org). Update migration/test counts when touched.
 - `zod` stays OUT of `apps/screen`; `billgenerator` repo stays pristine.
 - Commit AND push per batch; tick the box here; keep the MORNING SUMMARY at the bottom updated.
