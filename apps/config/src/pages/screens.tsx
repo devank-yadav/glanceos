@@ -2,6 +2,7 @@ import type { LayoutT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type DisplayGroup, type LayoutRecord, type Playlist, type SetupSummary } from "../api";
+import { PENDING_CLAIM_KEY } from "../claim";
 import { BoardPreview, BoardPreviewById } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -22,9 +23,18 @@ export function ScreensPage() {
   const [setups, setSetups] = useState<SetupSummary[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
-  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState(false);
   const toast = useToast();
+  // Arrived via a scanned QR (?claim=…)? Read+consume the stashed code once, open
+  // the connect modal, and let ClaimForm prefill + auto-submit it.
+  const [pendingClaim] = useState(() => {
+    try {
+      const c = sessionStorage.getItem(PENDING_CLAIM_KEY);
+      if (c) sessionStorage.removeItem(PENDING_CLAIM_KEY);
+      return c ?? "";
+    } catch { return ""; }
+  });
+  const [claiming, setClaiming] = useState(!!pendingClaim);
 
   const refresh = async () => {
     try {
@@ -76,7 +86,7 @@ export function ScreensPage() {
         )}
 
         <Modal open={claiming} onClose={() => setClaiming(false)} title="Connect a screen">
-          <ClaimForm onClaimed={onClaimed} />
+          <ClaimForm onClaimed={onClaimed} initialCode={pendingClaim} />
         </Modal>
         {pickerFor && (
           <SetupPicker deviceId={pickerFor} setups={setups} playlists={playlists} onClose={() => setPickerFor(null)} onDone={refresh} />

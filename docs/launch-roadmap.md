@@ -2,7 +2,9 @@
 
 **Directive (2026-06-24 night):** Owner is asleep; build autonomously through the night toward a real launch. **MODEL UPDATE (owner, latest):** launch as a **FREE, full-featured application — ALL features free at launch. Premium is deferred/undecided — do NOT build paywalls, billing, or feature-gating now.** Ship to **all platforms** (Android TV/Fire TV, Web/PWA/browser-TV, Apple TV/tvOS, Samsung Tizen, LG webOS, Raspberry Pi). Owner's explicit asks this round: **more integrations, more objects, polish every feature, add features you judge important, and finish Tracks A/C/D.** Limits reset **05:39**; a recovery cron resumes the loop.
 
-**Re-prioritized order:** finish **A** (hardening) → **E** (more integrations) → **F** (more objects + polish) → **G** (important new features) → **C** (platforms) → **D** (GTM). **Track B (paid multi-tenant/billing) is DEFERRED** until premium is decided — skip it.
+**ROTATE across ALL tracks — don't starve any.** The open-ended tracks (E integrations, F objects/polish, H audit) must NOT crowd out the earlier launch work (A hardening, **C all-platforms**, D GTM). Each tick advances the **next track in this rotation that has a ready batch**, then records `LAST TRACK: X` in the MORNING SUMMARY so the following tick moves on:
+
+> **rotation:** A → C → D → E → F → G → (then back to A) — with **H** (audit/bug-hunt) used only when the chosen track has nothing ready. This guarantees platforms (C) and GTM (D) keep getting built alongside integrations/objects/features. **Track B (paid multi-tenant/billing) stays DEFERRED** (free launch) — skip it.
 
 **Operating rules (every batch = one commit):**
 - Stay safe & reviewable: server+config typecheck clean + ALL tests green + `pnpm --filter @glanceos/screen size` ≤ 30000 gzip.
@@ -20,7 +22,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 ## Track A — Launch hardening (model-agnostic; do first)
 - [x] **A1 — Security holes.** ✅ `Secure` cookies on session/CSRF/share-unlock + `Strict-Transport-Security` header, both gated on `SECURE_COOKIES` (GLANCEOS_PUBLIC_URL=https… or GLANCEOS_SECURE_COOKIES=on) so local http still works; added `/api/public/*` IP limiter (240/min) + per-board-token `/unlock` limiter (12/min) for share-password brute-force defense; the three 500 handlers now return `{error:"internal error", ref}` (uuid, logged server-side) instead of echoing `e.message`. server tsc clean, 238 tests green.
 - [x] **A2 — Backup/restore.** ✅ `src/backup-db.ts`: online `db.backup()` snapshots (consistent, safe while running) → `snapshotDatabase()` + `pruneSnapshots()` + CLI (`pnpm --filter @glanceos/server backup`). Optional in-process scheduled snapshots via `GLANCEOS_BACKUP_INTERVAL_HOURS`/`_KEEP`/`_DIR` (off by default). `docs/BACKUP.md` documents logical snapshots, full volume backup, and the stop→swap→start restore (incl. the secret-key caveat). +2 tests (valid queryable snapshot + retention prune). server tsc clean, 240 tests.
-- [ ] **A3 — QR claim deep-link.** Config reads `?claim=<code>` (search/hash) on boot → prefill + auto-submit ClaimForm (the screen already encodes it). qr round-trip test. Fixes the false "no typing URLs" promise.
+- [x] **A3 — QR claim deep-link.** ✅ New `claim.ts` (`parseClaimCode` + `PENDING_CLAIM_KEY`, sanitized) + 3 unit tests. `main.tsx` captures `?claim=<code>` on boot → stashes to sessionStorage, strips the query, lands on `#/screens`. ScreensPage consumes it (lazy `useState`), opens the Connect modal, and `ClaimForm` prefills + **auto-submits** (`initialCode`). Fixes the false "no typing URLs" promise. config tsc + 219 tests. Live-verified the capture (query stripped → `#/screens`, code stashed); the post-login modal-open step wasn't exercised live because the preview session is logged out, but the stashed code persists until login by design.
 - [ ] **A4 — PWA icons.** Real PNG icons (192/512 + maskable + apple-touch) generated from the brand SVG (sharp); wire manifest + index. iOS/Android installability.
 - [ ] **A5 — README + landing accuracy + unfurl.** Fix counts everywhere → **213 blocks / 153 templates / 85 integrations**; trim the giant changelog blob to a crisp value prop; add a GitHub repo link + one-line positioning on the landing; add OG/Twitter card meta + a baked `og:image` to config index + server-injected meta for `/`.
 - [ ] **A6 — Repo hygiene.** CONTRIBUTING.md, SECURITY.md (disclosure policy), CHANGELOG.md, `.github/ISSUE_TEMPLATE/*`, PR template.
@@ -90,3 +92,6 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **A2 ✅** backup/restore (online snapshots + CLI + optional scheduler + docs/BACKUP.md). server 240 tests.
 - **MODEL CHANGED** → FREE launch, all features free, premium deferred. Track B (billing/multi-tenant) DEFERRED. New tracks E (integrations) / F (objects+polish) / G (features) / H (never-stop audit). Cron rebuilt to never idle.
 - **E1 ✅** +12 keyless providers → **97** (HN, Wikipedia, dictionary, quotable, Frankfurter FX, Binance, ISS, Spaceflight News, holidays, Gutenberg, FreeToGame, xkcd). server 240 tests.
+- Loop set to **ROTATE A→C→D→E→F→G (+H filler)** so platforms/GTM aren't starved (cron 27460db3).
+- **A3 ✅** QR claim deep-link (scan → prefill + auto-submit claim; capture live-verified). config 219 tests.
+- LAST TRACK: A

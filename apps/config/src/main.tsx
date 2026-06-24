@@ -1,8 +1,18 @@
 import { render } from "preact";
 import { App } from "./app";
+import { PENDING_CLAIM_KEY, parseClaimCode } from "./claim";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ToastProvider } from "./components/Toast";
 import "./style.css";
+
+// QR pairing deep-link: a scanned screen opens <origin>/?claim=<code>. Stash the
+// code for the Screens page to prefill + auto-claim, then strip the query and land
+// on Screens — so scanning the on-screen QR actually pairs the display, no typing.
+const claimCode = parseClaimCode(location.search);
+if (claimCode) {
+  try { sessionStorage.setItem(PENDING_CLAIM_KEY, claimCode); } catch { /* ignore */ }
+  history.replaceState(null, "", `${location.pathname}#/screens`);
+}
 
 // Providers sit above the route split so the lazy Studio chunk can use them too.
 render(
