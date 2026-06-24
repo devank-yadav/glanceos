@@ -36,7 +36,8 @@ import { limiter } from "./ratelimit";
 import { emit, isConnected, subscribe } from "./hub";
 import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
-  getLayoutByShareToken, getOwnedLayout, getShareInfo, importFromHub, listPendingTemplates,
+  getLayoutByShareToken, getLayoutVersionDocument, getOwnedLayout, getShareInfo, importFromHub,
+  listLayoutVersions, listPendingTemplates,
   listPublished, listSetups, publishForReview, setReviewStatus, setShareToken, shareExpired,
   updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
@@ -856,6 +857,24 @@ export function buildApp(): Hono<Env> {
     const copy = duplicateLayout(Number(c.req.param("id")), c.get("userId"));
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
+  });
+
+  // ---- board version history (browse + restore past states) ----
+  app.get("/api/layouts/:id/versions", (c) => {
+    const id = Number(c.req.param("id"));
+    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    return c.json(listLayoutVersions(id, c.get("userId")));
+  });
+
+  app.post("/api/layouts/:id/versions/:vid/restore", async (c) => {
+    const id = Number(c.req.param("id"));
+    const userId = c.get("userId");
+    if (!getOwnedLayout(id, userId)) return c.json({ error: "not found" }, 404);
+    const doc = getLayoutVersionDocument(id, Number(c.req.param("vid")), userId);
+    if (!doc) return c.json({ error: "version not found" }, 404);
+    const updated = updateLayout(id, doc)!; // archives the pre-restore state too → restore is undoable
+    await pushDevicesUsingLayout(id);
+    return c.json({ id: updated.id, version: updated.version });
   });
 
   app.delete("/api/layouts/:id", async (c) => {

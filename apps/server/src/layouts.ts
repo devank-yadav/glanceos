@@ -188,9 +188,51 @@ export function duplicateLayout(id: number, userId: string): LayoutRecord | unde
   return createLayout(name, { ...source.document, name }, { userId });
 }
 
-export function updateLayout(id: number, document: LayoutT): LayoutRecord | undefined {
+// ---- board version history (archive prior states; restore later) ----
+
+const VERSION_KEEP = (() => { const n = Number(process.env.GLANCEOS_VERSION_KEEP); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 50; })();
+// Throttle: only archive if the newest version is older than this, so frequent
+// autosaves don't flood history. 0 in tests captures every save.
+const VERSION_MIN_INTERVAL_MS = (() => { const n = Number(process.env.GLANCEOS_VERSION_MIN_INTERVAL_MS); return Number.isFinite(n) && n >= 0 ? n : 5 * 60_000; })();
+
+export interface LayoutVersionMeta { id: number; summary: string; createdAt: number }
+
+/** Archive a board's CURRENT document as a version (throttled + pruned). Called
+ *  by updateLayout before it overwrites, so each version is a restorable past state. */
+export function snapshotLayout(id: number, now = Date.now()): void {
+  const row = db.prepare("SELECT document, user_id, name FROM layouts WHERE id = ?").get(id) as
+    { document: string; user_id: string | null; name: string } | undefined;
+  if (!row) return;
+  const last = db.prepare("SELECT created_at FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC LIMIT 1").get(id) as { created_at: number } | undefined;
+  if (last && now - last.created_at < VERSION_MIN_INTERVAL_MS) return; // throttled
+  db.prepare("INSERT INTO layout_versions (layout_id, user_id, document, summary, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(id, row.user_id, row.document, row.name, now);
+  db.prepare(
+    `DELETE FROM layout_versions WHERE layout_id = ? AND id NOT IN (
+       SELECT id FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)`,
+  ).run(id, id, VERSION_KEEP);
+}
+
+/** Versions for an owned board, newest first. */
+export function listLayoutVersions(layoutId: number, userId: string, limit = 50): LayoutVersionMeta[] {
+  if (!getOwnedLayout(layoutId, userId)) return [];
+  const rows = db.prepare(
+    "SELECT id, summary, created_at FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+  ).all(layoutId, Math.min(Math.max(1, limit), 100)) as { id: number; summary: string; created_at: number }[];
+  return rows.map((r) => ({ id: r.id, summary: r.summary, createdAt: r.created_at }));
+}
+
+/** The parsed document of one version of an owned board (for restore/preview). */
+export function getLayoutVersionDocument(layoutId: number, versionId: number, userId: string): LayoutT | undefined {
+  if (!getOwnedLayout(layoutId, userId)) return undefined;
+  const row = db.prepare("SELECT document FROM layout_versions WHERE id = ? AND layout_id = ?").get(versionId, layoutId) as { document: string } | undefined;
+  return row ? parseDocument(JSON.parse(row.document)) : undefined;
+}
+
+export function updateLayout(id: number, document: LayoutT, now = Date.now()): LayoutRecord | undefined {
   const existing = getLayout(id);
   if (!existing) return undefined;
+  snapshotLayout(id, now); // archive the document we're about to replace
   db.prepare("UPDATE layouts SET document = ?, name = ?, version = version + 1 WHERE id = ?").run(
     JSON.stringify(document),
     document.name,

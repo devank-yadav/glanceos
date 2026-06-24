@@ -67,7 +67,7 @@ Same proven pattern as the v9.7 build: each provider is a `reg({...})` in `apps/
 - [ ] **F3** — App-wide consistency & a11y sweep (light+dark): focus states, keyboard-shortcuts help, toasts, error states, mobile.
 
 ## Track G — Important new features (owner: "add features you judge important"; all FREE)
-- [ ] **G1** — Board version history / restore (deferred Studio direction; high-trust editor feature).
+- [~] **G1** — Board version history / restore — **server foundation done; Studio UI is the next G batch.** ✅ Migration `023_layout_versions` (additive, empty-start, `ON DELETE CASCADE`); `updateLayout` now archives the document it replaces (throttled `GLANCEOS_VERSION_MIN_INTERVAL_MS`, default 5 min; pruned to newest `GLANCEOS_VERSION_KEEP`, default 50); `snapshotLayout`/`listLayoutVersions`/`getLayoutVersionDocument` helpers; API `GET /api/layouts/:id/versions` + `POST /api/layouts/:id/versions/:vid/restore` (owner-only; restore archives the pre-restore state too, so it's itself undoable, then pushes to screens). +3 server tests (capture+restore, throttle, owner-only). server tsc + 243 tests. **Next: Studio "History" panel (list + preview + restore button) wired to these endpoints.**
 - [ ] **G2** — Multi-page boards + rotation (deferred Studio direction).
 - [x] **G3** — ✅ ⌘K command palette is now a real **global search**: it indexes the user's **boards** (fetched from `/api/layouts` → "Open <name>" jumps straight to `/edit/:id`) and the full **153-template gallery** (type a name → opens the gallery), plus a new **Data inlets** nav entry. Boards refresh on auth + route change. config tsc + 219 tests; app boots clean (live smoke). (Follow-on: deep-link a template to its preview; integrations/blocks in the palette if wanted.)
 - [ ] **G4** — (loop adds more as the audit surfaces them.)
@@ -104,4 +104,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **D4 ✅** launch kit (docs/LAUNCH.md): Show HN / r/selfhosted / Product Hunt drafts + launch-day checklist + honest Q&A.
 - **E3 ✅** +12 keyless providers → **121** (NWS alerts, NASA EONET, sunrise, zip lookup, iTunes, Deezer, MusicBrainz, PokéAPI, Scryfall, OpenDota, cat facts, Chuck Norris). server 240 tests.
 - **F (objects b2) ✅** +10 preset objects for the E3 list providers → **57** total. config 219 tests; all schema/transform contracts hold.
-- LAST TRACK: F
+- **G1 (server) ✅** board version history foundation — migration 023 + capture-on-save (throttled/pruned) + list/restore API + 3 tests. server 243 tests. (Studio UI = next G batch.)
+- LAST TRACK: G
