@@ -2,6 +2,15 @@
 
 A native **Android TV / Fire TV** shell — the owner's primary big-screen hardware (a Fire TV stick). Powers on into the GlanceOS dashboard with no keyboard, controlled by the remote. This is a real, minimal Gradle/Kotlin app you build and sideload; the existing `pi-image/` and `esp32-eink/` device dirs are empty-on-purpose, this one is not.
 
+## Download (prebuilt)
+
+Every version tag publishes a **debug-signed `glanceos-androidtv.apk`** on the
+repo's [GitHub Releases](https://github.com/devank-yadav/glanceos/releases)
+(built by `.github/workflows/release.yml` — no signing secrets needed). Sideload
+it (`adb install glanceos-androidtv.apk`, or enable “install unknown apps”). You
+can also trigger a build any time via **Actions → release → Run workflow** and
+grab the APK from the run's artifacts. Prefer to build it yourself? See below.
+
 ## What it is
 
 A single-activity app that opens a fullscreen `WebView` on your self-hosted GlanceOS server and gets out of the way. It loads:

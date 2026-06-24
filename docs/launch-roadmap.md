@@ -41,7 +41,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 - [ ] **B7 — Postgres Store interface (RISKY — scaffold only tonight).** Define a `Store` interface over the data layer + opt-in Postgres backend behind env; SQLite stays default. The full "every call site async" migration is XL — do the interface/seam + a thin adapter + tests; **leave the full cutover for human review** (note it; do not break SQLite).
 
 ## Track C — All platforms, store-ready
-- [ ] **C1 — CI release pipeline.** Build the debug-signed Android `.apk` in CI; create the first **GitHub Release** with checksummed artifacts; release workflow.
+- [x] **C1 — CI release pipeline.** ✅ `.github/workflows/release.yml`: on every `v*` tag (and on-demand `workflow_dispatch`) builds the debug-signed Android TV/Fire TV APK (`setup-java 17` + `setup-android` + `./gradlew assembleDebug`), stages `glanceos-androidtv.apk` + a sha256, uploads it as a run artifact, and on tags attaches it to a **GitHub Release** (softprops) with sideload + self-host instructions. No signing secrets (debug-signed). androidtv/README gains a "Download (prebuilt)" section. YAML validated (parses). Verify-by-construction: the Android build can't run in this CLI env (no Android SDK) — it runs on the owner's next tag/dispatch. NEEDS-YOU: Apple/Samsung/LG store builds still need vendor accounts (source-build boundary, documented). Follow-on: **C3** (runtime-configurable host) so the APK isn't pinned to the placeholder URL.
 - [ ] **C2 — tvOS Xcode project.** Commit an **XcodeGen `project.yml`** (+ generated `.xcodeproj` if buildable, else documented one-command `xcodegen generate`) so Apple TV is one-command like the others; signing doc (free personal team for sideload; App Store = NEEDS-YOU $99).
 - [ ] **C3 — Runtime-configurable host.** First-run on-screen host setup (or QR-encoded host) so the webview shells (Android TV/Tizen/webOS/tvOS) stop hardcoding `glanceos.local:8080` and don't need a rebuild per deployment. Biggest install-friction win.
 - [ ] **C4 — Real artwork for all shells.** Brand icon set (Android TV banner+icon, webOS 80/130, Tizen, tvOS app icon + top-shelf/launch image) generated from one source SVG.
@@ -94,4 +94,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **E1 ✅** +12 keyless providers → **97** (HN, Wikipedia, dictionary, quotable, Frankfurter FX, Binance, ISS, Spaceflight News, holidays, Gutenberg, FreeToGame, xkcd). server 240 tests.
 - Loop set to **ROTATE A→C→D→E→F→G (+H filler)** so platforms/GTM aren't starved (cron 27460db3).
 - **A3 ✅** QR claim deep-link (scan → prefill + auto-submit claim; capture live-verified). config 219 tests.
-- LAST TRACK: A
+- **C1 ✅** release workflow → builds + attaches the Android TV/Fire TV APK to GitHub Releases on each tag (no secrets); androidtv README "Download" section. (CI build runs on the owner's next tag.)
+- LAST TRACK: C
