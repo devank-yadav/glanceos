@@ -4,7 +4,7 @@ import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fi
 
 describe("provider registry", () => {
   it("registers the providers (incl. v5.0 smart-life + B1-B7 integrations)", () => {
-    expect(PROVIDERS.size).toBe(109);
+    expect(PROVIDERS.size).toBe(121);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     // E1 — more keyless public-data providers
     for (const id of ["hackernews", "wikipedia", "frankfurter", "iss", "spaceflightnews", "nager", "gutendex", "dictionary", "quotable", "xkcd", "freetogame", "binance"]) expect(PROVIDERS.has(id)).toBe(true);
@@ -16,6 +16,11 @@ describe("provider registry", () => {
     expect(PROVIDERS.get("themealdb")?.category).toBe("food");
     expect(PROVIDERS.get("artic")?.category).toBe("art");
     expect(PROVIDERS.get("spacex")?.authKind).toBe("none");
+    // E3 — more keyless providers (weather/science/place/media/gaming/fun)
+    for (const id of ["nws", "eonet", "sunrise", "zippopotam", "itunes", "deezer", "musicbrainz", "pokeapi", "scryfall", "opendota", "catfact", "chucknorris"]) expect(PROVIDERS.has(id)).toBe(true);
+    expect(PROVIDERS.get("nws")?.category).toBe("weather");
+    expect(PROVIDERS.get("eonet")?.category).toBe("science");
+    expect(PROVIDERS.get("itunes")?.authKind).toBe("none");
     for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
     // B1 — keyless social/dev/books/gaming/sports
     for (const id of ["reddit", "devto", "lobsters", "npm", "bluesky", "mastodon", "openlibrary", "steam", "thesportsdb"]) expect(PROVIDERS.has(id)).toBe(true);

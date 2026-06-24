@@ -221,3 +221,33 @@ All keyless (render immediately, no login):
 - **Open Trivia DB** `opentdb` · keyless · opentdb.questions
 - **Dad Jokes** `dadjoke` · keyless · dadjoke.random
 - **Random Facts** `uselessfacts` · keyless · uselessfacts.random
+
+---
+
+## E3 additions — more keyless public-data providers (121 total)
+
+All keyless (render immediately, no login):
+
+### weather
+- **US Weather Alerts** `nws` · keyless · nws.alerts
+
+### science
+- **Natural Events (NASA EONET)** `eonet` · keyless · eonet.events
+
+### place
+- **Sunrise / Sunset** `sunrise` · keyless · sunrise.times
+- **Postal Code Lookup** `zippopotam` · keyless · zippopotam.place
+
+### media
+- **Apple iTunes Search** `itunes` · keyless · itunes.search
+- **Deezer** `deezer` · keyless · deezer.search
+- **MusicBrainz** `musicbrainz` · keyless · musicbrainz.artists
+
+### gaming
+- **PokéAPI** `pokeapi` · keyless · pokeapi.list
+- **Scryfall (MTG)** `scryfall` · keyless · scryfall.search
+- **Dota 2 (OpenDota)** `opendota` · keyless · opendota.heroes
+
+### fun
+- **Cat Facts** `catfact` · keyless · catfact.random
+- **Chuck Norris Jokes** `chucknorris` · keyless · chucknorris.random

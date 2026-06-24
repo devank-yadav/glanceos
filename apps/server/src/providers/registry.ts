@@ -2101,3 +2101,161 @@ reg({
     return { value: raw?.text ?? "" };
   },
 });
+
+// ---- E3: more keyless public-data providers (weather/science/place/media/gaming) ----
+
+reg({
+  id: "nws", label: "US Weather Alerts", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "nws.alerts", label: "Active alerts", shape: "list" }],
+  async resolve(ctx) {
+    const area = ((ctx.query.area || "CA").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2)) || "CA";
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://api.weather.gov/alerts/active?area=${area}`, UA)) as
+      { features?: { properties?: { event?: string; severity?: string; areaDesc?: string } }[] } | null;
+    return { items: (raw?.features ?? []).slice(0, max).map((f) => ({ title: f.properties?.event ?? "", label: [f.properties?.severity, f.properties?.areaDesc].filter(Boolean).join(" · ").slice(0, 80) })) };
+  },
+});
+
+reg({
+  id: "eonet", label: "Natural Events (NASA)", category: "science", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 60_000,
+  resources: [{ id: "eonet.events", label: "Open natural events", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=${max}`, UA)) as
+      { events?: { title?: string; categories?: { title?: string }[] }[] } | null;
+    return { items: (raw?.events ?? []).map((e) => ({ title: e.title ?? "", label: e.categories?.[0]?.title ?? "" })) };
+  },
+});
+
+reg({
+  id: "sunrise", label: "Sunrise / Sunset", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 60_000,
+  resources: [{ id: "sunrise.times", label: "Sun times", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 51.5;
+    const lng = Number(ctx.query.lng) || -0.12;
+    const raw = (await getJSON(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&formatted=0`, UA)) as
+      { results?: { sunrise?: string; sunset?: string; day_length?: number; solar_noon?: string } } | null;
+    const r = raw?.results;
+    const hm = (iso?: string) => (iso ? new Date(iso).toISOString().slice(11, 16) : "");
+    return { items: [
+      { text: "Sunrise (UTC)", value: hm(r?.sunrise) },
+      { text: "Sunset (UTC)", value: hm(r?.sunset) },
+      { text: "Solar noon (UTC)", value: hm(r?.solar_noon) },
+      { text: "Day length (h)", value: r?.day_length ? Number((r.day_length / 3600).toFixed(1)) : 0 },
+    ] };
+  },
+});
+
+reg({
+  id: "zippopotam", label: "Postal Code Lookup", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "zippopotam.place", label: "Place for a postcode", shape: "list" }],
+  async resolve(ctx) {
+    const country = (ctx.query.country || "us").toLowerCase().replace(/[^a-z]/g, "").slice(0, 2) || "us";
+    const code = (ctx.query.code || "10001").trim().replace(/[^A-Za-z0-9 -]/g, "");
+    const raw = (await getJSON(`https://api.zippopotam.us/${country}/${encodeURIComponent(code)}`, UA)) as
+      { places?: { "place name"?: string; state?: string }[] } | null;
+    return { items: (raw?.places ?? []).map((p) => ({ title: p["place name"] ?? "", label: p.state ?? "" })) };
+  },
+});
+
+reg({
+  id: "itunes", label: "Apple iTunes Search", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 15_000,
+  resources: [{ id: "itunes.search", label: "Music / podcasts / apps", shape: "list" }],
+  async resolve(ctx) {
+    const term = (ctx.query.q || "daft punk").trim();
+    const entity = ["song", "podcast", "movie", "ebook", "software", "album"].includes(ctx.query.entity || "") ? ctx.query.entity : "song";
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=${entity}&limit=${max}`, UA)) as
+      { results?: { trackName?: string; collectionName?: string; artistName?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((r) => ({ title: r.trackName || r.collectionName || "", label: r.artistName ?? "" })) };
+  },
+});
+
+reg({
+  id: "deezer", label: "Deezer", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 15_000,
+  resources: [{ id: "deezer.search", label: "Track search", shape: "list" }],
+  async resolve(ctx) {
+    const q = (ctx.query.q || "lofi").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=${max}`, UA)) as
+      { data?: { title?: string; artist?: { name?: string }; album?: { title?: string } }[] } | null;
+    return { items: (raw?.data ?? []).map((t) => ({ title: t.title ?? "", label: t.artist?.name ?? "" })) };
+  },
+});
+
+reg({
+  id: "musicbrainz", label: "MusicBrainz", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "musicbrainz.artists", label: "Artist search", shape: "list" }],
+  async resolve(ctx) {
+    const q = (ctx.query.q || "").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(q)}&fmt=json&limit=${max}`, UA)) as
+      { artists?: { name?: string; disambiguation?: string; country?: string }[] } | null;
+    return { items: (raw?.artists ?? []).map((a) => ({ title: a.name ?? "", label: a.disambiguation || a.country || "" })) };
+  },
+});
+
+reg({
+  id: "pokeapi", label: "PokéAPI", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "pokeapi.list", label: "Pokémon list", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 20, 60);
+    const raw = (await getJSON(`https://pokeapi.co/api/v2/pokemon?limit=${max}`, UA)) as
+      { results?: { name?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((p) => ({ title: p.name ? p.name.charAt(0).toUpperCase() + p.name.slice(1) : "" })) };
+  },
+});
+
+reg({
+  id: "scryfall", label: "Scryfall (MTG)", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "scryfall.search", label: "Card search", shape: "list" }],
+  async resolve(ctx) {
+    const q = (ctx.query.q || "t:goblin").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}`, { ...UA, Accept: "application/json" })) as
+      { data?: { name?: string; type_line?: string; set_name?: string }[] } | null;
+    return { items: (raw?.data ?? []).slice(0, max).map((c) => ({ title: c.name ?? "", label: c.type_line || c.set_name || "" })) };
+  },
+});
+
+reg({
+  id: "opendota", label: "Dota 2 (OpenDota)", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [{ id: "opendota.heroes", label: "Top pro heroes", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON("https://api.opendota.com/api/heroStats", UA)) as
+      { localized_name?: string; pro_pick?: number; pro_win?: number }[] | null;
+    const top = (raw ?? []).slice().sort((a, b) => (b.pro_pick ?? 0) - (a.pro_pick ?? 0)).slice(0, max);
+    return { items: top.map((h) => ({ text: h.localized_name ?? "", value: Number(h.pro_pick ?? 0) })) };
+  },
+});
+
+reg({
+  id: "catfact", label: "Cat Facts", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "catfact.random", label: "A cat fact", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://catfact.ninja/fact", UA)) as { fact?: string } | null;
+    return { value: raw?.fact ?? "" };
+  },
+});
+
+reg({
+  id: "chucknorris", label: "Chuck Norris Jokes", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 10_000,
+  resources: [{ id: "chucknorris.random", label: "A random joke", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.chucknorris.io/jokes/random", UA)) as { value?: string } | null;
+    return { value: raw?.value ?? "" };
+  },
+});
