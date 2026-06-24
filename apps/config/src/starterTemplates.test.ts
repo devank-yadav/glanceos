@@ -6,7 +6,7 @@ import { STARTER_CATEGORIES, STARTER_TEMPLATES } from "./starterTemplates";
 // screen runtime can render, ids must be unique, and every category populated.
 describe("starter templates", () => {
   it("ships the full template gallery with unique ids", () => {
-    expect(STARTER_TEMPLATES.length).toBeGreaterThanOrEqual(118);
+    expect(STARTER_TEMPLATES.length).toBeGreaterThanOrEqual(150);
     const ids = new Set(STARTER_TEMPLATES.map((t) => t.id));
     expect(ids.size).toBe(STARTER_TEMPLATES.length);
   });

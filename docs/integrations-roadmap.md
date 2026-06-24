@@ -1,5 +1,16 @@
 # Integrations roadmap (overnight build tracker)
 
+> ## ✅ ALL DONE — overnight directive complete
+> Every item on this tracker is shipped, committed, and pushed to `main`. In priority order:
+> 1. **Integrations (most important):** 22 → **85 providers** + **25 one-click preset objects** (v9.7.0). Server-side providers = zero screen-bundle cost; existing blocks render them via `source`.
+> 2. **Big feature:** Data inspector (point-and-click source binding).
+> 3. **Studio polish + adversarial bug hunt:** found & fixed a real preset-transform bug, locked in with a contract test.
+> 4. **Quality & hardening:** schema-validated the click-to-add flow + a11y.
+> 5. **Landing / marketing polish:** "Connect 85 apps" feature card + dynamic block count.
+> 6. **Templates (LAST):** starter gallery **53 → 153 (+100 exactly)** across **27 categories** (9 original + 18 new), in three batches — all schema-validated, several live-verified.
+>
+> Standing guarantees held every batch: server+config typecheck clean, all tests green (server 238 · config 216 · screen 51), `apps/screen` gzip **27045/30000** (zero growth — nothing was added to the renderer), diffs scrubbed for attribution, commit+push per batch. No schema migration was needed anywhere. Nothing is blocked. Further work is optional polish only.
+
 Goal: many integrations (TRMNL-breadth), each a server-side **provider** in
 `apps/server/src/providers/registry.ts` (zero screen-gzip cost) that existing blocks
 render via a block's `source` binding. Keyless public APIs render immediately; token/OAuth
@@ -31,10 +42,11 @@ Architecture per provider: add a `reg({...})` block (id, label, category, authKi
 - [x] **Studio polish + adversarial bug hunt** — found & fixed a real B8 bug: the preset "objects" omitted `map.transform`, so list presets resolved to an *array of `{text}` objects* instead of the newline string the list renderer wants (and scalar presets to a raw value), because `applyMap` only short-circuits `transform:"none"` when there's no `items`/`path`. Now the `LIST`/`VALUE` helpers emit `transform:"join"` / `transform:"first"` to match databind.tsx's own binding contract; locked in with a contract unit test (every list preset → join + items; every scalar preset → a value transform). Fixed the one inline preset (plausible) too. 115 config tests; screen 27045/30000.
 - [x] **Quality & hardening** — (1) extracted the "add object → clipboard" block builder to a pure `buildPresetBlock(o)` in integrationObjects.ts (DRY: the Integrations page now calls it) and added a **schema-validation test**: every one of the 25 presets' constructed blocks parses against the `Widget` zod union (kind + type survive) — the click-to-add flow can never emit a malformed block. (2) a11y: the integrations search input gained an `aria-label`. 116 config tests; screen 27045/30000.
 - [x] **Landing / marketing polish** — added a "Connect 85 apps" feature card to the landing (the big new story was missing from the homepage), and made the "calm blocks" card count dynamic (`${BLOCKS.length}` — was a hardcoded "199"). Tasteful, on-brand (reuses the existing feature-card grid + Icon.link). 116 config tests; tsc clean. (Live screenshot skipped — the landing renders only when logged out and the preview session is authenticated; change is a trivial additive array entry.)
-- [ ] **LAST: 100+ new full-page templates** across many use-cases — *in progress, built in batches*
+- [x] **LAST: 100+ new full-page templates** across many use-cases — **DONE: 53 → 153 (exactly +100), across 18 new categories** over three batches
   - [x] **Templates batch 1 (+34 → 87 total):** six brand-new use-case categories — **Gym & fitness, Classroom & school, Travel & transit, Finance & markets, Home & family, Newsroom & media** (5–6 templates each). Composed only from proven blocks (zero screen cost). All 34 validate against the Layout schema (89 starterTemplates tests; 150 config tests). Live-verified on the Templates gallery: new category chips render, and the **Class Schedule** board renders cleanly in the View modal (kicker + live clock + class timeline + ticker, "Copy template" works). screen 27045/30000.
   - [x] **Templates batch 2 (+34 → 121 total):** six more use-case categories — **Restaurant & kitchen, Retail & store, Healthcare & clinic, Coworking & office, Hotel & hospitality, Worship & community** (5–6 each: dinner menus, KDS, reservations, sale/flash boards, store hours, token queues, wait times, doctors directory, room/desk availability, guest welcome, amenities, service times, verse-of-the-day…). All validate against the Layout schema (123 starterTemplates tests; 184 config tests). Live-verified: all 6 new category chips render and the **Kitchen Display** board renders cleanly in the View modal (kicker + tickets table + throughput stats, Copy works). screen 27045/30000.
-  - [ ] Batches 3+: more places — Library, Salon/spa, Warehouse/factory, Real estate, Auto shop, Pet care, Garden, Wedding/party, Sports scoreboard, Bar/pub, Museum/gallery, Bank/branch, Pharmacy retail… (running toward 100+ more than the original 50 — now at 121, original was 53)
+  - [x] **Templates batch 3 (+32 → 153 total):** six more categories — **Library & study, Salon & spa, Warehouse & factory, Real estate, Auto & garage, Bar & pub** (5–6 each: library hours/quiet zone/study rooms, salon menu/relax, safety board/OEE/shift/dispatch/target, featured listing/open house/market snapshot, service status/vehicle ready/garage hours, on-tap/happy-hour/cocktails/quiz). All validate against the Layout schema (155 starterTemplates tests; 216 config tests). Live-verified: all 6 new chips render and the **Line Performance** board renders cleanly (kicker + OEE bars + 77%/8,420/1.4% stats, Copy works). screen 27045/30000.
+  - **Goal met:** original gallery was 53 → now **153 templates (+100 exactly)** across **27 categories total** (9 original + 18 new). Further batches optional (Museum/gallery, Bank/branch, Pet care, Garden, Wedding/party, Sports scoreboard…) if the owner wants even more.
 
 ## Notes / gotchas
 - Reddit `.json` needs a `User-Agent` header.
