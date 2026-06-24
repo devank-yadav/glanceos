@@ -4,13 +4,18 @@ import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fi
 
 describe("provider registry", () => {
   it("registers the providers (incl. v5.0 smart-life + B1-B7 integrations)", () => {
-    expect(PROVIDERS.size).toBe(97);
+    expect(PROVIDERS.size).toBe(109);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     // E1 — more keyless public-data providers
     for (const id of ["hackernews", "wikipedia", "frankfurter", "iss", "spaceflightnews", "nager", "gutendex", "dictionary", "quotable", "xkcd", "freetogame", "binance"]) expect(PROVIDERS.has(id)).toBe(true);
     expect(PROVIDERS.get("hackernews")?.authKind).toBe("none");
     expect(PROVIDERS.get("wikipedia")?.category).toBe("reference");
     expect(PROVIDERS.get("binance")?.category).toBe("finance");
+    // E2 — more keyless public-data providers (food/art/space/markets/fun)
+    for (const id of ["themealdb", "thecocktaildb", "spacex", "coinpaprika", "artic", "poetrydb", "opentdb", "datamuse", "openbrewerydb", "dadjoke", "f1", "uselessfacts"]) expect(PROVIDERS.has(id)).toBe(true);
+    expect(PROVIDERS.get("themealdb")?.category).toBe("food");
+    expect(PROVIDERS.get("artic")?.category).toBe("art");
+    expect(PROVIDERS.get("spacex")?.authKind).toBe("none");
     for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
     // B1 — keyless social/dev/books/gaming/sports
     for (const id of ["reddit", "devto", "lobsters", "npm", "bluesky", "mastodon", "openlibrary", "steam", "thesportsdb"]) expect(PROVIDERS.has(id)).toBe(true);

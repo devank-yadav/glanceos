@@ -58,7 +58,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 ## Track E — More integrations (free; server-side providers, zero screen cost)
 Same proven pattern as the v9.7 build: each provider is a `reg({...})` in `apps/server/src/providers/registry.ts` (keyless first so it renders immediately; token/OAuth scaffolds light up on connect). Update `registry.test.ts` count + `docs/INTEGRATIONS.md` each batch. ~12–15 providers per batch.
 - [x] **E1** — ✅ +12 **keyless** providers (85 → **97**): hackernews (news), wikipedia + dictionary + quotable (reference), frankfurter + binance (finance), iss + spaceflightnews (space), nager public-holidays (calendar), gutendex (books), freetogame (gaming), xkcd (fun). New CAT_LABELs: reference/space/fun. registry.test → 97; docs/INTEGRATIONS.md updated. server tsc + 240 tests; config tsc clean.
-- [ ] **E2** — +~12 more.
+- [x] **E2** — ✅ +12 **keyless** providers (97 → **109**): themealdb + thecocktaildb + openbrewerydb (food), artic (art), spacex (space), coinpaprika (finance), f1 (sports), poetrydb + datamuse (reference), opentdb + dadjoke + uselessfacts (fun). New CAT_LABELs food/art. registry.test → 109; INTEGRATIONS.md updated. server tsc + 240 tests; config tsc clean.
 - [ ] **E3** — +~12 more. (continue until breadth is strong; target 120+ providers)
 
 ## Track F — More objects + feature polish (free)
@@ -96,4 +96,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **A3 ✅** QR claim deep-link (scan → prefill + auto-submit claim; capture live-verified). config 219 tests.
 - **C1 ✅** release workflow → builds + attaches the Android TV/Fire TV APK to GitHub Releases on each tag (no secrets); androidtv README "Download" section. (CI build runs on the owner's next tag.)
 - **D3 ✅** one-command hosting: fly.toml + render.yaml + docs/DEPLOY.md (Compose/Fly/Render/any-Docker) + README pointer. (Actual deploy/domain = NEEDS-YOU.)
-- LAST TRACK: D
+- **E2 ✅** +12 keyless providers → **109** (TheMealDB, TheCocktailDB, Open Brewery, Art Institute, SpaceX, Coinpaprika, F1, PoetryDB, Datamuse, Open Trivia, Dad Jokes, Random Facts). server 240 tests.
+- LAST TRACK: E

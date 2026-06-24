@@ -1906,3 +1906,198 @@ reg({
     return { items };
   },
 });
+
+// ---- E2: more keyless public-data providers (food, art, space, markets, fun) ----
+
+// Minimal HTML-entity decode for APIs (e.g. Open Trivia DB) that return encoded text.
+const unesc = (s: string): string =>
+  s.replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+reg({
+  id: "themealdb", label: "TheMealDB (recipes)", category: "food", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 30_000,
+  resources: [
+    { id: "themealdb.search", label: "Recipe search", shape: "list" },
+    { id: "themealdb.random", label: "Random meal", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "themealdb.random") {
+      const raw = (await getJSON("https://www.themealdb.com/api/json/v1/1/random.php", UA)) as { meals?: { strMeal?: string; strCategory?: string }[] } | null;
+      const m = raw?.meals?.[0];
+      return { value: m?.strMeal ?? "", category: m?.strCategory ?? "" };
+    }
+    const q = (ctx.query.q || "").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`, UA)) as
+      { meals?: { strMeal?: string; strCategory?: string; strArea?: string }[] } | null;
+    return { items: (raw?.meals ?? []).slice(0, max).map((m) => ({ title: m.strMeal ?? "", label: [m.strArea, m.strCategory].filter(Boolean).join(" · ") })) };
+  },
+});
+
+reg({
+  id: "thecocktaildb", label: "TheCocktailDB", category: "food", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 30_000,
+  resources: [
+    { id: "thecocktaildb.search", label: "Cocktail search", shape: "list" },
+    { id: "thecocktaildb.random", label: "Random cocktail", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "thecocktaildb.random") {
+      const raw = (await getJSON("https://www.thecocktaildb.com/api/json/v1/1/random.php", UA)) as { drinks?: { strDrink?: string; strGlass?: string }[] } | null;
+      const d = raw?.drinks?.[0];
+      return { value: d?.strDrink ?? "", glass: d?.strGlass ?? "" };
+    }
+    const q = (ctx.query.q || "margarita").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`, UA)) as
+      { drinks?: { strDrink?: string; strCategory?: string; strAlcoholic?: string }[] } | null;
+    return { items: (raw?.drinks ?? []).slice(0, max).map((d) => ({ title: d.strDrink ?? "", label: [d.strAlcoholic, d.strCategory].filter(Boolean).join(" · ") })) };
+  },
+});
+
+reg({
+  id: "spacex", label: "SpaceX", category: "space", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 60_000,
+  resources: [{ id: "spacex.upcoming", label: "Upcoming launches", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 8, 20);
+    const raw = (await getJSON("https://api.spacexdata.com/v5/launches/upcoming", UA)) as { name?: string; date_utc?: string }[] | null;
+    return { items: (raw ?? []).slice(0, max).map((l) => ({ title: l.name ?? "", label: l.date_utc ? l.date_utc.slice(0, 10) : "" })) };
+  },
+});
+
+reg({
+  id: "coinpaprika", label: "Coinpaprika", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [
+    { id: "coinpaprika.tickers", label: "Top coins", shape: "list" },
+    { id: "coinpaprika.global", label: "Market cap", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "coinpaprika.global") {
+      const raw = (await getJSON("https://api.coinpaprika.com/v1/global", UA)) as { market_cap_usd?: number; bitcoin_dominance_percentage?: number } | null;
+      return { value: Number(raw?.market_cap_usd ?? 0), btcDominance: Number(raw?.bitcoin_dominance_percentage ?? 0) };
+    }
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://api.coinpaprika.com/v1/tickers?limit=${max}`, UA)) as
+      { name?: string; symbol?: string; quotes?: { USD?: { price?: number; percent_change_24h?: number } } }[] | null;
+    return { items: (raw ?? []).slice(0, max).map((c) => ({
+      text: c.symbol ?? "",
+      value: Number(c.quotes?.USD?.price ?? 0),
+      label: c.quotes?.USD?.percent_change_24h != null ? `${Number(c.quotes.USD.percent_change_24h).toFixed(2)}%` : "",
+    })) };
+  },
+});
+
+reg({
+  id: "artic", label: "Art Institute of Chicago", category: "art", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [
+    { id: "artic.artworks", label: "Artworks", shape: "list" },
+    { id: "artic.search", label: "Search", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const fields = "fields=title,artist_display,date_display";
+    const q = (ctx.query.q || "").trim();
+    const url = ctx.resource === "artic.search" && q
+      ? `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(q)}&limit=${max}&${fields}`
+      : `https://api.artic.edu/api/v1/artworks?limit=${max}&${fields}`;
+    const raw = (await getJSON(url, UA)) as { data?: { title?: string; artist_display?: string; date_display?: string }[] } | null;
+    return { items: (raw?.data ?? []).map((a) => ({ title: a.title ?? "", label: [a.artist_display, a.date_display].filter(Boolean).join(" · ").replace(/\n/g, " ") })) };
+  },
+});
+
+reg({
+  id: "poetrydb", label: "PoetryDB", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 30_000,
+  resources: [{ id: "poetrydb.random", label: "A random poem", shape: "list" }],
+  async resolve(ctx) {
+    const author = (ctx.query.author || "").trim();
+    const url = author ? `https://poetrydb.org/author/${encodeURIComponent(author)}` : "https://poetrydb.org/random";
+    const raw = (await getJSON(url, UA)) as { title?: string; author?: string; lines?: string[] }[] | null;
+    const poem = raw?.[0];
+    const max = Math.min(Number(ctx.query.max) || 12, 40);
+    return { items: (poem?.lines ?? []).slice(0, max).map((l) => ({ text: l })), title: poem?.title ?? "", author: poem?.author ?? "" };
+  },
+});
+
+reg({
+  id: "opentdb", label: "Open Trivia DB", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.m30, minRefreshMs: 15_000,
+  resources: [{ id: "opentdb.questions", label: "Trivia questions", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 20);
+    const raw = (await getJSON(`https://opentdb.com/api.php?amount=${max}&type=multiple`, UA)) as
+      { results?: { question?: string; category?: string; difficulty?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((q) => ({ title: unesc(q.question ?? ""), label: q.category ? unesc(q.category) : "" })) };
+  },
+});
+
+reg({
+  id: "datamuse", label: "Datamuse (words)", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 15_000,
+  resources: [{ id: "datamuse.related", label: "Related words", shape: "list" }],
+  async resolve(ctx) {
+    const word = (ctx.query.word || "calm").trim().replace(/[^\w' -]/g, "");
+    const rel = ctx.query.rel === "rhyme" ? `rel_rhy=${encodeURIComponent(word)}` : `ml=${encodeURIComponent(word)}`;
+    const max = Math.min(Number(ctx.query.max) || 12, 30);
+    const raw = (await getJSON(`https://api.datamuse.com/words?${rel}&max=${max}`, UA)) as { word?: string; score?: number }[] | null;
+    return { items: (raw ?? []).map((w) => ({ text: w.word ?? "", value: Number(w.score ?? 0) })) };
+  },
+});
+
+reg({
+  id: "openbrewerydb", label: "Open Brewery DB", category: "food", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "openbrewerydb.byCity", label: "Breweries by city", shape: "list" }],
+  async resolve(ctx) {
+    const city = (ctx.query.city || "portland").trim();
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const raw = (await getJSON(`https://api.openbrewerydb.org/v1/breweries?by_city=${encodeURIComponent(city)}&per_page=${max}`, UA)) as
+      { name?: string; brewery_type?: string; city?: string; state?: string }[] | null;
+    return { items: (raw ?? []).map((b) => ({ title: b.name ?? "", label: [b.brewery_type, b.city, b.state].filter(Boolean).join(" · ") })) };
+  },
+});
+
+reg({
+  id: "dadjoke", label: "Dad Jokes", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 10_000,
+  resources: [{ id: "dadjoke.random", label: "A random joke", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://icanhazdadjoke.com/", { ...UA, Accept: "application/json" })) as { joke?: string } | null;
+    return { value: raw?.joke ?? "" };
+  },
+});
+
+reg({
+  id: "f1", label: "Formula 1", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.h6, minRefreshMs: 60_000,
+  resources: [{ id: "f1.next", label: "Next race", shape: "list" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.jolpi.ca/ergast/f1/current/next.json", UA)) as
+      { MRData?: { RaceTable?: { Races?: { raceName?: string; date?: string; time?: string; Circuit?: { circuitName?: string; Location?: { locality?: string; country?: string } } }[] } } } | null;
+    const race = raw?.MRData?.RaceTable?.Races?.[0];
+    if (!race) return { items: [], value: "" };
+    const loc = race.Circuit?.Location;
+    return {
+      value: race.raceName ?? "",
+      items: [
+        { text: "Race", value: race.raceName ?? "" },
+        { text: "Date", value: [race.date, race.time].filter(Boolean).join(" ") },
+        { text: "Circuit", value: race.Circuit?.circuitName ?? "" },
+        { text: "Where", value: [loc?.locality, loc?.country].filter(Boolean).join(", ") },
+      ],
+    };
+  },
+});
+
+reg({
+  id: "uselessfacts", label: "Random Facts", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "uselessfacts.random", label: "A random fact", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://uselessfacts.jsph.pl/api/v2/facts/random", UA)) as { text?: string } | null;
+    return { value: raw?.text ?? "" };
+  },
+});

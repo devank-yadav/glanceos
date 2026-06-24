@@ -189,3 +189,35 @@ All keyless (render immediately, no login):
 
 ### fun
 - **xkcd** `xkcd` · keyless · xkcd.latest
+
+---
+
+## E2 additions — more keyless public-data providers (109 total)
+
+All keyless (render immediately, no login):
+
+### food
+- **TheMealDB (recipes)** `themealdb` · keyless · themealdb.search, themealdb.random
+- **TheCocktailDB** `thecocktaildb` · keyless · thecocktaildb.search, thecocktaildb.random
+- **Open Brewery DB** `openbrewerydb` · keyless · openbrewerydb.byCity
+
+### art
+- **Art Institute of Chicago** `artic` · keyless · artic.artworks, artic.search
+
+### space
+- **SpaceX** `spacex` · keyless · spacex.upcoming
+
+### finance
+- **Coinpaprika** `coinpaprika` · keyless · coinpaprika.tickers, coinpaprika.global
+
+### sports
+- **Formula 1** `f1` · keyless · f1.next
+
+### reference
+- **PoetryDB** `poetrydb` · keyless · poetrydb.random
+- **Datamuse (words)** `datamuse` · keyless · datamuse.related
+
+### fun
+- **Open Trivia DB** `opentdb` · keyless · opentdb.questions
+- **Dad Jokes** `dadjoke` · keyless · dadjoke.random
+- **Random Facts** `uselessfacts` · keyless · uselessfacts.random
