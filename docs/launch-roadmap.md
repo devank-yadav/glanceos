@@ -53,7 +53,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 - [ ] **D1 — Visual kit.** Capture 6–8 hero board screenshots + a Studio editing GIF via the real runtime (Preview MCP); embed at top of README + landing.
 - [ ] **D2 — Pricing + positioning page** (SaaS): plans, comparison vs TRMNL/DAKboard, the "open-source core + hosted tiers" story.
 - [x] **D3 — Deploy config (one-command hosting).** ✅ `fly.toml` (Fly.io: prebuilt image + `/data` volume + `/ready` checks + always-on for SSE) and `render.yaml` (Render blueprint: image + disk + generated secret + trusted-proxy), plus `docs/DEPLOY.md` consolidating Compose / Fly / Render / any-Docker-host with the contract (port 8080 + `/data` volume + `GLANCEOS_PUBLIC_URL`) and the secret-persistence caveat; README "Host it online" pointer. render.yaml validated (parses); fly.toml standard schema. NEEDS-YOU: a host account + domain + DNS, and (for a public demo) setting `GLANCEOS_PUBLIC_URL` + a seeded read-only demo account.
-- [ ] **D4 — Launch posts** (Show HN / r/selfhosted / Product Hunt drafts) + a "stranger installs from README in 30 min" dry-run checklist.
+- [x] **D4 — Launch kit.** ✅ `docs/LAUNCH.md`: ready-to-edit **Show HN** (title + body + first-comment), **r/selfhosted**, and **Product Hunt** (tagline/description/topics) drafts — all honest + accurate to current numbers (213 blocks · 153 templates · 109 integrations · 47 objects · MIT · one-container) and the FREE/premium-undecided framing; plus a **launch-day checklist** (cut a tag so the APK+image publish → verify the Release; 30-min stranger-self-host dry run; verify headline numbers; visual kit + hosted demo prep; repo hygiene; posting order/timing) and an honest "what to say if asked" Q&A. Pure docs.
 
 ## Track E — More integrations (free; server-side providers, zero screen cost)
 Same proven pattern as the v9.7 build: each provider is a `reg({...})` in `apps/server/src/providers/registry.ts` (keyless first so it renders immediately; token/OAuth scaffolds light up on connect). Update `registry.test.ts` count + `docs/INTEGRATIONS.md` each batch. ~12–15 providers per batch.
@@ -101,4 +101,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **G3 ✅** ⌘K global search — jump to any board by name + search the 153 templates + Data inlets nav. config 219 tests.
 - **A4 ✅** real PNG PWA icons (192/512 + opaque maskable + opaque apple-touch) from the brand SVG; manifest + index wired; all served 200. Fixes blank installed-app icon.
 - **C2 ✅** tvOS XcodeGen `project.yml` → Apple TV is one-command (`xcodegen generate`) like the other shells; README + .gitignore updated. (On-device signing = Apple acct NEEDS-YOU.)
-- LAST TRACK: C
+- **D4 ✅** launch kit (docs/LAUNCH.md): Show HN / r/selfhosted / Product Hunt drafts + launch-day checklist + honest Q&A.
+- LAST TRACK: D
