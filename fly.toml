@@ -1,0 +1,42 @@
+# Fly.io deploy for GlanceOS. Quick start:
+#   fly launch --copy-config --no-deploy   # creates the app from this file
+#   fly volumes create glanceos_data --size 1 --region <your-region>
+#   fly deploy
+#   fly secrets set GLANCEOS_PUBLIC_URL=https://<your-app>.fly.dev
+# Uses the prebuilt multi-arch image (no build step); data persists on a Fly volume
+# mounted at /data (SQLite + uploads + the auto-generated secret.key).
+
+app = "glanceos"          # change to a unique Fly app name
+primary_region = "iad"    # pick a region near your screens
+
+[build]
+  image = "ghcr.io/devank-yadav/glanceos:latest"
+
+[env]
+  TZ = "UTC"
+  # GLANCEOS_PUBLIC_URL — set as a secret after first deploy (needed for OAuth
+  # redirects + share/QR links): fly secrets set GLANCEOS_PUBLIC_URL=https://<app>.fly.dev
+  # GLANCEOS_SECRET_KEY auto-generates onto /data; set it explicitly if you ever
+  # recreate the volume so encrypted connection tokens stay readable.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"   # screens hold a live SSE connection — don't sleep
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/ready"
+
+[mounts]
+  source = "glanceos_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"   # the image bundles Chromium for e-ink/BMP render; 512mb is tight

@@ -52,7 +52,7 @@ The build loop drives the tracks roughly in this order, but always picks the nex
 ## Track D — GTM / launch kit
 - [ ] **D1 — Visual kit.** Capture 6–8 hero board screenshots + a Studio editing GIF via the real runtime (Preview MCP); embed at top of README + landing.
 - [ ] **D2 — Pricing + positioning page** (SaaS): plans, comparison vs TRMNL/DAKboard, the "open-source core + hosted tiers" story.
-- [ ] **D3 — Deploy config for a hosted demo** (fly.io/render/compose manifests + envs) ready to `apply`; actual deploy + DNS + secrets = NEEDS-YOU.
+- [x] **D3 — Deploy config (one-command hosting).** ✅ `fly.toml` (Fly.io: prebuilt image + `/data` volume + `/ready` checks + always-on for SSE) and `render.yaml` (Render blueprint: image + disk + generated secret + trusted-proxy), plus `docs/DEPLOY.md` consolidating Compose / Fly / Render / any-Docker-host with the contract (port 8080 + `/data` volume + `GLANCEOS_PUBLIC_URL`) and the secret-persistence caveat; README "Host it online" pointer. render.yaml validated (parses); fly.toml standard schema. NEEDS-YOU: a host account + domain + DNS, and (for a public demo) setting `GLANCEOS_PUBLIC_URL` + a seeded read-only demo account.
 - [ ] **D4 — Launch posts** (Show HN / r/selfhosted / Product Hunt drafts) + a "stranger installs from README in 30 min" dry-run checklist.
 
 ## Track E — More integrations (free; server-side providers, zero screen cost)
@@ -95,4 +95,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - Loop set to **ROTATE A→C→D→E→F→G (+H filler)** so platforms/GTM aren't starved (cron 27460db3).
 - **A3 ✅** QR claim deep-link (scan → prefill + auto-submit claim; capture live-verified). config 219 tests.
 - **C1 ✅** release workflow → builds + attaches the Android TV/Fire TV APK to GitHub Releases on each tag (no secrets); androidtv README "Download" section. (CI build runs on the owner's next tag.)
-- LAST TRACK: C
+- **D3 ✅** one-command hosting: fly.toml + render.yaml + docs/DEPLOY.md (Compose/Fly/Render/any-Docker) + README pointer. (Actual deploy/domain = NEEDS-YOU.)
+- LAST TRACK: D

@@ -1,0 +1,27 @@
+# Render.com blueprint for GlanceOS.  Dashboard → New → Blueprint → pick this repo.
+# Runs the prebuilt image; data persists on a Render disk at /data.
+# NOTE: a persistent disk requires a paid Render instance. On the free tier there
+# is no disk and the service sleeps — fine for a quick demo, not for real screens.
+services:
+  - type: web
+    name: glanceos
+    runtime: image
+    image:
+      url: ghcr.io/devank-yadav/glanceos:latest
+    healthCheckPath: /ready
+    envVars:
+      - key: TZ
+        value: UTC
+      # Set to your https URL after the first deploy (OAuth + share/QR links):
+      - key: GLANCEOS_PUBLIC_URL
+        sync: false
+      # Stable across deploys so encrypted tokens stay readable even without a disk:
+      - key: GLANCEOS_SECRET_KEY
+        generateValue: true
+      # Render terminates TLS in front of the app — trust its forwarded headers:
+      - key: GLANCEOS_TRUSTED_PROXIES
+        value: "*"
+    disk:
+      name: glanceos-data
+      mountPath: /data
+      sizeGB: 1
