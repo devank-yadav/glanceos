@@ -25,7 +25,7 @@ If you find yourself adding any of the above to this directory, stop — it belo
 
 - `appinfo.json` — the webOS app manifest. id `com.glanceos.app`, type `web`, main `index.html`.
 - `index.html` — sets `HOST`, then redirects the web view to the runtime in `?tv=1` mode. Contains a guarded, optional luna power call and a single Back-button (461) handler. CSP-friendly and dependency-free.
-- `icon.png` (80×80) and `largeIcon.png` (130×130) — placeholder launcher icons. Replace with real artwork before publishing.
+- `icon.png` (80×80) and `largeIcon.png` (130×130) — GlanceOS brand launcher icons (from `apps/config/public/icon.svg`). Drop in your own to customize.
 
 ### About webOSTV.js
 
@@ -88,5 +88,5 @@ To stop it during testing:
 
 - **Requires LG Developer Mode**, which expires and must be renewed periodically from the LG Developer Mode app, plus a registered LG developer account and a device added via 'ares-setup-device'. This is a sideload, not a Content Store listing.
 - **Not CI-built.** Packaging and installing need a real TV in Developer Mode on your LAN; there is no headless build to wire into CI here.
-- The bundled icons are flat-color placeholders — swap in real 80×80 and 130×130 PNGs before any public release.
+- The bundled icons are the GlanceOS brand mark (80×80 + 130×130, rendered from the source SVG); swap in your own PNGs of the same sizes to rebrand.
 - HTTP-on-LAN is the intended threat model (same as the rest of the fleet, see [ARCHITECTURE](../../docs/ARCHITECTURE.md) and [DEVICE-API](../../docs/DEVICE-API.md)). If your server is HTTPS, set `HOST` to the `https://` URL instead.

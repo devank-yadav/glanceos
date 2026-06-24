@@ -11,13 +11,13 @@
     android:viewportWidth="320"
     android:viewportHeight="180">
     <path
-        android:fillColor="#0B0B0F"
+        android:fillColor="#191919"
         android:pathData="M0,0h320v180h-320z" />
     <path
-        android:fillColor="#3B82F6"
+        android:fillColor="#FAFAFA"
         android:pathData="M44,72 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
     <path
-        android:fillColor="#0B0B0F"
+        android:fillColor="#191919"
         android:pathData="M44,72 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0" />
     <path
         android:fillColor="#FFFFFF"

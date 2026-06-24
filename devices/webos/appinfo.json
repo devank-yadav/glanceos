@@ -7,8 +7,8 @@
   "title": "GlanceOS",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
-  "iconColor": "#101418",
-  "bgColor": "#101418",
+  "iconColor": "#191919",
+  "bgColor": "#191919",
   "disableBackHistoryAPI": true,
   "handlesRelaunch": true
 }

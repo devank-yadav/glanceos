@@ -35,7 +35,7 @@ these to the `.wgt`, it belongs in `apps/screen`, not here.
 | `config.xml` | Tizen web-app manifest: TV profile, internet privilege, `access` origin, fullscreen, app id `GlanceOS0.GlanceOS`, `required_version` 6.0. |
 | `index.html` | Minimal page: a "Loading…" splash that immediately hands off to `main.js`. |
 | `main.js`    | The `HOST` constant, remote-key registration, OS wake-lock, and the redirect to the runtime. |
-| `icon.png`   | 512×512 launcher icon placeholder — replace with your own art.           |
+| `icon.png`   | 512×512 GlanceOS brand launcher icon (from `apps/config/public/icon.svg`) — drop in your own to customize. |
 
 ## Set the host
 

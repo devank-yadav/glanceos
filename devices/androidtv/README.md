@@ -53,8 +53,9 @@ androidtv/
     src/main/java/com/glanceos/tv/MainActivity.kt   the whole app
     src/main/res/values/strings.xml      app_name = "GlanceOS TV"
     src/main/res/values/themes.xml       fullscreen no-action-bar theme
-    src/main/res/drawable/               placeholder banner + adaptive-icon vectors
-    src/main/res/mipmap*/ic_launcher*    placeholder launcher icon
+    src/main/res/drawable-xhdpi/banner.png  brand TV banner (320×180)
+    src/main/res/drawable/               brand banner + adaptive-icon vectors
+    src/main/res/mipmap*/ic_launcher*    brand launcher icon
 ```
 
 ## Prerequisites
@@ -122,18 +123,18 @@ To update later, rebuild and `adb install -r ...` again (the `-r` reinstalls in 
 
 Both deliver standard `KeyboardEvent.key` values from the remote to the page, which is all the web runtime needs.
 
-## Assets (placeholders — swap your own)
+## Assets (real brand art — override to customize)
 
-The repo ships **vector** placeholders so the build is green with no binaries:
+The repo ships the **GlanceOS brand art** (monochrome — `#191919` ground, `#fafafa` mark), generated from the one source mark at `apps/config/public/icon.svg`:
 
-- `res/drawable/banner.xml` — the TV launcher tile. Replace with a real **320×180 PNG** at `res/drawable-xhdpi/banner.png` (a PNG at the same resource name overrides the vector). The manifest references `@drawable/banner`.
-- `res/mipmap*/ic_launcher*` + `res/drawable/ic_launcher_foreground.xml` / `ic_launcher_background.xml` — the launcher icon. For crisp per-density icons, use Android Studio's *Image Asset* wizard (right-click `res` → *New → Image Asset*) to generate proper `mipmap-*dpi` PNGs.
+- `res/drawable-xhdpi/banner.png` — the TV launcher tile (**320×180**, glyph + wordmark lockup). The manifest references `@drawable/banner`; this PNG wins on xhdpi+ TVs, with the brand-coloured `res/drawable/banner.xml` vector as the low-density fallback. Drop your own PNG here to customize.
+- `res/mipmap*/ic_launcher*` + `res/drawable/ic_launcher_foreground.xml` / `ic_launcher_background.xml` — the launcher icon (adaptive vector, brand colours). For crisp per-density raster icons, use Android Studio's *Image Asset* wizard (right-click `res` → *New → Image Asset*) to generate `mipmap-*dpi` PNGs.
 
-These are placeholders only — no binary assets are authored here.
+Regenerate the banner/icons from the source SVG with `sharp` (see the repo's icon-generation note) if you fork the brand.
 
 ## Caveats
 
 - `assembleDebug` produces an **unsigned-for-distribution, debug-signed** APK — fine for personal sideloading to your own stick, not for any store. A real release build (`assembleRelease`) needs **your own keystore**; create one with `keytool -genkeypair -v -keystore glanceos-release.jks -alias glanceos -keyalg RSA -keysize 2048 -validity 10000` and wire it into a `signingConfigs` block (kept out of git — see `.gitignore`).
 - The `gradle-wrapper.jar` (Gradle 8.7, the official one) **is committed**, so `./gradlew assembleDebug` works with no Android Studio and no system Gradle — just a JDK 17 + the SDK.
 - Old Fire TV WebViews are old Chromiums; the GlanceOS runtime already targets `es2017` for exactly this reason, so it runs fine — but very old sticks can be sluggish on heavy boards.
-- This app has not been built or installed on hardware from the authoring environment (no Android toolchain there). The sources are complete and conventional; supply real banner/icon art before it looks finished on the home row.
+- This app has not been built or installed on hardware from the authoring environment (no Android toolchain there). The sources are complete and conventional, and ship real brand banner/icon art (drop-in replaceable).
