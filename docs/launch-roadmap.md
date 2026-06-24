@@ -62,7 +62,7 @@ Same proven pattern as the v9.7 build: each provider is a `reg({...})` in `apps/
 - [ ] **E3** — +~12 more. (continue until breadth is strong; target 120+ providers)
 
 ## Track F — More objects + feature polish (free)
-- [ ] **F1** — Preset "objects" (`integrationObjects.ts`) for many more providers — aim every keyless + popular provider ships ≥1 one-click object; keep the schema-validation + transform-contract tests passing.
+- [x] **F1** — ✅ +22 preset "objects" (25 → **47**) covering every E1/E2 keyless provider (HN, Wikipedia, FX, ISS, spaceflight, holidays, Gutenberg, dictionary, quotes, xkcd, free games, Binance, recipes, cocktails, SpaceX, Coinpaprika, art, poetry, trivia, words, breweries, F1) — each a one-click `+` chip on Connections that copies a pre-bound block to the Studio clipboard. Long-prose scalars (dadjoke/uselessfacts) skipped (don't bind cleanly to a stat). All 9 integrationObjects tests green (schema-validation + transform-contract hold for all 47); config tsc + 219 tests. (More object batches can follow under F for token/OAuth providers.)
 - [ ] **F2** — Studio/editor polish: rough edges + small UX wins (search where missing, default sorts, empty/error/loading states).
 - [ ] **F3** — App-wide consistency & a11y sweep (light+dark): focus states, keyboard-shortcuts help, toasts, error states, mobile.
 
@@ -97,4 +97,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **C1 ✅** release workflow → builds + attaches the Android TV/Fire TV APK to GitHub Releases on each tag (no secrets); androidtv README "Download" section. (CI build runs on the owner's next tag.)
 - **D3 ✅** one-command hosting: fly.toml + render.yaml + docs/DEPLOY.md (Compose/Fly/Render/any-Docker) + README pointer. (Actual deploy/domain = NEEDS-YOU.)
 - **E2 ✅** +12 keyless providers → **109** (TheMealDB, TheCocktailDB, Open Brewery, Art Institute, SpaceX, Coinpaprika, F1, PoetryDB, Datamuse, Open Trivia, Dad Jokes, Random Facts). server 240 tests.
-- LAST TRACK: E
+- **F1 ✅** +22 one-click preset objects → **47** (every E1/E2 keyless provider). config 219 tests; all schema/transform contracts hold.
+- LAST TRACK: F
