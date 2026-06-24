@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -184,12 +184,26 @@ export function buildApp(): Hono<Env> {
     catch { return c.json({ ready: false }, 503); }
   });
 
+  // ---- launch hardening: Secure cookies behind TLS + opaque 500s ----
+  // Cookies get Secure (and we emit HSTS) only when actually served over https
+  // — gating on GLANCEOS_PUBLIC_URL=https… (or GLANCEOS_SECURE_COOKIES=on) so a
+  // plain-http local/dev box still works. 500s return a generic message + a
+  // correlation ref (logged server-side) instead of leaking internal/DB detail.
+  const SECURE_COOKIES =
+    (process.env.GLANCEOS_PUBLIC_URL ?? "").startsWith("https") || process.env.GLANCEOS_SECURE_COOKIES === "on";
+  const serverError = (c: Context, e: unknown): Response => {
+    const ref = randomUUID().slice(0, 8);
+    console.error(`[500 ${ref}]`, e);
+    return c.json({ error: "internal error", ref }, 500);
+  };
+
   // ---- security headers (+ CSP on document/asset responses) ----
   app.use("*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
     c.header("X-Frame-Options", "SAMEORIGIN");
     c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (SECURE_COOKIES) c.header("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
     const path = c.req.path;
     if (!path.startsWith("/api") && !path.startsWith("/uploads")) {
       // Casting (opt-in) needs the Google Cast SDKs from gstatic; only widen the
@@ -297,6 +311,10 @@ export function buildApp(): Hono<Env> {
   app.use("/api/inlets", limiter("inlets", 60, 60_000, userKey));
   app.use("/api/automations", limiter("automations", 60, 60_000, userKey));
   app.use("/api/hooks/*", limiter("hooks", 240, 60_000, (c) => c.req.path)); // per-secret (the path)
+  // Public (unauthenticated) share endpoints: throttle scraping per IP, and
+  // throttle share-board password guesses per board token (brute-force defense).
+  app.use("/api/public/*", limiter("public", 240, 60_000));
+  app.use("/api/public/board/:token/unlock", limiter("unlock", 12, 60_000, (c) => c.req.param("token") || "?"));
   // Account mutations are brute-force / abuse targets: cap per user.
   app.use("/api/account/password", limiter("acct-pw", 5, 60_000, userKey));
   app.use("/api/account/api-keys", limiter("apikeys", 20, 60_000, userKey));
@@ -305,8 +323,8 @@ export function buildApp(): Hono<Env> {
   const issueSession = (c: Context, userId: string) => {
     const session = createSession(userId);
     const maxAge = Math.floor((session.expiresAt - Date.now()) / 1000);
-    setCookie(c, SESSION_COOKIE, session.token, { httpOnly: true, sameSite: "Lax", path: "/", maxAge });
-    setCookie(c, CSRF_COOKIE, csrfFor(session.token), { httpOnly: false, sameSite: "Lax", path: "/", maxAge }); // readable by the config app
+    setCookie(c, SESSION_COOKIE, session.token, { httpOnly: true, secure: SECURE_COOKIES, sameSite: "Lax", path: "/", maxAge });
+    setCookie(c, CSRF_COOKIE, csrfFor(session.token), { httpOnly: false, secure: SECURE_COOKIES, sameSite: "Lax", path: "/", maxAge }); // readable by the config app
   };
 
   // ---- auth ----
@@ -434,7 +452,7 @@ export function buildApp(): Hono<Env> {
       );
       return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": "no-store" } });
     } catch (e) {
-      return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);
+      return serverError(c, e);
     }
   });
 
@@ -597,7 +615,7 @@ export function buildApp(): Hono<Env> {
       const { buf } = await renderImage(baseUrl(), payload, profile.width, profile.height, "png", `prev:${device.id}:${layoutId}:${version}`, toDitherOpts(safeJsonObj(device.render_opts)));
       return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": "image/png", "cache-control": "no-store" } });
     } catch (e) {
-      return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);
+      return serverError(c, e);
     }
   });
 
@@ -923,7 +941,7 @@ export function buildApp(): Hono<Env> {
     if (!found || shareExpired(found.expiresAt)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { password?: string };
     if (!verifySharePassword(found.pwHash, body.password)) return c.json({ error: "password_required" }, 401);
-    setCookie(c, shareCookie(token), shareUnlockSig(token), { httpOnly: true, sameSite: "Lax", path: "/", maxAge: 12 * 60 * 60 });
+    setCookie(c, shareCookie(token), shareUnlockSig(token), { httpOnly: true, secure: SECURE_COOKIES, sameSite: "Lax", path: "/", maxAge: 12 * 60 * 60 });
     return c.json({ ok: true });
   });
 
@@ -963,7 +981,7 @@ export function buildApp(): Hono<Env> {
       const cache = found.pwHash ? "private, max-age=300" : "public, max-age=300";
       return new Response(Uint8Array.from(buf), { status: 200, headers: { "content-type": contentType, "cache-control": cache } });
     } catch (e) {
-      return c.json({ error: String(e instanceof Error ? e.message : e) }, 500);
+      return serverError(c, e);
     }
   });
 
