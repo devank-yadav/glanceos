@@ -13,7 +13,7 @@ const FEATURES = [
   { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
   { icon: Icon.pencil, title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
   { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
-  { icon: Icon.link, title: "Connect 85 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 80 more. Many need no login; tokens stay encrypted server-side." },
+  { icon: Icon.link, title: "Connect 121 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 115 more. Many need no login; tokens stay encrypted server-side." },
   { icon: Icon.convert, title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
   { icon: Icon.layers, title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
   { icon: Icon.home, title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
@@ -136,6 +136,9 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a class="btn glass-btn lg" href={screenModeHref()}>
             Open screen mode →
           </a>
+          <a class="btn glass-btn lg" href="https://github.com/devank-yadav/glanceos" target="_blank" rel="noopener">
+            View on GitHub ↗
+          </a>
         </div>
         <a class="hero-howlink" href="#how">or see how it works ↓</a>
         <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
@@ -204,7 +207,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
 
       <footer class="landing-foot">
         <span class="brand">glanceos</span>
-        <span class="muted">MIT licensed · self-hosted · made for quiet rooms</span>
+        <span class="muted">MIT licensed · self-hosted · made for quiet rooms · <a href="https://github.com/devank-yadav/glanceos" target="_blank" rel="noopener">GitHub</a></span>
       </footer>
     </div>
   );
