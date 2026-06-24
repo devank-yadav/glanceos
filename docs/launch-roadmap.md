@@ -69,7 +69,7 @@ Same proven pattern as the v9.7 build: each provider is a `reg({...})` in `apps/
 ## Track G — Important new features (owner: "add features you judge important"; all FREE)
 - [ ] **G1** — Board version history / restore (deferred Studio direction; high-trust editor feature).
 - [ ] **G2** — Multi-page boards + rotation (deferred Studio direction).
-- [ ] **G3** — Global search / command-palette coverage across boards, templates, integrations, blocks.
+- [x] **G3** — ✅ ⌘K command palette is now a real **global search**: it indexes the user's **boards** (fetched from `/api/layouts` → "Open <name>" jumps straight to `/edit/:id`) and the full **153-template gallery** (type a name → opens the gallery), plus a new **Data inlets** nav entry. Boards refresh on auth + route change. config tsc + 219 tests; app boots clean (live smoke). (Follow-on: deep-link a template to its preview; integrations/blocks in the palette if wanted.)
 - [ ] **G4** — (loop adds more as the audit surfaces them.)
 
 ## Track H — Continuous audit & bug-hunt (NEVER "done" — owner: "don't stop, keep finding & fixing")
@@ -98,4 +98,5 @@ The loop must not idle. When A/C/D/E/F/G have no ready batch, run an **audit/bug
 - **D3 ✅** one-command hosting: fly.toml + render.yaml + docs/DEPLOY.md (Compose/Fly/Render/any-Docker) + README pointer. (Actual deploy/domain = NEEDS-YOU.)
 - **E2 ✅** +12 keyless providers → **109** (TheMealDB, TheCocktailDB, Open Brewery, Art Institute, SpaceX, Coinpaprika, F1, PoetryDB, Datamuse, Open Trivia, Dad Jokes, Random Facts). server 240 tests.
 - **F1 ✅** +22 one-click preset objects → **47** (every E1/E2 keyless provider). config 219 tests; all schema/transform contracts hold.
-- LAST TRACK: F
+- **G3 ✅** ⌘K global search — jump to any board by name + search the 153 templates + Data inlets nav. config 219 tests.
+- LAST TRACK: G

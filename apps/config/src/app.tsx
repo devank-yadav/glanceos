@@ -21,6 +21,7 @@ import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
 import { navigate, useRoute } from "./router";
+import { STARTER_TEMPLATES } from "./starterTemplates";
 
 // The Studio (and zod with it) lives in its own chunk: the shell loads tiny,
 // and we warm the chunk during idle time so opening a board feels instant.
@@ -141,6 +142,15 @@ export function App() {
 
   const logout = () => api.post("/api/auth/logout").then(refreshAuth);
 
+  // Global search: index the user's boards so ⌘K can jump straight to any of them.
+  const [boards, setBoards] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!status?.authed) { setBoards([]); return; }
+    api.get<{ id: number; name: string }[]>("/api/layouts")
+      .then((l) => setBoards(l.map((b) => ({ id: b.id, name: b.name }))))
+      .catch(() => {});
+  }, [status?.authed, route.name]);
+
   const commands = useMemo<Command[]>(() => [
     // primary destinations (the calm 3) + the most common action
     { id: "new-board", label: "New board", hint: "Action", icon: <Icon.plus />, run: async () => {
@@ -159,7 +169,12 @@ export function App() {
     { id: "help-onboard", label: "Show the setup guide", hint: "Help", icon: <Icon.help />, run: () => { try { localStorage.removeItem(DISMISS_KEY); } catch { /* ignore */ } setOnboard(true); } },
     { id: "theme", label: "Toggle theme", hint: "Appearance", icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, run: cycleTheme },
     { id: "logout", label: "Log out", hint: "Account", icon: <Icon.x />, run: logout },
-  ], [theme]);
+    { id: "nav-inlets", label: "Data inlets", hint: "Page", icon: <Icon.link />, run: () => navigate("/inlets") },
+    // Global search — jump straight to any of your boards…
+    ...boards.map((b) => ({ id: `board-${b.id}`, label: b.name || "Untitled board", hint: "Board", icon: <Icon.grid />, run: () => navigate(`/edit/${b.id}`) })),
+    // …or find a starter template by name (opens the gallery).
+    ...STARTER_TEMPLATES.map((t) => ({ id: `tpl-${t.id}`, label: t.name, hint: `Template · ${t.category}`, icon: <Icon.convert />, run: () => navigate("/hub") })),
+  ], [theme, boards]);
 
   if (!status) return <Splash />;
 
