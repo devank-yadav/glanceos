@@ -656,28 +656,6 @@ export function BoardSettings({ doc, commitDoc }: { doc: LayoutT; commitDoc: (do
           </label>
         )}
       </div>
-      <hr class="board-rule" />
-      <p class="muted section-label">Rotation <span class="muted">— whole board</span></p>
-      <div class="row wrap">
-        <label class="field">
-          <span>Default dwell <span class="muted">(secs/page)</span></span>
-          <input
-            type="number" min={3} max={3600} step={1}
-            value={typeof doc.pageRotateSeconds === "number" ? doc.pageRotateSeconds : ""}
-            placeholder="10"
-            onInput={(e) => { const v = Number((e.currentTarget as HTMLInputElement).value); commitDoc({ ...structuredClone(doc), pageRotateSeconds: Number.isFinite(v) && v >= 3 ? Math.min(3600, Math.floor(v)) : undefined }); }}
-          />
-        </label>
-        <label class="field">
-          <span>Transition <span class="muted">({doc.pageTransitionMs ?? 350} ms)</span></span>
-          <input
-            type="range" min={0} max={2000} step={50}
-            value={doc.pageTransitionMs ?? 350}
-            onInput={(e) => { const v = Number((e.currentTarget as HTMLInputElement).value); commitDoc({ ...structuredClone(doc), pageTransitionMs: v === 350 ? undefined : v }); }}
-          />
-        </label>
-      </div>
-      {(doc.pages?.length ?? 0) === 0 && <p class="muted hint">Add a second page (top bar) to make this board rotate.</p>}
     </section>
   );
 }

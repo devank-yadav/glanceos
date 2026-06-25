@@ -1199,21 +1199,23 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => { pushRecentBlock(type); insertBlock(type, editRows().length, !!TEXT_PROP[type]); }}
           />
-          <button class="settings-toggle" onClick={() => setPagesOpen((v) => !v)}>
-            <Icon.layers /> <span>Pages{pageCount > 1 ? ` (${pageCount})` : ""}</span>
-            <Icon.chevron class={`chevron${pagesOpen ? " open" : ""}`} />
-          </button>
-          {pagesOpen && <PagesPanel doc={state.present} activePage={Math.min(activePage, pageCount - 1)} setActivePage={setActivePage} commitDoc={commitDoc} />}
-          <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
-            <Icon.list /> <span>Objects</span>
-            <Icon.chevron class={`chevron${objectsOpen ? " open" : ""}`} />
-          </button>
-          {objectsOpen && <ObjectsPanel doc={state.present} stageEdit={stageEdit} selectedIds={state.selectedIds} onSelect={(id) => dispatch({ type: "select", id })} />}
-          <button class="settings-toggle" onClick={() => setBoardSettingsOpen((v) => !v)}>
-            <Icon.settings /> <span>Board settings</span>
-            <Icon.chevron class={`chevron${boardSettingsOpen ? " open" : ""}`} />
-          </button>
-          {boardSettingsOpen && <BoardSettings doc={state.present} commitDoc={commitDoc} />}
+          <div class="studio-side-sections">
+            <button class="settings-toggle" onClick={() => setPagesOpen((v) => !v)}>
+              <Icon.layers /> <span>Pages{pageCount > 1 ? ` (${pageCount})` : ""}</span>
+              <Icon.chevron class={`chevron${pagesOpen ? " open" : ""}`} />
+            </button>
+            {pagesOpen && <PagesPanel doc={state.present} activePage={Math.min(activePage, pageCount - 1)} setActivePage={setActivePage} commitDoc={commitDoc} />}
+            <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
+              <Icon.list /> <span>Objects</span>
+              <Icon.chevron class={`chevron${objectsOpen ? " open" : ""}`} />
+            </button>
+            {objectsOpen && <ObjectsPanel doc={state.present} stageEdit={stageEdit} selectedIds={state.selectedIds} onSelect={(id) => dispatch({ type: "select", id })} />}
+            <button class="settings-toggle" onClick={() => setBoardSettingsOpen((v) => !v)}>
+              <Icon.settings /> <span>Board settings</span>
+              <Icon.chevron class={`chevron${boardSettingsOpen ? " open" : ""}`} />
+            </button>
+            {boardSettingsOpen && <BoardSettings doc={state.present} commitDoc={commitDoc} />}
+          </div>
         </aside>
       </div>
       <div class="drag-chip drag-card" ref={ghostRef} />

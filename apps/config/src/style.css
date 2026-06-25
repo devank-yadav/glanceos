@@ -2242,6 +2242,12 @@ ul.tasks li:last-child {
 .pages-side-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .pages-li { border-radius: var(--r-sm); }
 .pages-li.on { background: var(--soft); }
+.pages-li.dragging { opacity: 0.4; }
+.pages-li.drag-over { box-shadow: inset 0 2px 0 var(--indigo); } /* drop indicator above the row */
+.pages-li[draggable="true"] { cursor: grab; }
+.pages-grip { display: inline-flex; align-items: center; flex: none; color: var(--faint); padding-left: 2px; }
+.pages-grip svg { width: 13px; height: 13px; }
+.pages-li[draggable="false"] .pages-grip { opacity: 0.25; }
 .pages-row { display: flex; align-items: center; gap: 4px; }
 .pages-row-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;
@@ -2263,6 +2269,7 @@ ul.tasks li:last-child {
 .pages-row-tools .ghost.sm:disabled { opacity: 0.3; cursor: default; }
 .pages-row-tools .ghost.sm svg { width: 13px; height: 13px; }
 .pages-row-tools .ghost.sm.danger:hover:not(:disabled) { color: var(--bad); }
+.pages-row-tools .ghost.sm.on { color: var(--indigo); background: color-mix(in srgb, var(--indigo) 12%, transparent); }
 .pages-add-row {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
   margin-top: 2px; padding: 6px 12px 6px 9px;
@@ -2271,23 +2278,18 @@ ul.tasks li:last-child {
 }
 .pages-add-row:hover { background: var(--hover-bg); }
 .pages-add-row svg { width: 14px; height: 14px; }
-/* "Base" pill on page 1 */
-.page-base-tag {
-  flex: none; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 1px 5px; border-radius: 999px;
-  background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--muted);
-}
 /* schedule / custom-dwell status glyph — pure CSS, from page settings only */
 .page-glyph { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .pg-cal { width: 14px; height: 5px; border-radius: 1px; opacity: 0.85; background: repeating-linear-gradient(to right, var(--indigo) 0 2px, transparent 2px 4px); }
 .pg-dwell { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--indigo); }
-/* active page's settings — shown below the page list (the list stays compact for
-   one-click switching), separated by a rule and headed with the page name */
-.pages-pop { display: flex; flex-direction: column; gap: 9px; padding: 10px 2px 4px; margin-top: 6px; border-top: 1px solid var(--rule); }
+/* a page's settings, expanded inline under its row when the gear is open (indented
+   under the row content; schedule fields are gated behind the checkbox) */
+.pages-pop { display: flex; flex-direction: column; gap: 9px; padding: 8px 8px 10px 24px; margin-top: 2px; border-top: 1px solid var(--rule); }
 .pages-pop .row.gap { flex-wrap: wrap; row-gap: 6px; }
-.pages-set-head { display: flex; align-items: center; gap: 6px; }
-.pages-set-name { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pages-pop .field { gap: 5px; }
+.check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--fg); cursor: pointer; line-height: 1.4; }
+.check-row input { margin-top: 2px; flex: none; accent-color: var(--indigo); }
+.pages-schedule { display: flex; flex-direction: column; gap: 8px; margin-left: 3px; padding-left: 8px; border-left: 2px solid var(--rule); }
 .pages-pop .field input[type="text"],
 .pages-pop .field input[type="number"],
 .pages-pop .field input[type="time"],
@@ -2312,8 +2314,14 @@ ul.tasks li:last-child {
 .day-chip:hover { background: var(--hover-bg); color: var(--fg); }
 .day-chip.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
 
-/* divider before the Rotation group in Board settings */
-.board-rule { border: none; border-top: 1px solid var(--rule); margin: 8px 0 2px; }
+/* whole-board rotation group at the bottom of the Pages section (default dwell +
+   transition) — unified here with the per-page "Show for" override */
+.pages-rotation { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.pages-rotation .section-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; color: var(--faint); margin: 0; }
+.pages-rotation .field { gap: 5px; }
+.pages-rotation .num { width: 76px; }
+.pages-rotation .hint { font-size: 11px; color: var(--muted); margin: 0; }
+.pages-rotation .field input[type="number"] { padding: 6px 9px; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--input-bg); color: var(--fg); font: inherit; }
 
 /* The blocks panel is always docked + opaque (a glassy/translucent panel was
    unreadable in dark mode); the top-bar toggle collapses its width to hide it. */
@@ -2439,8 +2447,8 @@ ul.tasks li:last-child {
 .palette {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  flex: 1;
+  min-height: 140px;
+  flex: 1 1 0;
   padding: 10px 14px 0;
 }
 
@@ -2536,8 +2544,18 @@ ul.tasks li:last-child {
 .studio-side .properties {
   flex: none;
   padding: 4px 14px 14px;
-  max-height: 40%;
+}
+/* The collapsible sections (Pages / Objects / Board settings) share ONE scroll area
+   below the palette, so opening all three scrolls instead of clipping + collapsing the
+   palette (which had each panel capped at 40% → 120% overflow under overflow:hidden). */
+.studio-side-sections {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 58%;
   overflow-y: auto;
+  border-top: 1px solid var(--rule);
 }
 
 .stage-pane.zoomed {
