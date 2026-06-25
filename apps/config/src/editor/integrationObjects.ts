@@ -148,6 +148,16 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "postcodesio", id: "nearest", label: "Nearby postcodes (UK)", description: "Closest UK postcodes to a point", blockType: "bulletList", sourceKind: "postcodesio.nearest", query: { lat: "51.5074", lon: "-0.1278", max: "8" }, map: LIST({ text: "title" }, "items"), defaultH: 7 },
   { providerId: "usgswater", id: "streamflow", label: "River streamflow", description: "Latest USGS streamflow for a site", blockType: "bulletList", sourceKind: "usgswater.streamflow", query: { sites: "01646500" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 6 },
   { providerId: "citypopulation", id: "cities", label: "City populations", description: "World cities and their populations", blockType: "bulletList", sourceKind: "citypopulation.cities", query: { max: "25" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
+
+  // ---- E7 keyless providers (render immediately) ----
+  { providerId: "astros", id: "people", label: "People in space", description: "Astronauts currently in orbit", blockType: "bulletList", sourceKind: "astros.people", query: {}, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 7 },
+  { providerId: "tfl", id: "status", label: "Tube line status", description: "London Underground line status", blockType: "bulletList", sourceKind: "tfl.status", query: { mode: "tube" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "citybikes", id: "networks", label: "Bike-share networks", description: "Bike-share systems worldwide", blockType: "bulletList", sourceKind: "citybikes.networks", query: { max: "20" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 9 },
+  { providerId: "wikitrends", id: "top", label: "Most-read on Wikipedia", description: "Yesterday's most-viewed articles", blockType: "bulletList", sourceKind: "wikitrends.top", query: { lang: "en", max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
+  { providerId: "exchangeapi", id: "rates", label: "Exchange rates", description: "Rates from a base currency", blockType: "bulletList", sourceKind: "exchangeapi.rates", query: { base: "usd", targets: "eur,gbp,jpy,inr,btc" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 6 },
+  { providerId: "rickandmorty", id: "characters", label: "Rick & Morty characters", description: "Characters, optionally by name", blockType: "bulletList", sourceKind: "rickandmorty.characters", query: { name: "", max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "metno", id: "now", label: "Weather now (MET Norway)", description: "Current temperature & wind", blockType: "stat", sourceKind: "metno.now", query: { lat: "51.5074", lon: "-0.1278" }, map: VALUE(), props: { label: "weather" }, defaultH: 4 },
+  { providerId: "openfda", id: "recalls", label: "Food recalls (FDA)", description: "Latest US food enforcement actions", blockType: "bulletList", sourceKind: "openfda.recalls", query: { max: "10" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
 ];
 
 /** Presets for a given provider id (drives the Integrations page "objects" section). */
