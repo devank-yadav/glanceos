@@ -158,6 +158,17 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "rickandmorty", id: "characters", label: "Rick & Morty characters", description: "Characters, optionally by name", blockType: "bulletList", sourceKind: "rickandmorty.characters", query: { name: "", max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
   { providerId: "metno", id: "now", label: "Weather now (MET Norway)", description: "Current temperature & wind", blockType: "stat", sourceKind: "metno.now", query: { lat: "51.5074", lon: "-0.1278" }, map: VALUE(), props: { label: "weather" }, defaultH: 4 },
   { providerId: "openfda", id: "recalls", label: "Food recalls (FDA)", description: "Latest US food enforcement actions", blockType: "bulletList", sourceKind: "openfda.recalls", query: { max: "10" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
+
+  // ---- E8 keyless providers (render immediately) ----
+  { providerId: "kraken", id: "ticker", label: "Crypto ticker", description: "Last price for a Kraken pair", blockType: "stat", sourceKind: "kraken.ticker", query: { pair: "XBTUSD" }, map: VALUE(), props: { label: "crypto" }, defaultH: 4 },
+  { providerId: "feargreed", id: "index", label: "Fear & Greed", description: "Crypto market sentiment index", blockType: "stat", sourceKind: "feargreed.index", query: {}, map: VALUE(), props: { label: "fear & greed" }, defaultH: 4 },
+  { providerId: "bitpay", id: "rates", label: "BTC rates", description: "1 BTC in your currencies", blockType: "bulletList", sourceKind: "bitpay.rates", query: { targets: "USD,EUR,GBP,JPY,INR" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 6 },
+  { providerId: "launchlibrary", id: "upcoming", label: "Rocket launches", description: "Upcoming launches with dates", blockType: "bulletList", sourceKind: "launchlibrary.upcoming", query: { max: "6" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "nobel", id: "prizes", label: "Nobel laureates", description: "Laureates for a year", blockType: "bulletList", sourceKind: "nobel.prizes", query: { max: "10" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "openalex", id: "works", label: "Top-cited papers", description: "Most-cited scholarly works", blockType: "bulletList", sourceKind: "openalex.works", query: { q: "", max: "8" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "inaturalist", id: "observations", label: "Nature spotted", description: "Recent iNaturalist observations", blockType: "bulletList", sourceKind: "inaturalist.observations", query: { max: "10" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
+  { providerId: "disney", id: "characters", label: "Disney characters", description: "Characters, optionally by name", blockType: "bulletList", sourceKind: "disney.characters", query: { name: "", max: "10" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "superhero", id: "stats", label: "Superhero stats", description: "Heroes & their power score", blockType: "bulletList", sourceKind: "superhero.all", query: { q: "", max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
 ];
 
 /** Presets for a given provider id (drives the Integrations page "objects" section). */
