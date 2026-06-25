@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -15,6 +15,7 @@ import {
   isUserAdmin, registrationOpen, sessionUserId, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dumpUser, importUser } from "./backup";
+import { injectAbsoluteOg } from "./ogmeta";
 import {
   createGroup, deleteGroup, getGroupRow, getOwnedGroup, listGroups, listGroupSchedules,
   setDeviceGroup, setGroupSchedules, updateGroup, type GroupSchedule,
@@ -1366,7 +1367,20 @@ ${og}
   if (existsSync(configDist)) {
     const root = relative(process.cwd(), configDist);
     app.use("/*", serveStatic({ root }));
-    app.get("*", serveStatic({ path: join(root, "index.html") }));
+    // SPA fallback for the config app. When GLANCEOS_PUBLIC_URL is set we serve the
+    // shell with ABSOLUTE og:url/og:image so strict social scrapers unfurl the card
+    // (relative `/og.png` resolves against the page origin for most, not all). The
+    // dist is immutable post-build, so read + transform once at boot; fall back to
+    // static serving if the read fails.
+    const indexHtmlPath = join(root, "index.html");
+    const publicUrl = process.env.GLANCEOS_PUBLIC_URL?.replace(/\/+$/, "") ?? "";
+    let shellHtml = "";
+    try {
+      shellHtml = readFileSync(indexHtmlPath, "utf8");
+      if (publicUrl) shellHtml = injectAbsoluteOg(shellHtml, publicUrl);
+    } catch { shellHtml = ""; }
+    if (shellHtml) app.get("*", (c) => c.html(shellHtml));
+    else app.get("*", serveStatic({ path: indexHtmlPath }));
   }
 
   return app;
