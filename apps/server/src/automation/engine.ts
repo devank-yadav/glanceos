@@ -146,6 +146,14 @@ export function evaluate(
     // The "held for N minutes" verdict is precomputed in the tick layer (resolveSustained)
     // and threaded in by content key, so evaluate stays pure/total — like trend.
     case "sustained": return sustained?.[sustainedKey(cond)] ?? false;
+    // Pure clock gate: in the daily [startMin,endMin) window (wrapping past midnight
+    // when end <= start) on an allowed weekday. Reads only ctx.time → total.
+    case "timeWindow": {
+      const mask = cond.daysMask ?? 127;
+      if (((mask >> ctx.time.weekday) & 1) === 0) return false;
+      const t = ctx.time.minuteOfDay, s = cond.startMin, e = cond.endMin;
+      return s <= e ? t >= s && t < e : t >= s || t < e;
+    }
     case "field": {
       if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") return (trend?.[cond.field] ?? null) === cond.op;
       if (cond.op === "stale") { const ms = staleMs?.[cond.field]; const min = num(cond.value) ?? 0; return ms != null && ms >= min * 60_000; }

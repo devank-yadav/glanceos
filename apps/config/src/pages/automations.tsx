@@ -23,6 +23,7 @@ type Cond =
   | { type: "any"; conditions: Cond[] }
   | { type: "not"; condition: Cond }
   | { type: "sustained"; minutes: number; condition: Cond } // v7.0 — engine-supported; preserved on round-trip
+  | { type: "timeWindow"; startMin: number; endMin: number; daysMask?: number } // gate to a daily time window
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string }
@@ -160,6 +161,7 @@ const OBJECT_ACTIONS: { id: string; label: string }[] = [
 ];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const blankField = (): Cond => ({ type: "field", field: "data.", op: "eq", value: "" });
+const blankTimeWindow = (): Cond => ({ type: "timeWindow", startMin: 540, endMin: 1020, daysMask: 127 }); // 09:00–17:00, every day
 const defaultAction = (kind: string, objects?: ObjOption[]): Action => {
   const o = objects?.find((x) => x.settable); // settable object for set-actions
   const anyObj = objects?.[0]; // any named object for show/hide
@@ -465,6 +467,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
       if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value), value2: coerce(c.value2) };
       if (c.type === "not") return { type: "not", condition: norm(c.condition) };
       if (c.type === "sustained") return { type: "sustained", minutes: c.minutes, condition: norm(c.condition) }; // preserve engine sustained nodes
+      if (c.type === "timeWindow") return { type: "timeWindow", startMin: c.startMin, endMin: c.endMin, daysMask: c.daysMask ?? 127 };
       return c.type === "all" ? { type: "all", conditions: c.conditions.map(norm) } : { type: "any", conditions: c.conditions.map(norm) };
     };
     const root = a.conditions;
@@ -705,6 +708,7 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "all", conditions: [] }]))}>+ group</button>
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "not", condition: blankField() }]))}>+ not</button>
           <button class="ghost" onClick={() => onChange(withKids([...group.conditions, { type: "sustained", minutes: 5, condition: blankField() }]))}>+ held for…</button>
+          <button class="ghost" onClick={() => onChange(withKids([...group.conditions, blankTimeWindow()]))}>+ between hours</button>
         </div>
       </div>
     );
@@ -725,6 +729,25 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
         <input type="number" min="1" max="1440" step="1" style={{ width: "4rem" }} value={node.minutes} onInput={(e) => onChange({ type: "sustained", minutes: Math.round(Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 1))), condition: node.condition })} />
         <span class="muted">min, while</span>
         <div class="grow"><ConditionNode node={node.condition} objects={objects} onChange={(n) => onChange({ type: "sustained", minutes: node.minutes, condition: n })} /></div>
+        {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
+      </div>
+    );
+  }
+  if (node.type === "timeWindow") {
+    const tw = node;
+    const mask = tw.daysMask ?? 127;
+    return (
+      <div class="cond-not">
+        <span class="cond-not-label">BETWEEN</span>
+        <input type="time" value={minToTime(tw.startMin)} onInput={(e) => onChange({ ...tw, startMin: timeToMin((e.currentTarget as HTMLInputElement).value) })} />
+        <span class="muted">and</span>
+        <input type="time" value={minToTime(tw.endMin)} onInput={(e) => onChange({ ...tw, endMin: timeToMin((e.currentTarget as HTMLInputElement).value) })} />
+        <div class="row" style={{ gap: "4px" }}>
+          {DAYS.map((d, i) => {
+            const on = (mask >> i) & 1;
+            return <button key={d} class={`day-toggle ${on ? "on" : ""}`} onClick={() => onChange({ ...tw, daysMask: mask ^ (1 << i) })}>{d}</button>;
+          })}
+        </div>
         {onRemove && <button class="ghost icon-btn" onClick={onRemove}>×</button>}
       </div>
     );

@@ -21,7 +21,12 @@ export type ConditionT =
   | { type: "not"; condition: ConditionT }
   // v7.0 — true only once the inner condition has held continuously for `minutes`
   // ("I've been gone 30 min", "CPU > 90% for 5 min"). Debounces twitchy signals.
-  | { type: "sustained"; minutes: number; condition: ConditionT };
+  | { type: "sustained"; minutes: number; condition: ConditionT }
+  // Gate to a daily time window in the user's timezone (e.g. office hours). startMin/
+  // endMin are minute-of-day [0,1439]; the window WRAPS past midnight when endMin <=
+  // startMin (22:00→06:00). daysMask is a bit per weekday (Sun=bit0 … Sat=bit6);
+  // absent = every day. A pure clock gate — references no data, fetches nothing.
+  | { type: "timeWindow"; startMin: number; endMin: number; daysMask?: number };
 
 const FieldCondition = z.object({
   type: z.literal("field"),
@@ -38,6 +43,7 @@ export const Condition: z.ZodType<ConditionT> = z.lazy(() =>
     z.object({ type: z.literal("any"), conditions: z.array(Condition).max(25) }),
     z.object({ type: z.literal("not"), condition: Condition }),
     z.object({ type: z.literal("sustained"), minutes: z.number().int().min(1).max(1440), condition: Condition }),
+    z.object({ type: z.literal("timeWindow"), startMin: z.number().int().min(0).max(1439), endMin: z.number().int().min(0).max(1439), daysMask: z.number().int().min(0).max(127).default(127) }),
   ]),
 ) as z.ZodType<ConditionT>;
 

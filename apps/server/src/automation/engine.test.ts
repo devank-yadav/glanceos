@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ComparatorT, ConditionT } from "@glanceos/schema";
+import { Condition } from "@glanceos/schema";
 
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-engine-"));
 process.env.GLANCEOS_RATE_LIMIT = "off";
@@ -24,6 +25,42 @@ const ctx = (over: Partial<{ data: Record<string, unknown>; webhook: unknown; de
   ({ data: { temp: 30, status: "open", tags: ["a", "b"] }, webhook: { value: 5 }, device: { online: true }, time: { hour: 9, minute: 0, minuteOfDay: 540, weekday: 1, ts: 1_700_000_000_000 }, objects: {}, ...over }) as Parameters<typeof evaluate>[1];
 
 const field = (f: string, op: ComparatorT, value?: unknown): ConditionT => ({ type: "field", field: f, op, value });
+
+describe("evaluate — timeWindow gate (pure clock)", () => {
+  const tw = (startMin: number, endMin: number, daysMask?: number): ConditionT => ({ type: "timeWindow", startMin, endMin, daysMask });
+  const at = (minuteOfDay: number, weekday = 3) =>
+    ({ ...ctx(), time: { hour: Math.floor(minuteOfDay / 60), minute: minuteOfDay % 60, minuteOfDay, weekday, ts: 0 } }) as Parameters<typeof evaluate>[1];
+  it("matches inside a daytime window, exclusive of the end", () => {
+    expect(evaluate(tw(540, 1020), at(600))).toBe(true); // 10:00 in 09:00–17:00
+    expect(evaluate(tw(540, 1020), at(540))).toBe(true); // 09:00 inclusive start
+    expect(evaluate(tw(540, 1020), at(480))).toBe(false); // 08:00 before
+    expect(evaluate(tw(540, 1020), at(1020))).toBe(false); // 17:00 end-exclusive
+    expect(evaluate(tw(540, 1020), at(1080))).toBe(false); // 18:00 after
+  });
+  it("wraps past midnight when end <= start", () => {
+    const overnight = tw(1320, 360); // 22:00 → 06:00
+    expect(evaluate(overnight, at(1380))).toBe(true); // 23:00
+    expect(evaluate(overnight, at(60))).toBe(true); // 01:00
+    expect(evaluate(overnight, at(720))).toBe(false); // 12:00
+  });
+  it("respects the weekday mask (Mon–Fri = 0b0111110)", () => {
+    const weekdays = tw(540, 1020, 0b0111110);
+    expect(evaluate(weekdays, at(600, 3))).toBe(true); // Wed in window
+    expect(evaluate(weekdays, at(600, 0))).toBe(false); // Sun excluded
+    expect(evaluate(weekdays, at(600, 6))).toBe(false); // Sat excluded
+  });
+  it("absent daysMask means every day", () => {
+    expect(evaluate(tw(540, 1020), at(600, 0))).toBe(true); // Sunday still matches
+  });
+  it("the schema validates it, defaults daysMask to 127, and bounds the minutes", () => {
+    const parsed = Condition.parse({ type: "timeWindow", startMin: 540, endMin: 1020 }) as Extract<ConditionT, { type: "timeWindow" }>;
+    expect(parsed.daysMask).toBe(127); // default = every day
+    expect(Condition.safeParse({ type: "timeWindow", startMin: -1, endMin: 1020 }).success).toBe(false);
+    expect(Condition.safeParse({ type: "timeWindow", startMin: 0, endMin: 1440 }).success).toBe(false);
+    // nests inside boolean groups like any other condition
+    expect(Condition.safeParse({ type: "all", conditions: [{ type: "timeWindow", startMin: 0, endMin: 60 }, { type: "field", field: "data.x", op: "eq", value: 1 }] }).success).toBe(true);
+  });
+});
 
 describe("evaluate — comparators (pure & total)", () => {
   it("eq/ne with loose scalar coercion", () => {
