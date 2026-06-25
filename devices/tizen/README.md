@@ -39,7 +39,14 @@ these to the `.wgt`, it belongs in `apps/screen`, not here.
 
 ## Set the host
 
-Open `main.js` and change the one line near the top:
+**On first launch the TV shows a one-time setup screen** — type your GlanceOS
+server address (e.g. `http://192.168.1.50:8080`) and press Connect. It's
+remembered in the webview's `localStorage`, so **you do not have to edit the
+code or rebuild the `.wgt` per deployment**. To change it later, relaunch the app
+with `?setup` in the URL (or clear the app's data).
+
+Optional: you can still bake a default by editing the one line near the top of
+`main.js` (a saved host always wins over this):
 
     var HOST = "http://glanceos.local:8080";
 

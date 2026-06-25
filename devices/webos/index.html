@@ -48,11 +48,27 @@
     // what is running this screen. Bump it when you change this file.
     var NATIVE = "webos-1.0.0";
 
-    // The exact contract. The runtime does ALL the work in ?tv=1 mode:
-    // fullscreen, wake-lock, D-pad spatial nav, burn-in pixel-shift,
-    // wake/sleep blanking, overscan-safe margins, device register + QR claim,
-    // and SSE live updates. This shell is dumb glass — it only navigates here.
-    var TARGET = HOST + "/screen/?tv=1&platform=webos&native=" + encodeURIComponent(NATIVE);
+    // C3 — runtime-configurable host. A host entered on the first-run setup
+    // screen is remembered in webview localStorage, so you no longer have to
+    // edit HOST and rebuild the .ipk per deployment. Saved host wins; HOST above
+    // is only the fallback default. Re-open with ?setup to change it.
+    var HOST_KEY = "glanceos.host";
+    var PLACEHOLDER = "http://glanceos.local:8080";
+    function normalizeHost(s) {
+      s = String(s || "").trim();
+      if (!s) return "";
+      if (!/^https?:\/\//i.test(s)) s = "http://" + s; // bare host/IP → http for LAN
+      return s.replace(/\/+$/, "");
+    }
+    function resolveHost() {
+      var saved = "";
+      try { saved = (localStorage.getItem(HOST_KEY) || "").trim(); } catch (e) {}
+      if (saved) return normalizeHost(saved);
+      return HOST === PLACEHOLDER ? "" : normalizeHost(HOST);
+    }
+    function targetFor(host) {
+      return host + "/screen/?tv=1&platform=webos&native=" + encodeURIComponent(NATIVE);
+    }
 
     // ----------------------------------------------------------------------
     // Optional: keep the panel awake at the OS level via the webOS power API.
@@ -89,9 +105,36 @@
       // so they reach the runtime page unmodified.
     });
 
+    // First-run / ?setup: ask once for the server, remember it, then go.
+    function showSetup(prefill) {
+      var root = document.getElementById("boot") || document.body;
+      root.innerHTML =
+        '<div style="max-width:80vw;margin:auto;font:400 1.4vw system-ui,-apple-system,sans-serif;color:#8a939c;text-align:left">' +
+        '<div style="color:#e6eaef;font-size:1.9vw;margin-bottom:1vw">Connect this screen to GlanceOS</div>' +
+        '<div style="margin-bottom:0.6vw">Enter your server address:</div>' +
+        '<input id="hostInput" type="text" value="' + (prefill || "") + '" placeholder="http://192.168.1.50:8080" ' +
+        'style="width:100%;box-sizing:border-box;font-size:1.6vw;padding:0.6vw;border-radius:8px;border:2px solid #2c3440;background:#0b0e12;color:#fff" />' +
+        '<button id="hostGo" style="margin-top:1vw;font-size:1.6vw;padding:0.6vw 1.6vw;border-radius:8px;border:0;background:#fafafa;color:#101418;cursor:pointer">Connect</button>' +
+        '<div style="margin-top:0.8vw;color:#5c6672;font-size:1vw">Remembered on this TV — no rebuild needed. Re-open with ?setup to change it.</div>' +
+        '</div>';
+      var input = document.getElementById("hostInput");
+      var btn = document.getElementById("hostGo");
+      var submit = function () {
+        var host = normalizeHost(input.value);
+        if (!host) { try { input.focus(); } catch (e) {} return; }
+        try { localStorage.setItem(HOST_KEY, host); } catch (e) {}
+        window.location.replace(targetFor(host));
+      };
+      if (btn) btn.addEventListener("click", submit);
+      if (input) input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+      try { if (input) input.focus(); } catch (e) {}
+    }
+
     // Give the document focus so key events are delivered to the page, then go.
     try { window.focus(); } catch (e) {}
-    window.location.replace(TARGET);
+    var forceSetup = /[?&]setup\b/.test(location.search);
+    var startHost = resolveHost();
+    if (!startHost || forceSetup) showSetup(startHost || ""); else window.location.replace(targetFor(startHost));
   </script>
 </body>
 </html>

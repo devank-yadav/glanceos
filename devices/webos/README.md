@@ -33,7 +33,9 @@ The LG `webOSTV.js` SDK is **optional** here. The default app does not bundle it
 
 ## Set the host URL
 
-Open `index.html` and edit the one line marked **CHANGE ME**:
+**On first launch the TV shows a one-time setup screen** — type your GlanceOS server address (e.g. `http://192.168.1.50:8080`) and press Connect. It's remembered in the webview's `localStorage`, so **you don't have to edit the code or rebuild the `.ipk` per deployment**. To change it later, relaunch with `?setup` in the URL (or clear the app's data).
+
+Optional: you can still bake a default by editing the one line marked **CHANGE ME** in `index.html` (a saved host always wins over it):
 
     var HOST = "http://glanceos.local:8080";
 
