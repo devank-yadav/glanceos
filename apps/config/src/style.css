@@ -2260,6 +2260,9 @@ ul.tasks li:last-child {
 }
 .page-tab {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 13px;
   border: 1px solid var(--rule);
   border-radius: 999px;
@@ -2272,7 +2275,20 @@ ul.tasks li:last-child {
 }
 .page-tab:hover { background: var(--hover-bg); }
 .page-tab.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
-.page-tab.scheduled::after { content: " ·"; opacity: 0.6; }
+.page-tab-name { white-space: nowrap; }
+/* the "Base" pill on page 1 */
+.page-tab-base {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--muted);
+}
+.page-tab.on .page-tab-base { background: color-mix(in srgb, var(--indigo-fg) 22%, transparent); color: var(--indigo-fg); }
+/* schedule / custom-dwell status glyph — pure CSS, derived only from page settings */
+.page-glyph { display: inline-flex; align-items: center; gap: 4px; }
+.pg-cal { width: 14px; height: 5px; border-radius: 1px; opacity: 0.85; background: repeating-linear-gradient(to right, var(--indigo) 0 2px, transparent 2px 4px); }
+.pg-dwell { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--indigo); }
+.page-tab.on .pg-cal { background: repeating-linear-gradient(to right, var(--indigo-fg) 0 2px, transparent 2px 4px); }
+.page-tab.on .pg-dwell { border-color: var(--indigo-fg); }
 .page-add {
   flex: 0 0 auto;
   display: inline-flex;
@@ -2307,17 +2323,16 @@ ul.tasks li:last-child {
 .page-cog.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
 .page-add svg { width: 14px; height: 14px; }
 .page-cog svg { width: 16px; height: 16px; }
-.pages-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px 16px;
-  border-top: 1px solid var(--rule);
-  background: var(--bg);
-  max-width: 480px;
+/* per-page settings popover body (sits inside the shared DraggablePanel .panel-body) */
+.pages-pop { display: flex; flex-direction: column; gap: 9px; }
+.block-popover:has(.pages-pop) { width: 336px; }
+.pages-pop .row.gap { flex-wrap: wrap; row-gap: 6px; }
+.page-base-tag {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--muted);
 }
 .pages-panel-head { display: flex; align-items: center; gap: 6px; }
-.pages-panel-head strong { font-size: 13px; }
 .pages-panel-head .grow { flex: 1; }
 .pages-panel-head .ghost.sm {
   width: 28px; height: 28px; padding: 0;
@@ -2328,17 +2343,17 @@ ul.tasks li:last-child {
 .pages-panel-head .ghost.sm:disabled { opacity: 0.4; cursor: default; }
 .pages-panel-head .ghost.sm svg { width: 14px; height: 14px; }
 .pages-panel-head .ghost.sm.danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
-.pages-panel .field { gap: 5px; }
-.pages-panel .field input[type="text"],
-.pages-panel .field input[type="number"],
-.pages-panel .field input[type="time"],
-.pages-panel .field input[type="date"] {
+.pages-pop .field { gap: 5px; }
+.pages-pop .field input[type="text"],
+.pages-pop .field input[type="number"],
+.pages-pop .field input[type="time"],
+.pages-pop .field input[type="date"] {
   padding: 6px 9px; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--input-bg); color: var(--fg); font: inherit;
 }
-.pages-panel .num { width: 76px; }
-.pages-panel hr { border: none; border-top: 1px solid var(--rule); margin: 4px 0; }
-.pages-panel .section-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; color: var(--faint); margin: 0; }
-.pages-panel .hint { font-size: 11px; color: var(--muted); margin: 0; }
+.pages-pop .num { width: 76px; }
+.pages-pop .section-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; color: var(--faint); margin: 4px 0 0; }
+.pages-pop .section-label:first-of-type { margin-top: 0; }
+.pages-pop .hint { font-size: 11px; color: var(--muted); margin: 0; }
 .day-chips { display: flex; gap: 5px; }
 .day-chip {
   width: 30px; height: 30px;
@@ -2352,6 +2367,9 @@ ul.tasks li:last-child {
 }
 .day-chip:hover { background: var(--hover-bg); color: var(--fg); }
 .day-chip.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
+
+/* divider before the Rotation group in Board settings */
+.board-rule { border: none; border-top: 1px solid var(--rule); margin: 8px 0 2px; }
 
 /* The blocks panel is always docked + opaque (a glassy/translucent panel was
    unreadable in dark mode); the top-bar toggle collapses its width to hide it. */
