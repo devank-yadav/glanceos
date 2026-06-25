@@ -13,7 +13,7 @@ const FEATURES = [
   { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
   { icon: Icon.pencil, title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
   { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
-  { icon: Icon.link, title: "Connect 121 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 115 more. Many need no login; tokens stay encrypted server-side." },
+  { icon: Icon.link, title: "Connect 137 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 131 more. Many need no login; tokens stay encrypted server-side." },
   { icon: Icon.convert, title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
   { icon: Icon.layers, title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
   { icon: Icon.home, title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
@@ -23,6 +23,18 @@ const STEPS = [
   { n: "1", title: "Open a screen", body: "Point any browser — TV, monitor, tablet — at your server. It registers itself and shows a claim code." },
   { n: "2", title: "Claim and compose", body: "Enter the code, then arrange blocks in the Studio. The preview is the exact renderer your screen runs." },
   { n: "3", title: "Glance", body: "Look, understand, move on. Boards update live; screens survive Wi-Fi blips without going blank." },
+];
+
+// Honest positioning vs the usual rent-a-screen-in-our-cloud dashboard services
+// — framed generically (no specific competitor claims to get wrong/be unfair about).
+const COMPARE = [
+  { dim: "Price", us: "Free, forever — no subscription", them: "Usually a monthly or annual plan" },
+  { dim: "Where it runs", us: "Your own server — one small container", them: "The vendor's cloud" },
+  { dim: "Your data", us: "Stays on your machine; zero telemetry", them: "Held in the vendor's cloud" },
+  { dim: "Source", us: "Open source (MIT) — audit it, fork it", them: "Typically closed source" },
+  { dim: "Screens", us: "Any browser — TV, tablet or e-ink panel", them: "Often one specific device or app" },
+  { dim: "Make it yours", us: `${BLOCKS.length} blocks + a Notion-style editor`, them: "Fixed templates, limited layout" },
+  { dim: "Live data", us: "137 sources, ~24 with no login at all", them: "Varies; often a paid add-on" },
 ];
 
 function BridgeMotif() {
@@ -191,6 +203,31 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
               <p>{s.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="compare" class="section">
+        <h2 class="section-title">How it's different</h2>
+        <p class="section-lede">Most dashboard services rent you a screen in their cloud. GlanceOS is the opposite — free, open, and entirely yours.</p>
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th scope="col"><span class="sr-only">Dimension</span></th>
+                <th scope="col" class="cmp-head-us">GlanceOS</th>
+                <th scope="col" class="cmp-head-them">Typical hosted dashboard</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARE.map((r) => (
+                <tr key={r.dim}>
+                  <th scope="row">{r.dim}</th>
+                  <td class="cmp-us">{r.us}</td>
+                  <td class="cmp-them">{r.them}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
