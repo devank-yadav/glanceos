@@ -939,6 +939,11 @@ ul.tasks li:last-child {
 .publish-board-btn { flex: none; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .starter-section .filter-chips { margin-bottom: 18px; }
+/* Templates toolbar: category chips on the left, a search box on the right,
+   stacking cleanly when the row gets narrow. */
+.starter-toolbar { align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.starter-toolbar .filter-chips { margin-bottom: 0; }
+.starter-toolbar .integ-search { margin-left: auto; }
 /* board pickers (publish-a-board, change-content) — clickable preview tiles */
 .publish-grid, .picker-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
 .publish-board { display: flex; flex-direction: column; gap: 10px; }

@@ -4,6 +4,7 @@ import { api, type HubItem, type SetupSummary } from "../api";
 import { Icon } from "../editor/icons";
 import { navigate } from "../router";
 import { STARTER_CATEGORIES, STARTER_TEMPLATES } from "../starterTemplates";
+import { filterTemplates } from "../templateSearch";
 import { BoardPreview, BoardPreviewById } from "./BoardPreview";
 import { Modal } from "./Modal";
 import { useToast } from "./Toast";
@@ -19,6 +20,7 @@ const COMMUNITY = "Community";
 
 export function StarterTemplates({ publishing, onClosePublish }: { publishing: boolean; onClosePublish: () => void }) {
   const [cat, setCat] = useState<string>("All");
+  const [query, setQuery] = useState("");
   const [viewing, setViewing] = useState<GalleryItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [community, setCommunity] = useState<HubItem[]>([]);
@@ -35,7 +37,7 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
     ...community.map((c) => ({ key: `c-${c.id}`, name: c.name, category: COMMUNITY, description: c.description, doc: c.document, kind: "community" as const, hubId: c.id })),
   ];
   const categories = ["All", ...STARTER_CATEGORIES, ...(community.length ? [COMMUNITY] : [])];
-  const list = cat === "All" ? items : items.filter((t) => t.category === cat);
+  const list = filterTemplates(items, cat, query);
 
   const copy = async (t: GalleryItem) => {
     setBusy(true);
@@ -54,12 +56,25 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
 
   return (
     <section class="starter-section">
-      <div class="filter-chips" role="tablist" aria-label="Template categories">
-        {categories.map((c) => (
-          <button key={c} role="tab" aria-selected={cat === c} class={`filter-chip${cat === c ? " on" : ""}`} onClick={() => setCat(c)}>{c}</button>
-        ))}
+      <div class="row spread starter-toolbar">
+        <div class="filter-chips" role="tablist" aria-label="Template categories">
+          {categories.map((c) => (
+            <button key={c} role="tab" aria-selected={cat === c} class={`filter-chip${cat === c ? " on" : ""}`} onClick={() => setCat(c)}>{c}</button>
+          ))}
+        </div>
+        <input
+          class="integ-search"
+          type="search"
+          aria-label="Search templates"
+          placeholder={`Search ${items.length} templates…`}
+          value={query}
+          onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
+        />
       </div>
 
+      {list.length === 0 ? (
+        <p class="muted">No templates match {query.trim() ? `“${query.trim()}”` : "that filter"}.</p>
+      ) : (
       <div class="cards hub-cards">
         {list.map((t) => (
           <div key={t.key} class="card hub-card starter-card">
@@ -77,6 +92,7 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
           </div>
         ))}
       </div>
+      )}
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing?.name ?? "Template"} size="full">
         {viewing && (
