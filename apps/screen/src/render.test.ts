@@ -3,7 +3,7 @@ import type { StreamPayloadT } from "@glanceos/schema";
 
 // renderPayload captures #app at module load, so it must exist before importing.
 document.body.innerHTML = '<div id="app"></div>';
-const { renderPayload } = await import("./render");
+const { renderPayload, activePageIndex } = await import("./render");
 const { showAlert } = await import("./alert");
 // Same object reference render.ts holds — register a deliberately-throwing widget so we
 // can prove one bad block can't blank the wall (render-isolation, v7.0 P0).
@@ -482,5 +482,30 @@ describe("designable objects — per-block style classes (v9.0)", () => {
     expect(cells[1]!.className).toContain("rad-l");
     expect(cells[1]!.className).toContain("bg-subtle");
     expect(cells[1]!.className).toContain("bsize-l");
+  });
+});
+
+describe("multi-page boards (v9.x)", () => {
+  it("activePageIndex rotates by the wall clock; 1 page or 0s stays on page 0", () => {
+    expect(activePageIndex(0, 10, 1)).toBe(0);
+    expect(activePageIndex(50_000, 0, 3)).toBe(0);
+    expect(activePageIndex(0, 10, 3)).toBe(0);
+    expect(activePageIndex(10_000, 10, 3)).toBe(1);
+    expect(activePageIndex(25_000, 10, 3)).toBe(2);
+    expect(activePageIndex(35_000, 10, 3)).toBe(0); // wraps
+  });
+
+  it("renders the active page and rebuilds when it changes", () => {
+    const A = { id: "ra", h: 6, blocks: [{ id: "a", type: "heading", width: 1, props: { content: "PAGEA", level: 1 } }] };
+    const B = { id: "rb", h: 6, blocks: [{ id: "b", type: "heading", width: 1, props: { content: "PAGEB", level: 1 } }] };
+    const doc = { ...baseLayout, rows: [A], pages: [[B]], pageRotateSeconds: 10 };
+    const now = vi.spyOn(Date, "now").mockReturnValue(0);
+    renderPayload(payload(doc));
+    expect(document.body.textContent).toContain("PAGEA");
+    expect(document.body.textContent).not.toContain("PAGEB");
+    now.mockReturnValue(10_000); // wall clock advances one page
+    renderPayload(payload(doc));
+    expect(document.body.textContent).toContain("PAGEB");
+    now.mockRestore();
   });
 });

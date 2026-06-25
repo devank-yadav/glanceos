@@ -10,6 +10,26 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(new Set(templates.map((t) => t.name)).size).toBe(4);
   });
 
+  it("supports optional multi-page boards (no migration; absent = single page)", () => {
+    const single = Layout.parse({ schemaVersion: 3, name: "One", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }] });
+    expect(single.pages).toBeUndefined(); // existing docs parse unchanged
+    expect(single.pageRotateSeconds).toBeUndefined();
+
+    const multi = Layout.parse({
+      schemaVersion: 3,
+      name: "Multi",
+      rows: [{ id: "r0", blocks: [{ id: "a", type: "divider", props: {} }] }],
+      pages: [[{ id: "r1", blocks: [{ id: "b", type: "divider", props: {} }] }]],
+      pageRotateSeconds: 10,
+    });
+    expect(multi.pages).toHaveLength(1);
+    expect(multi.pageRotateSeconds).toBe(10);
+
+    // bounds: rotate must be ≥ 3s; at most 8 extra pages
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageRotateSeconds: 1 }).success).toBe(false);
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pages: Array.from({ length: 9 }, () => []) }).success).toBe(false);
+  });
+
   it("supports optional signage zones (no migration; absent = single doc)", () => {
     const noZones = Layout.parse({ schemaVersion: 3, name: "Plain", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }] });
     expect(noZones.zones).toBeUndefined(); // existing docs parse unchanged

@@ -28,6 +28,8 @@ export function setEditingLock(ids: ReadonlySet<string>): void { editingIds = id
 export function getCells(): ReadonlyMap<string, { el: HTMLElement }> { return cells; }
 
 let spotlightStop: (() => void) | null = null;
+let pageStop: (() => void) | null = null;
+let lastPayload: StreamPayloadT | null = null;
 
 function reset(): void {
   for (const fn of cleanups) fn();
@@ -36,8 +38,31 @@ function reset(): void {
   cells.clear();
   spotlightStop?.();
   spotlightStop = null;
+  pageStop?.();
+  pageStop = null;
   mountedSig = null;
   root.innerHTML = "";
+}
+
+// v9.x multi-page boards: which page shows now — deterministic from the wall clock
+// so every screen rotates in lockstep. n = total pages, secs = seconds per page.
+export function activePageIndex(now: number, secs: number, n: number): number {
+  if (n <= 1 || secs <= 0) return 0;
+  return Math.floor(now / 1000 / secs) % n;
+}
+
+// Re-arm a 1 s ticker that re-renders when the active page changes. Idempotent:
+// clears any prior ticker; arms only for a rotating multi-page board.
+function armPageRotate(pages: RowT[][] | null, secs: number): void {
+  pageStop?.();
+  pageStop = null;
+  if (!pages || pages.length < 2 || secs <= 0) return;
+  let last = activePageIndex(Date.now(), secs, pages.length);
+  const h = window.setInterval(() => {
+    const idx = activePageIndex(Date.now(), secs, pages.length);
+    if (idx !== last && lastPayload) { last = idx; renderPayload(lastPayload); }
+  }, 1000);
+  pageStop = () => window.clearInterval(h);
 }
 
 // v8.0 spotlight: cycle a calm emphasis across the board's cells (others dim), one at a
@@ -143,6 +168,7 @@ export function renderPayload(payload: StreamPayloadT): void {
     return;
   }
   const state = payload.state;
+  lastPayload = payload; // for the page-rotation ticker to re-render with the latest data
   // TV-mode devices carry display settings server-side; apply before painting.
   if (state.tv?.enabled) {
     enableTvMode();
@@ -155,7 +181,14 @@ export function renderPayload(payload: StreamPayloadT): void {
     return;
   }
 
-  const layout = state.layout;
+  const board = state.layout;
+  // v9.x multi-page: render the active page as a normal board ([rows, ...pages] rotated
+  // by the wall clock). Single-page boards (no `pages`) take `layout = board` unchanged.
+  const allPages: RowT[][] | null = board.pages?.length ? [board.rows, ...board.pages] : null;
+  const rotSecs = Math.max(0, Number(board.pageRotateSeconds) || 0);
+  const layout: LayoutT = allPages
+    ? { ...board, rows: allPages[activePageIndex(Date.now(), rotSecs, allPages.length)]!, pages: undefined }
+    : board;
   // Theme + look + quiet dim are body-level — apply every tick, no rebuild needed.
   // "auto" mode resolves to effectiveTheme server-side (sun); fall back to light.
   const mode = state.effectiveTheme ?? (layout.theme.mode === "auto" ? "light" : layout.theme.mode);
@@ -169,8 +202,9 @@ export function renderPayload(payload: StreamPayloadT): void {
   document.body.style.setProperty("--fs-base", fs); // v9.0: constant board scale a per-block `bsize-*` cell multiplies (no self-reference)
 
   // Same skeleton as last tick → diff in place (no flash); else full rebuild.
+  // (When the active page changes, the sig differs → a clean rebuild of that page.)
   const sig = structuralSig(layout, state.data);
-  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); return; }
+  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); armPageRotate(allPages, rotSecs); return; }
   reset();
   mountedSig = sig;
   if (layout.zones && layout.zones.length > 0) {
@@ -189,6 +223,7 @@ export function renderPayload(payload: StreamPayloadT): void {
     root.appendChild(buildPage(layout.rows, layout, state.data));
   }
   applySpotlight(layout.spotlight);
+  armPageRotate(allPages, rotSecs);
 }
 
 // Build one document page (a height-unit grid of rows) for the given rows. Used

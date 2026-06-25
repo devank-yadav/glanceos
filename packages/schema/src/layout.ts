@@ -663,6 +663,12 @@ export const Layout = z.object({
   // v8.0 spotlight: cycle a calm emphasis across the board's blocks (others dim), one at a
   // time, every N seconds. Optional → absent = no spotlight, renders exactly as before.
   spotlight: z.object({ seconds: z.number().int().min(3).max(600).default(20) }).optional(),
+  // v9.x multi-page boards: extra pages beyond `rows` (page 0 = `rows`). The screen
+  // rotates through [rows, ...pages] every `pageRotateSeconds` (deterministic from the
+  // wall clock so screens stay in lockstep); absent → single page, renders as before.
+  // Optional + additive → no migration; old docs (and screens that ignore it) are unaffected.
+  pages: z.array(z.array(Row).max(40)).max(8).optional(),
+  pageRotateSeconds: z.number().int().min(3).max(3600).optional(),
 });
 
 export type WidgetT = z.infer<typeof Widget>;
