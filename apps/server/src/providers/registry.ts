@@ -3346,3 +3346,143 @@ reg({
     return { items: (raw?.results ?? []).map((r) => ({ title: (r.product_description ?? "").slice(0, 120), label: r.recalling_firm ?? "", value: r.classification ?? "" })) };
   },
 });
+
+// ---- E8 keyless providers (finance / space / reference / media / science / fun) ----
+// Every endpoint + response shape below was confirmed live (curl) before writing
+// the resolver — no guessed shapes.
+
+reg({
+  id: "kraken", label: "Kraken", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "kraken.ticker", label: "Crypto pair ticker", shape: "scalar" }],
+  async resolve(ctx) {
+    const pair = String(ctx.query.pair ?? "XBTUSD").replace(/[^a-z0-9]/gi, "").toUpperCase() || "XBTUSD";
+    const raw = (await getJSON(`https://api.kraken.com/0/public/Ticker?pair=${pair}`, UA)) as { result?: Record<string, { c?: string[] }> } | null;
+    const first = Object.values(raw?.result ?? {})[0];
+    const last = first?.c?.[0];
+    return { value: last != null ? `${pair}: ${last}` : "" };
+  },
+});
+
+reg({
+  id: "bitpay", label: "BitPay Rates", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "bitpay.rates", label: "1 BTC in your currencies", shape: "list" }],
+  async resolve(ctx) {
+    const targets = String(ctx.query.targets ?? "USD,EUR,GBP,JPY,INR").toUpperCase().split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    const raw = (await getJSON("https://bitpay.com/api/rates", UA)) as { code?: string; rate?: number }[] | null;
+    const byCode = new Map((raw ?? []).map((r) => [r.code, r.rate]));
+    return { items: targets.map((t) => ({ title: `1 BTC → ${t}`, value: byCode.has(t) ? String(byCode.get(t)) : "" })) };
+  },
+});
+
+reg({
+  id: "feargreed", label: "Crypto Fear & Greed", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "feargreed.index", label: "Fear & Greed Index", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.alternative.me/fng/?limit=1", UA)) as { data?: { value?: string; value_classification?: string }[] } | null;
+    const d = raw?.data?.[0];
+    return { value: d?.value != null ? `${d.value} · ${d.value_classification ?? ""}`.trim() : "" };
+  },
+});
+
+reg({
+  id: "launchlibrary", label: "Rocket Launches", category: "space", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 60_000,
+  resources: [{ id: "launchlibrary.upcoming", label: "Upcoming launches", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 6, 15);
+    const raw = (await getJSON(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=${max}`, UA)) as { results?: { name?: string; net?: string; launch_service_provider?: { name?: string } }[] } | null;
+    return { items: (raw?.results ?? []).map((l) => ({ title: l.name ?? "", label: l.launch_service_provider?.name ?? "", value: l.net ? l.net.slice(0, 10) : "" })) };
+  },
+});
+
+reg({
+  id: "nobel", label: "Nobel Prizes", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "nobel.prizes", label: "Laureates for a year", shape: "list" }],
+  async resolve(ctx) {
+    const year = String(ctx.query.year ?? new Date().getFullYear() - 1).replace(/[^0-9]/g, "") || "2024";
+    const max = Math.min(Number(ctx.query.max) || 10, 20);
+    const raw = (await getJSON(`https://api.nobelprize.org/2.1/nobelPrizes?nobelPrizeYear=${year}&limit=${max}`, UA)) as { nobelPrizes?: { category?: { en?: string }; awardYear?: string; laureates?: { fullName?: { en?: string }; orgName?: { en?: string } }[] }[] } | null;
+    return { items: (raw?.nobelPrizes ?? []).map((p) => ({ title: p.category?.en ?? "", label: String(p.awardYear ?? ""), value: (p.laureates ?? []).map((l) => l.fullName?.en ?? l.orgName?.en ?? "").filter(Boolean).join(", ") })) };
+  },
+});
+
+reg({
+  id: "openalex", label: "OpenAlex", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "openalex.works", label: "Most-cited scholarly works", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "").trim().slice(0, 80);
+    const max = Math.min(Number(ctx.query.max) || 8, 25);
+    const search = q ? `&search=${encodeURIComponent(q)}` : "";
+    const raw = (await getJSON(`https://api.openalex.org/works?per_page=${max}&sort=cited_by_count:desc${search}`, UA)) as { results?: { display_name?: string; cited_by_count?: number; publication_year?: number }[] } | null;
+    return { items: (raw?.results ?? []).map((w) => ({ title: (w.display_name ?? "").slice(0, 140), label: String(w.publication_year ?? ""), value: w.cited_by_count != null ? `${w.cited_by_count.toLocaleString()} cites` : "" })) };
+  },
+});
+
+reg({
+  id: "openverse", label: "Openverse", category: "media", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "openverse.images", label: "Openly-licensed image search", shape: "list" }],
+  async resolve(ctx) {
+    const q = encodeURIComponent(String(ctx.query.q ?? "nature").slice(0, 80));
+    const max = Math.min(Number(ctx.query.max) || 10, 20);
+    const raw = (await getJSON(`https://api.openverse.org/v1/images/?q=${q}&page_size=${max}`, UA)) as { results?: { title?: string; creator?: string; source?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((r) => ({ title: r.title ?? "", label: r.creator ?? "", value: r.source ?? "" })) };
+  },
+});
+
+reg({
+  id: "inaturalist", label: "iNaturalist", category: "science", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [{ id: "inaturalist.observations", label: "Recent nature observations", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const order = String(ctx.query.order ?? "created_at").replace(/[^a-z_]/gi, "") || "created_at";
+    const raw = (await getJSON(`https://api.inaturalist.org/v1/observations?per_page=${max}&order_by=${order}&photos=true`, UA)) as { results?: { species_guess?: string; place_guess?: string; taxon?: { name?: string; preferred_common_name?: string } }[] } | null;
+    return { items: (raw?.results ?? []).map((o) => ({ title: o.species_guess || o.taxon?.preferred_common_name || o.taxon?.name || "Unknown", label: o.place_guess ?? "" })) };
+  },
+});
+
+reg({
+  id: "urbandictionary", label: "Urban Dictionary", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "urbandictionary.define", label: "Slang definitions", shape: "list" }],
+  async resolve(ctx) {
+    const term = encodeURIComponent(String(ctx.query.term ?? "serendipity").slice(0, 60));
+    const max = Math.min(Number(ctx.query.max) || 5, 10);
+    const raw = (await getJSON(`https://api.urbandictionary.com/v0/define?term=${term}`, UA)) as { list?: { word?: string; definition?: string }[] } | null;
+    const clean = (s: string) => s.replace(/[[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+    return { items: (raw?.list ?? []).slice(0, max).map((d) => ({ title: d.word ?? "", value: clean(d.definition ?? "") })) };
+  },
+});
+
+reg({
+  id: "disney", label: "Disney Characters", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "disney.characters", label: "Characters, optionally by name", shape: "list" }],
+  async resolve(ctx) {
+    const name = String(ctx.query.name ?? "").trim().slice(0, 40);
+    const max = Math.min(Number(ctx.query.max) || 10, 20);
+    const url = name ? `https://api.disneyapi.dev/character?name=${encodeURIComponent(name)}&pageSize=${max}` : `https://api.disneyapi.dev/character?pageSize=${max}`;
+    const raw = (await getJSON(url, UA)) as { data?: { name?: string; films?: string[] }[] } | null;
+    return { items: (raw?.data ?? []).slice(0, max).map((c) => ({ title: c.name ?? "", value: c.films?.length ? c.films[0]! : "" })) };
+  },
+});
+
+reg({
+  id: "superhero", label: "Superhero Stats", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "superhero.all", label: "Superheroes, optionally by name", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "").toLowerCase().trim();
+    const max = Math.min(Number(ctx.query.max) || 12, 30);
+    const raw = (await getJSON("https://akabab.github.io/superhero-api/api/all.json", UA)) as { name?: string; biography?: { publisher?: string }; powerstats?: { power?: number } }[] | null;
+    let arr = Array.isArray(raw) ? raw : [];
+    if (q) arr = arr.filter((h) => String(h.name ?? "").toLowerCase().includes(q));
+    return { items: arr.slice(0, max).map((h) => ({ title: h.name ?? "", label: h.biography?.publisher ?? "", value: h.powerstats?.power != null ? `power ${h.powerstats.power}` : "" })) };
+  },
+});

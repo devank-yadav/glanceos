@@ -1,6 +1,6 @@
 # Integrations
 
-GlanceOS connects to **177 data sources**. Each is a server-side *provider* — it knows how
+GlanceOS connects to **188 data sources**. Each is a server-side *provider* — it knows how
 to fetch a *resource* and return a raw payload, which a block's **SourceMap** then shapes to
 fit. Binding happens in the Studio's **⟿ Data** tab (or one-click via a provider's preset
 "objects" on **Settings → Connections**). Tokens and secret URLs are encrypted on the server
@@ -84,13 +84,14 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 ### Chat (1)
 - **Slack** `slack` · OAuth · slack.messages, slack.channels
 
-### Media (14)
+### Media (15)
 - **Anime (Jikan / MyAnimeList)** `jikan` · keyless · jikan.top, jikan.search
 - **Apple iTunes Search** `itunes` · keyless · itunes.search
 - **Deezer** `deezer` · keyless · deezer.search
 - **Last.fm** `lastfm` · apiKey · lastfm.recent, lastfm.topartists
 - **ListenBrainz** `listenbrainz` · token · listenbrainz.listens
 - **MusicBrainz** `musicbrainz` · keyless · musicbrainz.artists
+- **Openverse** `openverse` · keyless · openverse.images
 - **Plex** `plex` · token · plex.recentlyAdded, plex.sessions
 - **Radarr** `radarr` · apiKey · radarr.calendar, radarr.queue
 - **Sonarr** `sonarr` · apiKey · sonarr.calendar, sonarr.queue
@@ -130,19 +131,22 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Open Library** `openlibrary` · keyless · openlibrary.search
 - **Project Gutenberg** `gutendex` · keyless · gutendex.search
 
-### Reference (9)
+### Reference (11)
 - **City Population** `citypopulation` · keyless · citypopulation.cities
 - **Datamuse (words)** `datamuse` · keyless · datamuse.related
 - **Dictionary** `dictionary` · keyless · dictionary.define
 - **FIRST.org Countries** `firstorg` · keyless · firstorg.countries
+- **Nobel Prizes** `nobel` · keyless · nobel.prizes
+- **OpenAlex** `openalex` · keyless · openalex.works
 - **PoetryDB** `poetrydb` · keyless · poetrydb.random
 - **Quotable** `quotable` · keyless · quotable.random
 - **Wikipedia** `wikipedia` · keyless · wikipedia.onthisday, wikipedia.search
 - **Wikipedia Most Read** `wikitrends` · keyless · wikitrends.top
 - **World Bank** `worldbank` · keyless · worldbank.indicator
 
-### Science (7)
+### Science (8)
 - **GBIF Biodiversity** `gbif` · keyless · gbif.species
+- **iNaturalist** `inaturalist` · keyless · inaturalist.observations
 - **Natural Events (NASA)** `eonet` · keyless · eonet.events
 - **Open-Meteo Air Quality** `openmeteoair` · keyless · openmeteoair.current
 - **Open-Meteo Elevation** `openmeteoelev` · keyless · openmeteoelev.point
@@ -150,9 +154,10 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **UK Carbon Intensity** `carbonintensity` · keyless · carbonintensity.mix
 - **USGS Water Services** `usgswater` · keyless · usgswater.streamflow
 
-### Space (4)
+### Space (5)
 - **ISS tracker** `iss` · keyless · iss.position
 - **People in Space** `astros` · keyless · astros.people
+- **Rocket Launches** `launchlibrary` · keyless · launchlibrary.upcoming
 - **Spaceflight News** `spaceflightnews` · keyless · spaceflightnews.articles
 - **SpaceX** `spacex` · keyless · spacex.upcoming
 
@@ -192,7 +197,7 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **The Met** `metmuseum` · keyless · metmuseum.search
 - **V&A Museum** `vam` · keyless · vam.search
 
-### Fun (16)
+### Fun (19)
 - **Advice Slip** `adviceslip` · keyless · adviceslip.random
 - **Affirmations** `affirmations` · keyless · affirmations.random
 - **Agify** `agify` · keyless · agify.age
@@ -200,6 +205,7 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Cat Facts** `catfact` · keyless · catfact.random
 - **Chuck Norris Jokes** `chucknorris` · keyless · chucknorris.random
 - **Dad Jokes** `dadjoke` · keyless · dadjoke.random
+- **Disney Characters** `disney` · keyless · disney.characters
 - **Genderize** `genderize` · keyless · genderize.gender
 - **Kanye Quotes** `kanyerest` · keyless · kanyerest.quote
 - **Nationalize** `nationalize` · keyless · nationalize.countries
@@ -207,18 +213,23 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Open Trivia DB** `opentdb` · keyless · opentdb.questions
 - **Random Facts** `uselessfacts` · keyless · uselessfacts.random
 - **Rick and Morty** `rickandmorty` · keyless · rickandmorty.characters
+- **Superhero Stats** `superhero` · keyless · superhero.all
+- **Urban Dictionary** `urbandictionary` · keyless · urbandictionary.define
 - **xkcd** `xkcd` · keyless · xkcd.latest
 - **Yes or No** `yesno` · keyless · yesno.answer
 
-### Finance (10)
+### Finance (13)
 - **Binance (crypto)** `binance` · keyless · binance.tickers
+- **BitPay Rates** `bitpay` · keyless · bitpay.rates
 - **Blockchain.com Stats** `blockchaininfo` · keyless · blockchaininfo.btcprice
 - **Coinbase** `coinbase` · OAuth · coinbase.accounts
 - **CoinGecko** `coingecko` · keyless · coingecko.markets, coingecko.trending
 - **CoinLore** `coinlore` · keyless · coinlore.top
 - **Coinpaprika** `coinpaprika` · keyless · coinpaprika.tickers, coinpaprika.global
+- **Crypto Fear & Greed** `feargreed` · keyless · feargreed.index
 - **Exchange Rates (currency-api)** `exchangeapi` · keyless · exchangeapi.rates
 - **Frankfurter (FX)** `frankfurter` · keyless · frankfurter.rates
+- **Kraken** `kraken` · keyless · kraken.ticker
 - **mempool.space Fees** `mempool` · keyless · mempool.fastestfee
 - **Open Exchange Rates** `openexchangerates` · apiKey · openexchangerates.latest
 
