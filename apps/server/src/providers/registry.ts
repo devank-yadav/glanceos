@@ -2259,3 +2259,339 @@ reg({
     return { value: raw?.value ?? "" };
   },
 });
+
+// ---- E4: more keyless public-data providers (science / finance / fun / place / weather / gaming / sports / reference) ----
+
+reg({
+  id: "gbif", label: "GBIF Biodiversity", category: "science", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "gbif.species", label: "Species search", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "Panthera").replace(/[^A-Za-z0-9 ]/g, "").slice(0, 60) || "Panthera";
+    const max = Math.min(Number(ctx.query.max) || 12, 50);
+    const raw = (await getJSON(
+      `https://api.gbif.org/v1/species/search?q=${encodeURIComponent(q)}&limit=${max}`,
+      UA,
+    )) as { results?: { canonicalName?: string; scientificName?: string; rank?: string; kingdom?: string }[] } | null;
+    return {
+      items: (raw?.results ?? []).map((s) => ({
+        title: s.canonicalName ?? s.scientificName ?? "",
+        label: s.rank ?? "",
+        value: s.kingdom ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "openmeteoair", label: "Open-Meteo Air Quality", category: "science", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "openmeteoair.current", label: "Air quality now", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat);
+    const lon = Number(ctx.query.lon);
+    const latitude = Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : 52.52;
+    const longitude = Number.isFinite(lon) ? Math.max(-180, Math.min(180, lon)) : 13.41;
+    const fields = "european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,carbon_monoxide,sulphur_dioxide";
+    const raw = (await getJSON(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=${fields}`,
+      UA,
+    )) as {
+      current?: {
+        european_aqi?: number; pm2_5?: number; pm10?: number; ozone?: number;
+        nitrogen_dioxide?: number; carbon_monoxide?: number; sulphur_dioxide?: number;
+      } | null;
+    } | null;
+    const c = raw?.current ?? null;
+    const rows: { title: string; value: string }[] = [
+      { title: "European AQI", value: String(c?.european_aqi ?? "") },
+      { title: "PM2.5 µg/m³", value: String(c?.pm2_5 ?? "") },
+      { title: "PM10 µg/m³", value: String(c?.pm10 ?? "") },
+      { title: "Ozone µg/m³", value: String(c?.ozone ?? "") },
+      { title: "NO₂ µg/m³", value: String(c?.nitrogen_dioxide ?? "") },
+      { title: "CO µg/m³", value: String(c?.carbon_monoxide ?? "") },
+      { title: "SO₂ µg/m³", value: String(c?.sulphur_dioxide ?? "") },
+    ];
+    return { items: rows.filter((r) => r.value !== "") };
+  },
+});
+
+reg({
+  id: "openmarine", label: "Open-Meteo Marine", category: "science", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "openmarine.current", label: "Sea conditions now", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat);
+    const lon = Number(ctx.query.lon);
+    const latitude = Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : 54.544;
+    const longitude = Number.isFinite(lon) ? Math.max(-180, Math.min(180, lon)) : 10.227;
+    const fields = "wave_height,wave_period,wave_direction,sea_surface_temperature";
+    const raw = (await getJSON(
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${latitude}&longitude=${longitude}&current=${fields}`,
+      UA,
+    )) as {
+      current?: {
+        wave_height?: number; wave_period?: number; wave_direction?: number; sea_surface_temperature?: number;
+      } | null;
+    } | null;
+    const c = raw?.current ?? null;
+    const rows: { title: string; value: string }[] = [
+      { title: "Wave height m", value: String(c?.wave_height ?? "") },
+      { title: "Wave period s", value: String(c?.wave_period ?? "") },
+      { title: "Wave direction °", value: String(c?.wave_direction ?? "") },
+      { title: "Sea surface °C", value: String(c?.sea_surface_temperature ?? "") },
+    ];
+    return { items: rows.filter((r) => r.value !== "") };
+  },
+});
+
+reg({
+  id: "coinlore", label: "CoinLore", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "coinlore.top", label: "Top crypto by market cap", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 100);
+    const raw = (await getJSON(`https://api.coinlore.net/api/tickers/?start=0&limit=${max}`, UA)) as {
+      data?: { name?: string; symbol?: string; price_usd?: string; percent_change_24h?: string }[];
+    } | null;
+    return {
+      items: (raw?.data ?? []).map((c) => ({
+        title: c.name ?? c.symbol ?? "",
+        label: c.symbol ?? "",
+        value: c.price_usd != null ? `$${c.price_usd}` : "",
+        change: c.percent_change_24h != null ? Number(c.percent_change_24h) : undefined,
+      })),
+    };
+  },
+});
+
+reg({
+  id: "blockchaininfo", label: "Blockchain.com Stats", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "blockchaininfo.btcprice", label: "BTC price (USD)", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://blockchain.info/stats?format=json", UA)) as { market_price_usd?: number } | null;
+    const p = raw?.market_price_usd;
+    return { value: p != null ? `$${Math.round(p).toLocaleString("en-US")}` : "" };
+  },
+});
+
+reg({
+  id: "mempool", label: "mempool.space Fees", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "mempool.fastestfee", label: "BTC fast fee (sat/vB)", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://mempool.space/api/v1/fees/recommended", UA)) as { fastestFee?: number } | null;
+    const f = raw?.fastestFee;
+    return { value: f != null ? `${f} sat/vB` : "" };
+  },
+});
+
+reg({
+  id: "adviceslip", label: "Advice Slip", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "adviceslip.random", label: "A piece of advice", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.adviceslip.com/advice", UA)) as { slip?: { advice?: string } } | null;
+    return { value: raw?.slip?.advice ?? "" };
+  },
+});
+
+reg({
+  id: "officialjoke", label: "Official Joke API", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [
+    { id: "officialjoke.list", label: "Random jokes", shape: "list" },
+    { id: "officialjoke.random", label: "A random joke", shape: "scalar" },
+  ],
+  async resolve(ctx) {
+    if (ctx.resource === "officialjoke.random") {
+      const one = (await getJSON("https://official-joke-api.appspot.com/random_joke", UA)) as { setup?: string; punchline?: string } | null;
+      const setup = one?.setup ?? "";
+      const punch = one?.punchline ?? "";
+      return { value: punch ? `${setup} ${punch}`.trim() : setup };
+    }
+    const max = Math.min(Number(ctx.query.max) || 10, 10);
+    const raw = (await getJSON("https://official-joke-api.appspot.com/jokes/ten", UA)) as { setup?: string; punchline?: string }[] | null;
+    return { items: (raw ?? []).slice(0, max).map((j) => ({ title: j?.setup ?? "", label: j?.punchline ?? "" })) };
+  },
+});
+
+reg({
+  id: "affirmations", label: "Affirmations", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "affirmations.random", label: "A daily affirmation", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://www.affirmations.dev/", UA)) as { affirmation?: string } | null;
+    return { value: raw?.affirmation ?? "" };
+  },
+});
+
+reg({
+  id: "worldtime", label: "World Time", category: "place", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "worldtime.now", label: "Local time in a timezone", shape: "scalar" }],
+  async resolve(ctx) {
+    const tz = String(ctx.query.tz ?? "Europe/London").replace(/[^A-Za-z0-9_\/+-]/g, "") || "Europe/London";
+    const raw = (await getJSON(`https://timeapi.io/api/Time/current/zone?timeZone=${encodeURIComponent(tz)}`, UA)) as { time?: string; dayOfWeek?: string } | null;
+    const t = raw?.time ?? "";
+    const d = raw?.dayOfWeek ?? "";
+    return { value: [t, d].filter(Boolean).join(" ") };
+  },
+});
+
+reg({
+  id: "civilweather", label: "Civil Forecast", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "civilweather.daily", label: "Multi-day forecast for a lat/lon", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Math.min(Math.max(Number(ctx.query.lat) || 0, -90), 90);
+    const lon = Math.min(Math.max(Number(ctx.query.lon) || 0, -180), 180);
+    const raw = (await getJSON(`https://www.7timer.info/bin/api.pl?lon=${lon}&lat=${lat}&product=civillight&output=json`, UA)) as { dataseries?: { date?: number; weather?: string; temp2m?: { max?: number; min?: number } }[] } | null;
+    return {
+      items: (raw?.dataseries ?? []).map((d) => {
+        const s = String(d?.date ?? "");
+        const title = s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
+        const hi = d?.temp2m?.max;
+        const lo = d?.temp2m?.min;
+        return {
+          title,
+          label: d?.weather ?? "",
+          value: hi != null && lo != null ? `${hi}°/${lo}°` : "",
+        };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "cheapshark", label: "CheapShark Game Deals", category: "gaming", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "cheapshark.deals", label: "PC game deals", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 12, 60);
+    const upper = Math.min(Number(ctx.query.upperPrice) || 15, 50);
+    const raw = (await getJSON(
+      `https://www.cheapshark.com/api/1.0/deals?sortBy=Savings&pageSize=${max}&upperPrice=${upper}`,
+      UA,
+    )) as { title?: string; salePrice?: string; normalPrice?: string; savings?: string; steamRatingPercent?: string }[] | null;
+    return {
+      items: (raw ?? []).slice(0, max).map((d) => {
+        const sale = Number(d.salePrice ?? 0);
+        const was = Number(d.normalPrice ?? 0);
+        const off = Math.round(Number(d.savings ?? 0));
+        const rating = Number(d.steamRatingPercent ?? 0);
+        return {
+          title: d.title ?? "",
+          label: was > sale ? `$${sale.toFixed(2)} (was $${was.toFixed(2)})` : `$${sale.toFixed(2)}`,
+          value: off > 0 ? `-${off}%` : "",
+          change: rating > 0 ? rating : undefined,
+        };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "espn", label: "ESPN Scoreboard", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "espn.scoreboard", label: "Live scores & schedule", shape: "list" }],
+  async resolve(ctx) {
+    const sport = String(ctx.query.sport ?? "basketball").toLowerCase().replace(/[^a-z]/g, "") || "basketball";
+    const league = String(ctx.query.league ?? "nba").toLowerCase().replace(/[^a-z0-9-]/g, "") || "nba";
+    const max = Math.min(Number(ctx.query.max) || 20, 60);
+    const raw = (await getJSON(
+      `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/scoreboard`,
+      UA,
+    )) as { events?: { name?: string; shortName?: string; status?: { type?: { shortDetail?: string } } }[] } | null;
+    return {
+      items: (raw?.events ?? []).slice(0, max).map((e) => ({
+        title: e.shortName ?? e.name ?? "",
+        label: e.name ?? "",
+        value: e.status?.type?.shortDetail ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "mlb", label: "MLB Scores", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "mlb.schedule", label: "MLB games & scores", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 20, 60);
+    const date = String(ctx.query.date ?? "").replace(/[^0-9-]/g, "");
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1${date ? `&date=${date}` : ""}`;
+    const raw = (await getJSON(url, UA)) as {
+      dates?: {
+        games?: {
+          status?: { detailedState?: string };
+          teams?: {
+            away?: { score?: number; team?: { name?: string } };
+            home?: { score?: number; team?: { name?: string } };
+          };
+        }[];
+      }[];
+    } | null;
+    const games = (raw?.dates ?? []).flatMap((d) => d.games ?? []);
+    return {
+      items: games.slice(0, max).map((g) => {
+        const away = g.teams?.away;
+        const home = g.teams?.home;
+        const an = away?.team?.name ?? "Away";
+        const hn = home?.team?.name ?? "Home";
+        const hasScore = typeof away?.score === "number" && typeof home?.score === "number";
+        return {
+          title: `${an} @ ${hn}`,
+          label: g.status?.detailedState ?? "",
+          value: hasScore ? `${away?.score}-${home?.score}` : "",
+        };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "firstorg", label: "FIRST.org Countries", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "firstorg.countries", label: "Countries by region", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 30, 100);
+    const region = String(ctx.query.region ?? "").replace(/[^A-Za-z ]/g, "").trim().toLowerCase();
+    const raw = (await getJSON("https://api.first.org/data/v1/countries", UA)) as { data?: Record<string, { country?: string; region?: string }> } | null;
+    const all = Object.entries(raw?.data ?? {}).map(([code, v]) => ({
+      code,
+      country: v?.country ?? "",
+      region: v?.region ?? "",
+    }));
+    const filtered = region ? all.filter((c) => c.region.toLowerCase() === region) : all;
+    return {
+      items: filtered.slice(0, max).map((c) => ({
+        title: c.country,
+        label: c.code,
+        value: c.region,
+      })),
+    };
+  },
+});
+
+reg({
+  id: "worldbank", label: "World Bank", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "worldbank.indicator", label: "Indicator by country", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 20, 100);
+    const indicator = String(ctx.query.indicator ?? "SP.POP.TOTL").replace(/[^A-Za-z0-9.]/g, "") || "SP.POP.TOTL";
+    const year = String(Number(ctx.query.year) || 2023).replace(/[^0-9]/g, "") || "2023";
+    const url = `https://api.worldbank.org/v2/country/all/indicator/${indicator}?format=json&date=${year}&per_page=${max}`;
+    const raw = (await getJSON(url, UA)) as [unknown, { country?: { value?: string }; countryiso3code?: string; value?: number | null; date?: string }[]] | null;
+    const rows = Array.isArray(raw) ? (raw[1] ?? []) : [];
+    return {
+      items: rows.map((r) => ({
+        title: r?.country?.value ?? "",
+        label: r?.countryiso3code ?? "",
+        value: r?.value ?? "",
+      })),
+    };
+  },
+});

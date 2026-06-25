@@ -1,6 +1,6 @@
 # Integrations
 
-GlanceOS connects to **85 data sources**. Each is a server-side *provider* — it knows how
+GlanceOS connects to **137 data sources**. Each is a server-side *provider* — it knows how
 to fetch a *resource* and return a raw payload, which a block's **SourceMap** then shapes to
 fit. Binding happens in the Studio's **⟿ Data** tab (or one-click via a provider's preset
 "objects" on **Settings → Connections**). Tokens and secret URLs are encrypted on the server
@@ -66,11 +66,12 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Statuspage** `statuspage` · token · statuspage.incidents
 - **UptimeRobot** `uptimerobot` · apiKey · uptimerobot.monitors
 
-### Calendar (5)
+### Calendar (6)
 - **Calendar (iCal URL)** `ical` · url · ical.events
 - **Calendly** `calendly` · OAuth · calendly.me, calendly.events
 - **Google Calendar** `google` · OAuth · google.calendar
 - **Microsoft 365 / Outlook** `microsoft` · OAuth · microsoft.calendar
+- **Public Holidays** `nager` · keyless · nager.next
 - **Zoom** `zoom` · OAuth · zoom.meetings
 
 ### Mail (2)
@@ -80,10 +81,16 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 ### Smart home (1)
 - **Home Assistant** `homeassistant` · token · homeassistant.entity, homeassistant.history
 
-### Media (11)
+### Chat (1)
+- **Slack** `slack` · OAuth · slack.messages, slack.channels
+
+### Media (14)
 - **Anime (Jikan / MyAnimeList)** `jikan` · keyless · jikan.top, jikan.search
+- **Apple iTunes Search** `itunes` · keyless · itunes.search
+- **Deezer** `deezer` · keyless · deezer.search
 - **Last.fm** `lastfm` · apiKey · lastfm.recent, lastfm.topartists
 - **ListenBrainz** `listenbrainz` · token · listenbrainz.listens
+- **MusicBrainz** `musicbrainz` · keyless · musicbrainz.artists
 - **Plex** `plex` · token · plex.recentlyAdded, plex.sessions
 - **Radarr** `radarr` · apiKey · radarr.calendar, radarr.queue
 - **Sonarr** `sonarr` · apiKey · sonarr.calendar, sonarr.queue
@@ -99,19 +106,86 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Mastodon** `mastodon` · keyless · mastodon.timeline
 - **Reddit** `reddit` · keyless · reddit.posts
 
-### Gaming (2)
+### News (1)
+- **Hacker News** `hackernews` · keyless · hackernews.top, hackernews.search
+
+### Gaming (7)
+- **CheapShark Game Deals** `cheapshark` · keyless · cheapshark.deals
+- **Dota 2 (OpenDota)** `opendota` · keyless · opendota.heroes
+- **Free-to-Play Games** `freetogame` · keyless · freetogame.games
+- **PokéAPI** `pokeapi` · keyless · pokeapi.list
+- **Scryfall (MTG)** `scryfall` · keyless · scryfall.search
 - **Steam** `steam` · keyless · steam.players
 - **Twitch** `twitch` · OAuth · twitch.user
 
-### Sports (1)
+### Sports (4)
+- **ESPN Scoreboard** `espn` · keyless · espn.scoreboard
+- **Formula 1** `f1` · keyless · f1.next
+- **MLB Scores** `mlb` · keyless · mlb.schedule
 - **TheSportsDB** `thesportsdb` · keyless · thesportsdb.next, thesportsdb.last
 
-### Books (1)
+### Books (2)
 - **Open Library** `openlibrary` · keyless · openlibrary.search
+- **Project Gutenberg** `gutendex` · keyless · gutendex.search
 
-### Finance (3)
+### Reference (7)
+- **Datamuse (words)** `datamuse` · keyless · datamuse.related
+- **Dictionary** `dictionary` · keyless · dictionary.define
+- **FIRST.org Countries** `firstorg` · keyless · firstorg.countries
+- **PoetryDB** `poetrydb` · keyless · poetrydb.random
+- **Quotable** `quotable` · keyless · quotable.random
+- **Wikipedia** `wikipedia` · keyless · wikipedia.onthisday, wikipedia.search
+- **World Bank** `worldbank` · keyless · worldbank.indicator
+
+### Science (4)
+- **GBIF Biodiversity** `gbif` · keyless · gbif.species
+- **Natural Events (NASA)** `eonet` · keyless · eonet.events
+- **Open-Meteo Air Quality** `openmeteoair` · keyless · openmeteoair.current
+- **Open-Meteo Marine** `openmarine` · keyless · openmarine.current
+
+### Space (3)
+- **ISS tracker** `iss` · keyless · iss.position
+- **Spaceflight News** `spaceflightnews` · keyless · spaceflightnews.articles
+- **SpaceX** `spacex` · keyless · spacex.upcoming
+
+### Weather (2)
+- **Civil Forecast** `civilweather` · keyless · civilweather.daily
+- **US Weather Alerts** `nws` · keyless · nws.alerts
+
+### Travel & place (4)
+- **Postal Code Lookup** `zippopotam` · keyless · zippopotam.place
+- **Sunrise / Sunset** `sunrise` · keyless · sunrise.times
+- **Travel time (OSRM)** `osrm` · keyless · osrm.route
+- **World Time** `worldtime` · keyless · worldtime.now
+
+### Food & drink (3)
+- **Open Brewery DB** `openbrewerydb` · keyless · openbrewerydb.byCity
+- **TheCocktailDB** `thecocktaildb` · keyless · thecocktaildb.search, thecocktaildb.random
+- **TheMealDB (recipes)** `themealdb` · keyless · themealdb.search, themealdb.random
+
+### Art (1)
+- **Art Institute of Chicago** `artic` · keyless · artic.artworks, artic.search
+
+### Fun (9)
+- **Advice Slip** `adviceslip` · keyless · adviceslip.random
+- **Affirmations** `affirmations` · keyless · affirmations.random
+- **Cat Facts** `catfact` · keyless · catfact.random
+- **Chuck Norris Jokes** `chucknorris` · keyless · chucknorris.random
+- **Dad Jokes** `dadjoke` · keyless · dadjoke.random
+- **Official Joke API** `officialjoke` · keyless · officialjoke.list, officialjoke.random
+- **Open Trivia DB** `opentdb` · keyless · opentdb.questions
+- **Random Facts** `uselessfacts` · keyless · uselessfacts.random
+- **xkcd** `xkcd` · keyless · xkcd.latest
+
+### Finance (9)
+- **Binance (crypto)** `binance` · keyless · binance.tickers
+- **Blockchain.com Stats** `blockchaininfo` · keyless · blockchaininfo.btcprice
 - **Coinbase** `coinbase` · OAuth · coinbase.accounts
 - **CoinGecko** `coingecko` · keyless · coingecko.markets, coingecko.trending
+- **CoinLore** `coinlore` · keyless · coinlore.top
+- **Coinpaprika** `coinpaprika` · keyless · coinpaprika.tickers, coinpaprika.global
+- **Frankfurter (FX)** `frankfurter` · keyless · frankfurter.rates
+- **mempool.space Fees** `mempool` · keyless · mempool.fastestfee
 - **Open Exchange Rates** `openexchangerates` · apiKey · openexchangerates.latest
 
 ### Money (4)
@@ -141,113 +215,11 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Pinboard** `pinboard` · token · pinboard.recent
 - **Raindrop.io** `raindrop` · token · raindrop.bookmarks
 
-### Civic & science (2)
+### Civic (2)
 - **Health stats (disease.sh)** `diseasesh` · keyless · diseasesh.country
 - **USGS Earthquakes** `usgs` · keyless · usgs.quakes
-
-### Travel & place (1)
-- **Travel time (OSRM)** `osrm` · keyless · osrm.route
 
 ### Generic (3)
 - **GraphQL** `graphql` · token · graphql
 - **REST / JSON** `rest` · apiKey · rest
 - **RSS / Atom** `rss` · keyless · rss.feed
-
-### chat (1)
-- **Slack** `slack` · OAuth · slack.messages, slack.channels
-
----
-
-## E1 additions — more keyless public-data providers (97 total)
-
-All keyless (render immediately, no login):
-
-### news
-- **Hacker News** `hackernews` · keyless · hackernews.top, hackernews.search
-
-### reference
-- **Wikipedia** `wikipedia` · keyless · wikipedia.onthisday, wikipedia.search
-- **Dictionary** `dictionary` · keyless · dictionary.define
-- **Quotable** `quotable` · keyless · quotable.random
-
-### finance
-- **Frankfurter (FX)** `frankfurter` · keyless · frankfurter.rates
-- **Binance (crypto)** `binance` · keyless · binance.tickers
-
-### space
-- **ISS tracker** `iss` · keyless · iss.position
-- **Spaceflight News** `spaceflightnews` · keyless · spaceflightnews.articles
-
-### calendar
-- **Public Holidays** `nager` · keyless · nager.next
-
-### books
-- **Project Gutenberg** `gutendex` · keyless · gutendex.search
-
-### gaming
-- **Free-to-Play Games** `freetogame` · keyless · freetogame.games
-
-### fun
-- **xkcd** `xkcd` · keyless · xkcd.latest
-
----
-
-## E2 additions — more keyless public-data providers (109 total)
-
-All keyless (render immediately, no login):
-
-### food
-- **TheMealDB (recipes)** `themealdb` · keyless · themealdb.search, themealdb.random
-- **TheCocktailDB** `thecocktaildb` · keyless · thecocktaildb.search, thecocktaildb.random
-- **Open Brewery DB** `openbrewerydb` · keyless · openbrewerydb.byCity
-
-### art
-- **Art Institute of Chicago** `artic` · keyless · artic.artworks, artic.search
-
-### space
-- **SpaceX** `spacex` · keyless · spacex.upcoming
-
-### finance
-- **Coinpaprika** `coinpaprika` · keyless · coinpaprika.tickers, coinpaprika.global
-
-### sports
-- **Formula 1** `f1` · keyless · f1.next
-
-### reference
-- **PoetryDB** `poetrydb` · keyless · poetrydb.random
-- **Datamuse (words)** `datamuse` · keyless · datamuse.related
-
-### fun
-- **Open Trivia DB** `opentdb` · keyless · opentdb.questions
-- **Dad Jokes** `dadjoke` · keyless · dadjoke.random
-- **Random Facts** `uselessfacts` · keyless · uselessfacts.random
-
----
-
-## E3 additions — more keyless public-data providers (121 total)
-
-All keyless (render immediately, no login):
-
-### weather
-- **US Weather Alerts** `nws` · keyless · nws.alerts
-
-### science
-- **Natural Events (NASA EONET)** `eonet` · keyless · eonet.events
-
-### place
-- **Sunrise / Sunset** `sunrise` · keyless · sunrise.times
-- **Postal Code Lookup** `zippopotam` · keyless · zippopotam.place
-
-### media
-- **Apple iTunes Search** `itunes` · keyless · itunes.search
-- **Deezer** `deezer` · keyless · deezer.search
-- **MusicBrainz** `musicbrainz` · keyless · musicbrainz.artists
-
-### gaming
-- **PokéAPI** `pokeapi` · keyless · pokeapi.list
-- **Scryfall (MTG)** `scryfall` · keyless · scryfall.search
-- **Dota 2 (OpenDota)** `opendota` · keyless · opendota.heroes
-
-### fun
-- **Cat Facts** `catfact` · keyless · catfact.random
-- **Chuck Norris Jokes** `chucknorris` · keyless · chucknorris.random
