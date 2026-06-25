@@ -3001,3 +3001,192 @@ reg({
     return { value: raw?.quote ?? "" };
   },
 });
+
+// ---- E6: more keyless public-data providers (geo / civic / earth-science / name-novelty / reference) ----
+
+reg({
+  id: "bigdatacloud", label: "BigDataCloud Reverse Geocode", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "bigdatacloud.place", label: "Place at lat/lon", shape: "scalar" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 51.5074;
+    const lon = Number(ctx.query.lon) || -0.1278;
+    const raw = (await getJSON(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`, UA)) as { city?: string; locality?: string; principalSubdivision?: string; countryName?: string } | null;
+    const place = (raw?.city || raw?.locality) ?? "";
+    const region = raw?.principalSubdivision ?? "";
+    const country = raw?.countryName ?? "";
+    const value = [place, region, country].filter((p) => p).join(", ");
+    return { value };
+  },
+});
+
+reg({
+  id: "postcodesio", label: "Postcodes.io (UK)", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "postcodesio.nearest", label: "Nearest UK postcodes", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 51.5074;
+    const lon = Number(ctx.query.lon) || -0.1278;
+    const n = Math.min(Number(ctx.query.max) || 5, 20);
+    const raw = (await getJSON(`https://api.postcodes.io/postcodes?lon=${lon}&lat=${lat}&limit=${n}`, UA)) as { result?: { postcode?: string; admin_district?: string; country?: string }[] | null } | null;
+    return { items: (raw?.result ?? []).map((p) => ({ title: p.postcode ?? "", label: [p.admin_district, p.country].filter((x) => x).join(", ") })) };
+  },
+});
+
+reg({
+  id: "censusgeocoder", label: "US Census Geocoder", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "censusgeocoder.match", label: "Geocode a US address", shape: "list" }],
+  async resolve(ctx) {
+    const address = String(ctx.query.address ?? "4600 Silver Hill Rd, Washington, DC 20233").slice(0, 200);
+    const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(address)}&benchmark=Public_AR_Current&format=json`;
+    const raw = (await getJSON(url, UA)) as { result?: { addressMatches?: { matchedAddress?: string; coordinates?: { x?: number; y?: number } }[] } } | null;
+    return { items: (raw?.result?.addressMatches ?? []).map((m) => ({ title: m.matchedAddress ?? "", label: m.coordinates ? `${m.coordinates.y ?? ""}, ${m.coordinates.x ?? ""}` : "" })) };
+  },
+});
+
+reg({
+  id: "policeuk", label: "UK Police Crime", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "policeuk.street", label: "Street-level crimes near a point", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 52.629729;
+    const lng = Number(ctx.query.lng) || -1.131592;
+    const date = String(ctx.query.date ?? "").replace(/[^0-9-]/g, "").slice(0, 7);
+    const max = Math.min(Number(ctx.query.max) || 20, 60);
+    const dq = date ? `&date=${date}` : "";
+    const raw = (await getJSON(`https://data.police.uk/api/crimes-street/all-crime?lat=${lat}&lng=${lng}${dq}`, UA)) as { category?: string; month?: string; location?: { street?: { name?: string } } }[] | null;
+    return {
+      items: (raw ?? []).slice(0, max).map((c) => ({
+        title: (c.category ?? "crime").replace(/-/g, " "),
+        label: c.location?.street?.name ?? "",
+        value: c.month ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "fbiwanted", label: "FBI Wanted", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "fbiwanted.list", label: "FBI wanted persons", shape: "list" }],
+  async resolve(ctx) {
+    const page = Math.min(Math.max(Number(ctx.query.page) || 1, 1), 60);
+    const max = Math.min(Number(ctx.query.max) || 20, 50);
+    const raw = (await getJSON(`https://api.fbi.gov/wanted/v1/list?page=${page}`, UA)) as { items?: { title?: string; description?: string; status?: string }[] } | null;
+    return {
+      items: (raw?.items ?? []).slice(0, max).map((w) => ({
+        title: w.title ?? "",
+        label: w.description ?? "",
+        value: w.status ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "ukbills", label: "UK Parliament Bills", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "ukbills.list", label: "Bills before Parliament", shape: "list" }],
+  async resolve(ctx) {
+    const take = Math.min(Number(ctx.query.max) || 20, 60);
+    const raw = (await getJSON(`https://bills-api.parliament.uk/api/v1/Bills?take=${take}`, UA)) as { items?: { shortTitle?: string; currentHouse?: string; currentStage?: { description?: string } }[] } | null;
+    return {
+      items: (raw?.items ?? []).map((b) => ({
+        title: b.shortTitle ?? "",
+        label: b.currentStage?.description ?? "",
+        value: b.currentHouse ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "agify", label: "Agify", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "agify.age", label: "Predicted age for a name", shape: "scalar" }],
+  async resolve(ctx) {
+    const name = String(ctx.query.name ?? "michael").replace(/[^a-zA-Z]/g, "").slice(0, 40) || "michael";
+    const raw = (await getJSON(`https://api.agify.io/?name=${name}`, UA)) as { age?: number | null } | null;
+    return { value: raw?.age ?? 0 };
+  },
+});
+
+reg({
+  id: "genderize", label: "Genderize", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "genderize.gender", label: "Predicted gender for a name", shape: "scalar" }],
+  async resolve(ctx) {
+    const name = String(ctx.query.name ?? "michael").replace(/[^a-zA-Z]/g, "").slice(0, 40) || "michael";
+    const raw = (await getJSON(`https://api.genderize.io/?name=${name}`, UA)) as { gender?: string | null; probability?: number } | null;
+    return { value: raw?.gender ?? "unknown" };
+  },
+});
+
+reg({
+  id: "nationalize", label: "Nationalize", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "nationalize.countries", label: "Likely nationalities for a name", shape: "list" }],
+  async resolve(ctx) {
+    const name = String(ctx.query.name ?? "michael").replace(/[^a-zA-Z]/g, "").slice(0, 40) || "michael";
+    const max = Math.min(Number(ctx.query.max) || 5, 10);
+    const raw = (await getJSON(`https://api.nationalize.io/?name=${name}`, UA)) as { country?: { country_id?: string; probability?: number }[] } | null;
+    return { items: (raw?.country ?? []).slice(0, max).map((c) => ({ title: c.country_id ?? "", value: Math.round((c.probability ?? 0) * 100) + "%" })) };
+  },
+});
+
+reg({
+  id: "noaatides", label: "NOAA Tides & Currents", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [{ id: "noaatides.level", label: "Latest water level", shape: "scalar" }],
+  async resolve(ctx) {
+    const station = String(ctx.query.station ?? "9414290").replace(/[^a-z0-9]/gi, "") || "9414290";
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=today&station=${station}&product=water_level&datum=MLLW&time_zone=lst_ldt&units=english&format=json`;
+    const raw = (await getJSON(url, UA)) as { metadata?: { name?: string }; data?: { t?: string; v?: string }[] } | null;
+    const data = raw?.data ?? [];
+    const last = data.length ? data[data.length - 1] : null;
+    const ft = Number(last?.v);
+    const name = raw?.metadata?.name ?? station;
+    return { value: Number.isFinite(ft) ? `${name}: ${ft.toFixed(2)} ft` : "" };
+  },
+});
+
+reg({
+  id: "usgswater", label: "USGS Water Services", category: "science", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [{ id: "usgswater.streamflow", label: "Latest streamflow", shape: "list" }],
+  async resolve(ctx) {
+    const sites = String(ctx.query.sites ?? "01646500").replace(/[^0-9,]/g, "") || "01646500";
+    const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${sites}&parameterCd=00060&siteStatus=active`;
+    const raw = (await getJSON(url, UA)) as {
+      value?: { timeSeries?: { sourceInfo?: { siteName?: string }; variable?: { unit?: { unitCode?: string } }; values?: { value?: { value?: string }[] }[] }[] };
+    } | null;
+    const series = raw?.value?.timeSeries ?? [];
+    return {
+      items: series.map((ts) => {
+        const obs = ts?.values?.[0]?.value ?? [];
+        const last = obs.length ? obs[obs.length - 1] : null;
+        const unit = ts?.variable?.unit?.unitCode ?? "";
+        const v = last?.value;
+        return {
+          title: ts?.sourceInfo?.siteName ?? "",
+          value: v != null ? `${v}${unit ? " " + unit : ""}` : "",
+        };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "citypopulation", label: "City Population", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "citypopulation.cities", label: "World cities by population", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 25, 100);
+    const raw = (await getJSON("https://countriesnow.space/api/v0.1/countries/population/cities", UA)) as { error?: boolean; data?: { city?: string; country?: string; populationCounts?: { year?: string; value?: string }[] }[] } | null;
+    return { items: (raw?.data ?? []).slice(0, max).map((c) => {
+      const latest = (c.populationCounts ?? []).reduce<{ year?: string; value?: string } | null>((best, cur) => (best && (Number(best.year) || 0) >= (Number(cur?.year) || 0) ? best : cur), null);
+      return { title: c.city ?? "", label: c.country ?? "", value: latest?.value ?? "" };
+    }) };
+  },
+});
