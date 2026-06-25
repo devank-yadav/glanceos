@@ -135,6 +135,19 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "openfoodfacts", id: "search", label: "Food products", description: "Products matching a search", blockType: "bulletList", sourceKind: "openfoodfacts.search", query: { q: "chocolate", max: "8" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
   { providerId: "fruityvice", id: "all", label: "Fruit nutrition", description: "Fruits and their calories", blockType: "bulletList", sourceKind: "fruityvice.all", query: { max: "20" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
   { providerId: "boredapi", id: "activities", label: "Things to do", description: "Activity ideas when bored", blockType: "bulletList", sourceKind: "boredapi.activities", query: { max: "8" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
+
+  // ---- E6 keyless providers (render immediately) ----
+  { providerId: "bigdatacloud", id: "place", label: "Where am I", description: "Place name for a lat/lon", blockType: "stat", sourceKind: "bigdatacloud.place", query: { lat: "51.5074", lon: "-0.1278" }, map: VALUE(), props: { label: "location" }, defaultH: 4 },
+  { providerId: "noaatides", id: "level", label: "Tide level", description: "Latest water level at a NOAA station", blockType: "stat", sourceKind: "noaatides.level", query: { station: "9414290" }, map: VALUE(), props: { label: "tide" }, defaultH: 4 },
+  { providerId: "agify", id: "age", label: "Age guess", description: "Predicted age for a first name", blockType: "stat", sourceKind: "agify.age", query: { name: "michael" }, map: VALUE(), props: { label: "predicted age" }, defaultH: 4 },
+  { providerId: "genderize", id: "gender", label: "Gender guess", description: "Predicted gender for a first name", blockType: "stat", sourceKind: "genderize.gender", query: { name: "alex" }, map: VALUE(), props: { label: "predicted gender" }, defaultH: 4 },
+  { providerId: "policeuk", id: "street", label: "Crime nearby (UK)", description: "Street-level crimes near a point", blockType: "bulletList", sourceKind: "policeuk.street", query: { lat: "52.6297", lng: "-1.1316", max: "12" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
+  { providerId: "fbiwanted", id: "list", label: "FBI Wanted", description: "People on the FBI wanted list", blockType: "bulletList", sourceKind: "fbiwanted.list", query: { max: "10" }, map: LIST({ text: "title" }, "items"), defaultH: 8 },
+  { providerId: "ukbills", id: "list", label: "UK bills", description: "Bills before the UK Parliament", blockType: "bulletList", sourceKind: "ukbills.list", query: { max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
+  { providerId: "nationalize", id: "countries", label: "Name origins", description: "Likely nationalities for a first name", blockType: "bulletList", sourceKind: "nationalize.countries", query: { name: "sofia" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 6 },
+  { providerId: "postcodesio", id: "nearest", label: "Nearby postcodes (UK)", description: "Closest UK postcodes to a point", blockType: "bulletList", sourceKind: "postcodesio.nearest", query: { lat: "51.5074", lon: "-0.1278", max: "8" }, map: LIST({ text: "title" }, "items"), defaultH: 7 },
+  { providerId: "usgswater", id: "streamflow", label: "River streamflow", description: "Latest USGS streamflow for a site", blockType: "bulletList", sourceKind: "usgswater.streamflow", query: { sites: "01646500" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 6 },
+  { providerId: "citypopulation", id: "cities", label: "City populations", description: "World cities and their populations", blockType: "bulletList", sourceKind: "citypopulation.cities", query: { max: "25" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
 ];
 
 /** Presets for a given provider id (drives the Integrations page "objects" section). */
