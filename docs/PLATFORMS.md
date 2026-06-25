@@ -31,7 +31,7 @@ conventional but unproven on-device — reports welcome).
 
 | Platform | Artifact | Built in CI? | On real hardware? | Needs |
 | --- | --- | --- | --- | --- |
-| **Raspberry Pi kiosk** | SD-card install (script + systemd + Chromium kiosk) | No (installer runs on the Pi) | Not yet verified | A Pi + the multi-arch image. Flashable `.img` is still pending — see [roadmap C5](launch-roadmap.md). |
+| **Raspberry Pi kiosk** | SD-card install (script + systemd + Chromium kiosk) **or** a flashable `.img` ([pi-gen stage](../devices/pi-image/pi-gen/)) | No (installer runs on the Pi; image build runs on a Linux host) | Not yet verified | A Pi + the multi-arch image. The pi-gen image build needs a Linux box and hasn't been booted on hardware yet. |
 | **Android TV / Fire TV** | `.apk` (debug-signed) | On a `v*` tag via [`release.yml`](../.github/workflows/release.yml) | Not yet verified | Sideload to your stick. A store build needs your own keystore. |
 | **Apple TV (tvOS)** | Xcode project (`xcodegen generate`) | No | Not yet verified | Runs in the Simulator with no account; on-device needs an **Apple Developer account** (NEEDS-YOU). App-icon asset catalog still pending. |
 | **Samsung Tizen TV** | `.wgt` | No | Not yet verified | **Tizen Studio + a Samsung developer certificate** (NEEDS-YOU). |

@@ -5,9 +5,18 @@ that powers on into the dashboard with no keyboard, ever. You point it at your s
 GlanceOS server, it shows a big QR + claim code on first boot, you scan it in the config app,
 and from then on the screen just lives on the wall and updates itself.
 
-This directory does not build a custom SD-card image (that's the eventual pi-gen stage). It
-ships the **hand-conversion path**: a runbook + an idempotent installer that turn stock
-**Raspberry Pi OS (Bookworm)** into a boot-to-dashboard kiosk. PLATFORM_ID is `pi`.
+This directory ships **two paths to the same kiosk**, sharing one launcher + systemd unit:
+
+- the **hand-conversion path** — a runbook + an idempotent installer
+  ([`install-kiosk.sh`](install-kiosk.sh)) that turn a Pi you already booted on stock
+  **Raspberry Pi OS (Bookworm)** into a boot-to-dashboard kiosk; and
+- the **flashable image** — a [pi-gen custom stage](pi-gen/) that bakes the same kiosk into a
+  fresh SD image, so you flash and power on with nothing to install. The stage copies the very
+  same [`start-kiosk.sh`](start-kiosk.sh) + [`glanceos-kiosk.service`](glanceos-kiosk.service),
+  so the two paths can't drift. See [`pi-gen/README.md`](pi-gen/README.md) — the image build
+  needs a Linux host and is **not yet booted on hardware** (Tier 2).
+
+PLATFORM_ID is `pi`.
 
 ## Dumb glass
 

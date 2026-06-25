@@ -1,0 +1,32 @@
+# Sample pi-gen config for a GlanceOS kiosk image. Copy to `config` in your
+# pi-gen checkout (or pass with `./build-docker.sh -c /path/to/this/config`).
+# Docs: https://github.com/RPi-Distro/pi-gen#config
+#
+# Build:  cd pi-gen && GLANCEOS_URL='http://your-server:8080' ./build-docker.sh -c config
+# Output: pi-gen/deploy/*-glanceos-kiosk.img(.xz)
+
+IMG_NAME='glanceos-kiosk'
+RELEASE='bookworm'
+TARGET_HOSTNAME='glanceos'
+LOCALE_DEFAULT='en_US.UTF-8'
+KEYBOARD_KEYMAP='us'
+KEYBOARD_LAYOUT='English (US)'
+TIMEZONE_DEFAULT='Etc/UTC'
+
+# pi-gen requires a first user. The kiosk runs as this account (it owns tty1 and
+# the Chromium profile). SSH is handy for a headless wall; drop it for a sealed
+# appliance.
+FIRST_USER_NAME='pi'
+FIRST_USER_PASS='change-me-before-building'
+DISABLE_FIRST_BOOT_USER_RENAME=1
+ENABLE_SSH=1
+
+# Build a Lite base (stage0..stage2) + our kiosk stage. stage2 must keep its
+# EXPORT_IMAGE so a base image is produced too; our stage exports the kiosk img.
+# Use an ABSOLUTE path to the stage (pi-gen resolves external stages by path),
+# or symlink stage-glanceos into the pi-gen root and list it bare.
+STAGE_LIST='stage0 stage1 stage2 /ABSOLUTE/PATH/TO/glanceos/devices/pi-image/pi-gen/stage-glanceos'
+
+# Optional: skip NOOBS/zip artefacts to shorten the build.
+# DEPLOY_COMPRESSION='xz'
+# DEPLOY_ZIP=0
