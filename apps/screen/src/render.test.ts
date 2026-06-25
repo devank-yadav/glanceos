@@ -46,6 +46,13 @@ describe("activePageAt — rich page rotation (v10)", () => {
     const allOff = [{ schedule: { startMin: 1080, endMin: 1200 } }, { schedule: { startMin: 1080, endMin: 1200 } }];
     expect(activePageAt(wed10, 2, allOff, 10)).toBe(0); // nothing eligible → fall back to page 0
   });
+  it("skips a blank extra page when the page list is supplied (half-built page never flashes empty)", () => {
+    const filled = [{ id: "r", blocks: [{ id: "b", type: "divider", props: {} }] }];
+    const withEmpty = [filled, []] as never; // page 0 has content, page 1 is empty
+    expect(activePageAt(0, 2, undefined, 10, withEmpty)).toBe(0);
+    expect(activePageAt(12_000, 2, undefined, 10, withEmpty)).toBe(0); // would be page 1 without the skip
+    expect(activePageAt(12_000, 2, undefined, 10, [filled, filled] as never)).toBe(1); // both filled → rotates
+  });
 });
 
 describe("pageScheduleActive (v10)", () => {

@@ -81,11 +81,15 @@ export function pageScheduleActive(s: PageSettingT["schedule"] | undefined, now:
 // among the eligible set we rotate with VARIABLE durations (cycle = sum of dwells,
 // position = now mod cycle). Robust: never returns an out-of-range or hidden page —
 // empty-eligible → the base page 0, so the wall is never blank.
-export function activePageAt(now: number, n: number, settings: (PageSettingT | undefined)[] | undefined, defaultSecs: number): number {
+export function activePageAt(now: number, n: number, settings: (PageSettingT | undefined)[] | undefined, defaultSecs: number, pages?: RowT[][]): number {
   if (n <= 1) return 0;
   const d = new Date(now);
   const eligible: number[] = [];
-  for (let i = 0; i < n; i++) if (pageScheduleActive(settings?.[i]?.schedule, d)) eligible.push(i);
+  for (let i = 0; i < n; i++) {
+    if (!pageScheduleActive(settings?.[i]?.schedule, d)) continue;
+    if (i !== 0 && pages && !pages[i]?.some((r) => r.blocks.length > 0)) continue; // skip a blank extra page so a half-built page never flashes empty
+    eligible.push(i);
+  }
   if (eligible.length === 0) return 0;
   if (eligible.length === 1) return eligible[0]!;
   const dur = eligible.map((i) => clampSecs(settings?.[i]?.seconds ?? defaultSecs));
@@ -103,9 +107,9 @@ function armPageRotate(pages: RowT[][] | null, settings: (PageSettingT | undefin
   pageStop?.();
   pageStop = null;
   if (!pages || pages.length < 2) return;
-  let last = activePageAt(Date.now(), pages.length, settings, defaultSecs);
+  let last = activePageAt(Date.now(), pages.length, settings, defaultSecs, pages);
   const h = window.setInterval(() => {
-    const idx = activePageAt(Date.now(), pages.length, settings, defaultSecs);
+    const idx = activePageAt(Date.now(), pages.length, settings, defaultSecs, pages);
     if (idx !== last && lastPayload) { last = idx; pageChanging = true; renderPayload(lastPayload); }
   }, 1000);
   pageStop = () => window.clearInterval(h);
@@ -233,7 +237,7 @@ export function renderPayload(payload: StreamPayloadT): void {
   const allPages: RowT[][] | null = board.pages?.length ? [board.rows, ...board.pages] : null;
   const defaultSecs = clampSecs(Number(board.pageRotateSeconds) || undefined);
   const layout: LayoutT = allPages
-    ? { ...board, rows: allPages[activePageAt(Date.now(), allPages.length, board.pageSettings, defaultSecs)]!, pages: undefined }
+    ? { ...board, rows: allPages[activePageAt(Date.now(), allPages.length, board.pageSettings, defaultSecs, allPages)]!, pages: undefined }
     : board;
   // v10 page transition: the fade/gap between pages (ms). Set a CSS var the .page-in
   // rule reads; 0 → instant (the rule's animation is a no-op at 0 ms).
