@@ -669,6 +669,33 @@ export const Layout = z.object({
   // Optional + additive → no migration; old docs (and screens that ignore it) are unaffected.
   pages: z.array(z.array(Row).max(40)).max(8).optional(),
   pageRotateSeconds: z.number().int().min(3).max(3600).optional(),
+  // v10 rich page rotation (supersedes the single pageRotateSeconds without breaking it):
+  // per-page config, index-aligned to the full page list `[rows, ...pages]` (entry 0
+  // configures the base `rows` page). Each page may set its own dwell `seconds` and a
+  // `schedule` limiting WHEN it appears — a daily time window (wraps past midnight),
+  // weekdays, and an inclusive date range. Pages whose schedule excludes "now" are skipped
+  // in the rotation; the screen derives the active page deterministically from the wall
+  // clock so synced screens stay in lockstep. `pageTransitionMs` is the fade/gap between
+  // pages (0 = instant). All optional + additive → no migration; old docs unaffected.
+  pageSettings: z
+    .array(
+      z.object({
+        name: z.string().max(60).optional(),
+        seconds: z.number().int().min(1).max(3600).optional(),
+        schedule: z
+          .object({
+            startMin: z.number().int().min(0).max(1439).optional(),
+            endMin: z.number().int().min(0).max(1439).optional(),
+            daysMask: z.number().int().min(0).max(127).optional(),
+            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .max(9)
+    .optional(),
+  pageTransitionMs: z.number().int().min(0).max(2000).optional(),
 });
 
 export type WidgetT = z.infer<typeof Widget>;
@@ -676,5 +703,7 @@ export type WidgetType = WidgetT["type"];
 export type RowT = z.infer<typeof Row>;
 export type ZoneT = z.infer<typeof Zone>;
 export type LayoutT = z.infer<typeof Layout>;
+export type PageSettingT = NonNullable<LayoutT["pageSettings"]>[number];
+export type PageScheduleT = NonNullable<PageSettingT["schedule"]>;
 
 export const PAGE_UNITS = 24;

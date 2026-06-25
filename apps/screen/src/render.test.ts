@@ -3,7 +3,7 @@ import type { StreamPayloadT } from "@glanceos/schema";
 
 // renderPayload captures #app at module load, so it must exist before importing.
 document.body.innerHTML = '<div id="app"></div>';
-const { renderPayload, activePageIndex } = await import("./render");
+const { renderPayload, activePageIndex, activePageAt, pageScheduleActive } = await import("./render");
 const { showAlert } = await import("./alert");
 // Same object reference render.ts holds — register a deliberately-throwing widget so we
 // can prove one bad block can't blank the wall (render-isolation, v7.0 P0).
@@ -20,6 +20,57 @@ const payload = (layout: object): StreamPayloadT =>
 // module state (cells / mountedSig). Reset it between tests so each is independent —
 // render a claimed-no-layout payload, which routes through renderMessage()→reset().
 beforeEach(() => renderPayload({ claimed: true, state: { layoutVersion: 0, layout: null, data: {} } } as StreamPayloadT));
+
+describe("activePageAt — rich page rotation (v10)", () => {
+  it("degrades to equal-duration rotation with no per-page settings", () => {
+    expect(activePageAt(0, 3, undefined, 10)).toBe(0); // 3 pages × 10s, cycle 30s
+    expect(activePageAt(12_000, 3, undefined, 10)).toBe(1);
+    expect(activePageAt(25_000, 3, undefined, 10)).toBe(2);
+    expect(activePageAt(30_000, 3, undefined, 10)).toBe(0); // wraps
+    expect(activePageAt(0, 1, undefined, 10)).toBe(0); // single page → static
+  });
+  it("honors per-page dwell durations (variable cycle)", () => {
+    const s = [{ seconds: 30 }, { seconds: 10 }]; // cycle 40s; page0 [0,30), page1 [30,40)
+    expect(activePageAt(5_000, 2, s, 10)).toBe(0);
+    expect(activePageAt(29_000, 2, s, 10)).toBe(0);
+    expect(activePageAt(30_000, 2, s, 10)).toBe(1);
+    expect(activePageAt(39_000, 2, s, 10)).toBe(1);
+    expect(activePageAt(40_000, 2, s, 10)).toBe(0); // wraps
+  });
+  it("skips out-of-schedule pages and never blanks (empty-eligible → base page 0)", () => {
+    const wed10 = new Date(2026, 5, 24, 10, 0).getTime(); // Wed 10:00 local
+    const inWindow = [undefined, { schedule: { startMin: 540, endMin: 1020 } }]; // 09–17, both eligible
+    expect([0, 1]).toContain(activePageAt(wed10, 2, inWindow, 10));
+    const evening = [undefined, { schedule: { startMin: 1080, endMin: 1200 } }]; // 18–20 → page1 excluded
+    expect(activePageAt(wed10, 2, evening, 10)).toBe(0);
+    const allOff = [{ schedule: { startMin: 1080, endMin: 1200 } }, { schedule: { startMin: 1080, endMin: 1200 } }];
+    expect(activePageAt(wed10, 2, allOff, 10)).toBe(0); // nothing eligible → fall back to page 0
+  });
+});
+
+describe("pageScheduleActive (v10)", () => {
+  const wed = new Date(2026, 5, 24, 10, 30); // Wed June 24 2026, 10:30 local (day 3)
+  it("absent schedule is always on", () => {
+    expect(pageScheduleActive(undefined, wed)).toBe(true);
+  });
+  it("daily time window, with midnight wrap", () => {
+    expect(pageScheduleActive({ startMin: 540, endMin: 1020 }, wed)).toBe(true); // 09–17 incl 10:30
+    expect(pageScheduleActive({ startMin: 660, endMin: 1020 }, wed)).toBe(false); // 11–17 excl 10:30
+    const night = { startMin: 1320, endMin: 360 }; // 22:00–06:00 wraps
+    expect(pageScheduleActive(night, new Date(2026, 5, 24, 23, 0))).toBe(true);
+    expect(pageScheduleActive(night, wed)).toBe(false);
+  });
+  it("weekday mask", () => {
+    expect(pageScheduleActive({ daysMask: 0b0111110 }, wed)).toBe(true); // Mon–Fri includes Wed
+    expect(pageScheduleActive({ daysMask: 0b0000001 }, wed)).toBe(false); // Sun only
+  });
+  it("inclusive date range", () => {
+    expect(pageScheduleActive({ fromDate: "2026-06-01", toDate: "2026-06-30" }, wed)).toBe(true);
+    expect(pageScheduleActive({ fromDate: "2026-07-01" }, wed)).toBe(false);
+    expect(pageScheduleActive({ toDate: "2026-06-23" }, wed)).toBe(false);
+    expect(pageScheduleActive({ fromDate: "2026-06-24", toDate: "2026-06-24" }, wed)).toBe(true);
+  });
+});
 
 describe("calm crossfade — in-place diff (v6.1)", () => {
   const mk = (n: number): StreamPayloadT => ({

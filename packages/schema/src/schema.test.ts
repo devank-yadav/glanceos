@@ -30,6 +30,29 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pages: Array.from({ length: 9 }, () => []) }).success).toBe(false);
   });
 
+  it("v10 rich page rotation: per-page settings + transition round-trip + bound", () => {
+    const rich = Layout.parse({
+      schemaVersion: 3,
+      name: "Rich",
+      rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }],
+      pages: [[{ id: "r1", blocks: [{ id: "b", type: "divider", props: {} }] }]],
+      pageSettings: [
+        { name: "Day", seconds: 30, schedule: { startMin: 540, endMin: 1020, daysMask: 62 } },
+        { name: "Promo", seconds: 8, schedule: { fromDate: "2026-12-24", toDate: "2026-12-26" } },
+      ],
+      pageTransitionMs: 500,
+    });
+    expect(rich.pageSettings).toHaveLength(2);
+    expect(rich.pageSettings?.[0]?.schedule?.daysMask).toBe(62);
+    expect(rich.pageSettings?.[1]?.schedule?.fromDate).toBe("2026-12-24");
+    expect(rich.pageTransitionMs).toBe(500);
+    // bounds: minute-of-day ≤ 1439, dates must be YYYY-MM-DD, ≤ 9 page settings, fade ≤ 2000ms
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageSettings: [{ schedule: { startMin: 1440 } }] }).success).toBe(false);
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageSettings: [{ schedule: { fromDate: "2026/01/01" } }] }).success).toBe(false);
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageTransitionMs: 5000 }).success).toBe(false);
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageSettings: Array.from({ length: 10 }, () => ({})) }).success).toBe(false);
+  });
+
   it("supports optional signage zones (no migration; absent = single doc)", () => {
     const noZones = Layout.parse({ schemaVersion: 3, name: "Plain", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }] });
     expect(noZones.zones).toBeUndefined(); // existing docs parse unchanged

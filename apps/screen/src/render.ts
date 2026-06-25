@@ -1,4 +1,4 @@
-import type { LayoutT, RowT, StreamPayloadT } from "@glanceos/schema";
+import type { LayoutT, PageSettingT, RowT, StreamPayloadT } from "@glanceos/schema";
 import { startPixelShift, stopPixelShift } from "./burnin";
 import { qrSvg } from "./qr";
 import { applySafeArea, enableTvMode } from "./tv";
@@ -30,6 +30,7 @@ export function getCells(): ReadonlyMap<string, { el: HTMLElement }> { return ce
 let spotlightStop: (() => void) | null = null;
 let pageStop: (() => void) | null = null;
 let lastPayload: StreamPayloadT | null = null;
+let pageChanging = false; // set by the rotation ticker so the next rebuild fades the page in
 
 function reset(): void {
   for (const fn of cleanups) fn();
@@ -46,21 +47,66 @@ function reset(): void {
 
 // v9.x multi-page boards: which page shows now — deterministic from the wall clock
 // so every screen rotates in lockstep. n = total pages, secs = seconds per page.
+// (Equal-duration, no schedule. Superseded by activePageAt; kept for the simple path.)
 export function activePageIndex(now: number, secs: number, n: number): number {
   if (n <= 1 || secs <= 0) return 0;
   return Math.floor(now / 1000 / secs) % n;
 }
 
+const DEFAULT_DWELL = 10; // seconds, when neither a per-page nor a board default is set
+const clampSecs = (s: number | undefined): number => (typeof s === "number" && Number.isFinite(s) && s >= 1 ? Math.min(3600, Math.floor(s)) : DEFAULT_DWELL);
+const localDate = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+// v10: is a page's schedule satisfied right now? Pure + total — a missing field never
+// constrains; absent schedule → always on. `now` is the device's LOCAL time, so a
+// "09:00–17:00" page shows 9-to-5 in each screen's own timezone (like the clock block).
+export function pageScheduleActive(s: PageSettingT["schedule"] | undefined, now: Date): boolean {
+  if (!s) return true;
+  if (s.fromDate || s.toDate) {
+    const d = localDate(now);
+    if (s.fromDate && d < s.fromDate) return false;
+    if (s.toDate && d > s.toDate) return false;
+  }
+  if (s.daysMask != null && ((s.daysMask >> now.getDay()) & 1) === 0) return false;
+  if (s.startMin != null && s.endMin != null) {
+    const t = now.getHours() * 60 + now.getMinutes();
+    const inWin = s.startMin <= s.endMin ? t >= s.startMin && t < s.endMin : t >= s.startMin || t < s.endMin; // wraps past midnight
+    if (!inWin) return false;
+  }
+  return true;
+}
+
+// v10 rich rotation: which page shows now, honoring per-page dwell + schedule.
+// Deterministic from the wall clock. Pages whose schedule excludes now are skipped;
+// among the eligible set we rotate with VARIABLE durations (cycle = sum of dwells,
+// position = now mod cycle). Robust: never returns an out-of-range or hidden page —
+// empty-eligible → the base page 0, so the wall is never blank.
+export function activePageAt(now: number, n: number, settings: (PageSettingT | undefined)[] | undefined, defaultSecs: number): number {
+  if (n <= 1) return 0;
+  const d = new Date(now);
+  const eligible: number[] = [];
+  for (let i = 0; i < n; i++) if (pageScheduleActive(settings?.[i]?.schedule, d)) eligible.push(i);
+  if (eligible.length === 0) return 0;
+  if (eligible.length === 1) return eligible[0]!;
+  const dur = eligible.map((i) => clampSecs(settings?.[i]?.seconds ?? defaultSecs));
+  const cycle = dur.reduce((a, b) => a + b, 0);
+  if (cycle <= 0) return eligible[0]!;
+  let t = Math.floor(now / 1000) % cycle;
+  for (let k = 0; k < eligible.length; k++) { if (t < dur[k]!) return eligible[k]!; t -= dur[k]!; }
+  return eligible[eligible.length - 1]!;
+}
+
 // Re-arm a 1 s ticker that re-renders when the active page changes. Idempotent:
-// clears any prior ticker; arms only for a rotating multi-page board.
-function armPageRotate(pages: RowT[][] | null, secs: number): void {
+// clears any prior ticker; arms only for a multi-page board (≥2 pages). The per-page
+// durations + schedules drive the change, so it arms even with no board-level interval.
+function armPageRotate(pages: RowT[][] | null, settings: (PageSettingT | undefined)[] | undefined, defaultSecs: number): void {
   pageStop?.();
   pageStop = null;
-  if (!pages || pages.length < 2 || secs <= 0) return;
-  let last = activePageIndex(Date.now(), secs, pages.length);
+  if (!pages || pages.length < 2) return;
+  let last = activePageAt(Date.now(), pages.length, settings, defaultSecs);
   const h = window.setInterval(() => {
-    const idx = activePageIndex(Date.now(), secs, pages.length);
-    if (idx !== last && lastPayload) { last = idx; renderPayload(lastPayload); }
+    const idx = activePageAt(Date.now(), pages.length, settings, defaultSecs);
+    if (idx !== last && lastPayload) { last = idx; pageChanging = true; renderPayload(lastPayload); }
   }, 1000);
   pageStop = () => window.clearInterval(h);
 }
@@ -185,10 +231,14 @@ export function renderPayload(payload: StreamPayloadT): void {
   // v9.x multi-page: render the active page as a normal board ([rows, ...pages] rotated
   // by the wall clock). Single-page boards (no `pages`) take `layout = board` unchanged.
   const allPages: RowT[][] | null = board.pages?.length ? [board.rows, ...board.pages] : null;
-  const rotSecs = Math.max(0, Number(board.pageRotateSeconds) || 0);
+  const defaultSecs = clampSecs(Number(board.pageRotateSeconds) || undefined);
   const layout: LayoutT = allPages
-    ? { ...board, rows: allPages[activePageIndex(Date.now(), rotSecs, allPages.length)]!, pages: undefined }
+    ? { ...board, rows: allPages[activePageAt(Date.now(), allPages.length, board.pageSettings, defaultSecs)]!, pages: undefined }
     : board;
+  // v10 page transition: the fade/gap between pages (ms). Set a CSS var the .page-in
+  // rule reads; 0 → instant (the rule's animation is a no-op at 0 ms).
+  const fadeMs = Math.max(0, Math.min(2000, Math.floor(Number(board.pageTransitionMs ?? 350))));
+  document.body.style.setProperty("--page-fade", `${fadeMs}ms`);
   // Theme + look + quiet dim are body-level — apply every tick, no rebuild needed.
   // "auto" mode resolves to effectiveTheme server-side (sun); fall back to light.
   const mode = state.effectiveTheme ?? (layout.theme.mode === "auto" ? "light" : layout.theme.mode);
@@ -204,11 +254,12 @@ export function renderPayload(payload: StreamPayloadT): void {
   // Same skeleton as last tick → diff in place (no flash); else full rebuild.
   // (When the active page changes, the sig differs → a clean rebuild of that page.)
   const sig = structuralSig(layout, state.data);
-  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); armPageRotate(allPages, rotSecs); return; }
+  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); armPageRotate(allPages, board.pageSettings, defaultSecs); return; }
   reset();
   mountedSig = sig;
   if (layout.zones && layout.zones.length > 0) {
     const zones = el("page-zones");
+    if (pageChanging) zones.classList.add("page-in");
     for (const zone of layout.zones) {
       const z = el("zone");
       z.style.left = `${zone.rect.x}%`;
@@ -220,10 +271,13 @@ export function renderPayload(payload: StreamPayloadT): void {
     }
     root.appendChild(zones);
   } else {
-    root.appendChild(buildPage(layout.rows, layout, state.data));
+    const pageEl = buildPage(layout.rows, layout, state.data);
+    if (pageChanging) pageEl.classList.add("page-in"); // fade the new page in on a rotation
+    root.appendChild(pageEl);
   }
+  pageChanging = false;
   applySpotlight(layout.spotlight);
-  armPageRotate(allPages, rotSecs);
+  armPageRotate(allPages, board.pageSettings, defaultSecs);
 }
 
 // Build one document page (a height-unit grid of rows) for the given rows. Used
