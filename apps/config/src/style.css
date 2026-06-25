@@ -3296,6 +3296,13 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .share-popover .ghost.danger { color: var(--bad); }
 .share-popover a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
 
+/* Version-history list (Studio history popover) */
+.history-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.history-row { padding: 6px 4px; border-radius: 8px; }
+.history-row:hover { background: var(--hover); }
+.history-row + .history-row { border-top: 1px solid var(--line); }
+.history-when { font-size: 13px; color: var(--fg); }
+
 /* ---------- device schedule editor ---------- */
 .sched-editor .sched-rule { padding: 12px; margin-top: 10px; }
 .sched-rule-right { gap: 10px; align-items: center; }

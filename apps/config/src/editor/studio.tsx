@@ -2,6 +2,7 @@ import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
+import { timeAgo } from "../timeAgo";
 import { editorOrigin } from "../router";
 import { BINDABLE, BLOCKS, blockFor, ENTER_BREAKS, INPLACE_EDIT, makeBlock, newWidgetId, pushRecentBlock, SINGLE_LINE, TEXT_PROP, type WidgetType } from "./blocks";
 import { DataPanel } from "./databind";
@@ -27,6 +28,9 @@ import { TableEditor } from "./tableEditor";
 import { BlockMenu } from "./toolbar";
 import { Icon } from "./icons";
 import { editorReducer, initialEditor, primaryId } from "./state";
+
+// Mirrors the server's listLayoutVersions() row (GET /api/layouts/:id/versions).
+type LayoutVersionMeta = { id: number; summary: string; createdAt: number };
 
 // Block types that get the structured per-line list editor instead of a textarea.
 const LIST_EDIT = new Set<WidgetType>(["bulletList", "numberedList", "checklist", "steps"]);
@@ -206,6 +210,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [shareDays, setShareDays] = useState(0); // 0 = never
   const [sharePw, setSharePw] = useState("");
+  const [histOpen, setHistOpen] = useState(false);
+  const [histBusy, setHistBusy] = useState(false);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [versions, setVersions] = useState<LayoutVersionMeta[]>([]);
   const [canCast, setCanCast] = useState(false);
   const [castMsg, setCastMsg] = useState("");
   const [convertId, setConvertId] = useState<string | null>(null);
@@ -783,6 +791,30 @@ export function Studio({ layoutId }: { layoutId: number }) {
     setShareOpen(true); setShareCopied(false);
     api.get<{ token: string | null; url: string | null }>(`/api/layouts/${layoutId}/share`).then((r) => setShareUrl(r.url)).catch(() => {});
   };
+  const openHistory = () => {
+    setHistOpen(true); setHistBusy(true);
+    api.get<LayoutVersionMeta[]>(`/api/layouts/${layoutId}/versions`)
+      .then((rows) => setVersions(Array.isArray(rows) ? rows : []))
+      .catch(() => setVersions([]))
+      .finally(() => setHistBusy(false));
+  };
+  const restoreVersion = async (vid: number) => {
+    setRestoringId(vid);
+    try {
+      // Restore archives the pre-restore state too (server-side), so this is itself undoable.
+      await api.post(`/api/layouts/${layoutId}/versions/${vid}/restore`);
+      const record = await api.get<LayoutRecord>(`/api/layouts/${layoutId}`);
+      lastSavedRef.current = JSON.stringify(record.document);
+      dispatch({ type: "replace", doc: record.document });
+      setSaveState("saved"); setSaveError("");
+      setHistOpen(false);
+      toast.success("Board restored to an earlier version");
+    } catch (e) {
+      toast.error(`Couldn't restore: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setRestoringId(null);
+    }
+  };
   const createShare = async () => {
     setShareBusy(true);
     try {
@@ -847,6 +879,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <button class="ghost icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
         <button class="ghost icon-btn" aria-label="Present" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
         <button class={`ghost icon-btn${autoOpen ? " on" : ""}`} aria-label="Automations" title="Automations — make this board react" onClick={() => setAutoOpen(true)}><Icon.command /></button>
+        <button class={`ghost icon-btn${histOpen ? " on" : ""}`} aria-label="Version history" title="Version history" onClick={() => (histOpen ? setHistOpen(false) : openHistory())}><Icon.history /></button>
         <button class={`ghost icon-btn${shareOpen ? " on" : ""}`} aria-label="Share" title="Share" onClick={() => (shareOpen ? setShareOpen(false) : openShare())}><Icon.link /></button>
         <button class={`ghost icon-btn${sideShown ? " on" : ""}`} aria-label={sideShown ? "Hide blocks panel" : "Show blocks panel"} title={sideShown ? "Hide panel" : "Show blocks panel"} onClick={toggleSidebar}><Icon.panelToggle /></button>
       </header>
@@ -922,6 +955,34 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   <span />
                   <button class="primary" onClick={createShare} disabled={shareBusy}>{shareBusy ? "Creating…" : "Create link"}</button>
                 </div>
+              </>
+            )}
+          </div>
+        </>,
+        document.body,
+      )}
+      {histOpen && createPortal(
+        <>
+          <div class="popover-backdrop" onPointerDown={() => setHistOpen(false)} />
+          <div class="share-popover card" role="dialog" aria-label="Version history">
+            <h3>Version history</h3>
+            {histBusy ? (
+              <p class="muted">Loading…</p>
+            ) : versions.length === 0 ? (
+              <p class="muted">No saved versions yet. As you edit, GlanceOS quietly archives the previous state every few minutes — they'll show up here to restore.</p>
+            ) : (
+              <>
+                <p class="muted">Restore the board to an earlier saved state. Restoring is itself undoable — your current state is archived first.</p>
+                <ul class="history-list">
+                  {versions.map((v) => (
+                    <li key={v.id} class="row spread history-row">
+                      <span class="history-when" title={new Date(v.createdAt).toLocaleString()}>{timeAgo(v.createdAt)}</span>
+                      <button class="ghost" disabled={restoringId !== null} onClick={() => restoreVersion(v.id)}>
+                        {restoringId === v.id ? "Restoring…" : "Restore"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
           </div>

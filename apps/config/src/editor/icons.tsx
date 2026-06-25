@@ -16,6 +16,7 @@ export const Icon = {
   undo: svg([<path d="M9 7 4 12l5 5" />, <path d="M4 12h11a5 5 0 0 1 0 10h-3" />]),
   redo: svg([<path d="m15 7 5 5-5 5" />, <path d="M20 12H9a5 5 0 0 0 0 10h3" />]),
   help: svg([<circle cx="12" cy="12" r="9" />, <path d="M9.2 9a3 3 0 0 1 5.6 1.3c0 2-3 2.7-3 2.7" />, <path d="M12 17h.01" />]),
+  history: svg([<path d="M3 5v5h5" />, <path d="M3.05 11a9 9 0 1 1 .5 4" />, <path d="M12 8v4l3 2" />]),
   play: svg(<path d="M7 5v14l11-7z" fill="currentColor" stroke="none" />),
   pencil: svg([<path d="M12 20h9" />, <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />]),
   lock: svg([<rect x="5" y="11" width="14" height="9" rx="2" />, <path d="M8 11V8a4 4 0 0 1 8 0v3" />]),
