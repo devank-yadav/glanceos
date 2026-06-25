@@ -48,6 +48,7 @@ export function Overlay({
   scale,
   selectedIds,
   docRef,
+  writeBack = (d) => d,
   dispatch,
   dragLayer,
   onDrop,
@@ -62,6 +63,9 @@ export function Overlay({
   scale: number;
   selectedIds: string[];
   docRef: RefObject<LayoutT>;
+  // v10: docRef/doc are the ACTIVE page (a lens view); writeBack folds a resized
+  // active-page doc back into the right page slot so other pages stay untouched.
+  writeBack?: (doc: LayoutT) => LayoutT;
   dispatch: Dispatch<EditorAction>;
   dragLayer: DragLayer;
   onDrop: (id: string, target: DropTarget, copy?: boolean) => void;
@@ -175,7 +179,7 @@ export function Overlay({
       for (const s of [1 / 3, 1 / 2, 2 / 3]) if (Math.abs(frac - s) < 0.025) { leftW = sum * s; rightW = sum * (1 - s); break; }
       showBadge(`${Math.round((leftW / sum) * 100)}% · ${Math.round((rightW / sum) * 100)}%`, e.clientX, e.clientY);
     }
-    dispatch({ type: "gestureUpdate", doc: resizeColumns(docRef.current!, d.rowIndex, d.leftIndex, leftW, rightW) });
+    dispatch({ type: "gestureUpdate", doc: writeBack(resizeColumns(docRef.current!, d.rowIndex, d.leftIndex, leftW, rightW)) });
   };
 
   // ---- row gutter (height) ----
@@ -193,7 +197,7 @@ export function Overlay({
     const dUnits = ((e.clientY - d.startY) / scale) / geometry.unit;
     const h = Math.max(1, Math.min(24, Math.round(d.h0 + dUnits)));
     showBadge(`h ${h}/24`, e.clientX, e.clientY);
-    dispatch({ type: "gestureUpdate", doc: resizeRow(docRef.current!, d.rowIndex, d.h0 + dUnits) });
+    dispatch({ type: "gestureUpdate", doc: writeBack(resizeRow(docRef.current!, d.rowIndex, d.h0 + dUnits)) });
   };
 
   // ---- corner grip (height + width together) ----
@@ -229,7 +233,7 @@ export function Overlay({
     const h = Math.max(1, Math.min(24, Math.round(d.h0 + dUnits)));
     doc = resizeRow(doc, d.rowIndex, d.h0 + dUnits);
     showBadge(d.hasRight ? `↔ · h ${h}/24` : `h ${h}/24`, e.clientX, e.clientY);
-    dispatch({ type: "gestureUpdate", doc });
+    dispatch({ type: "gestureUpdate", doc: writeBack(doc) });
   };
 
   const endGesture = (commit: boolean) => {

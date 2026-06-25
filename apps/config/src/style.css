@@ -2234,6 +2234,89 @@ ul.tasks li:last-child {
 
 /* ---------- sidebar: palette + properties ---------- */
 
+/* v10 multi-page: the pages bar sits below the top toolbar, above the canvas.
+   Tabs switch which page you edit; the cog opens per-page + rotation settings. */
+.pages-strip {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pages-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  overflow-x: auto;
+}
+.page-tab {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.page-tab:hover { background: var(--surface-hover, var(--surface)); color: var(--text); }
+.page-tab.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.page-tab.scheduled::after { content: " ·"; opacity: 0.6; }
+.page-add,
+.page-cog {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+.page-add:hover,
+.page-cog:hover { color: var(--text); background: var(--surface); }
+.page-cog { margin-left: auto; }
+.page-cog.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.page-add svg,
+.page-cog svg { width: 15px; height: 15px; }
+.pages-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border);
+  max-width: 460px;
+}
+.pages-panel-head { display: flex; align-items: center; gap: 6px; }
+.pages-panel-head .grow { flex: 1; }
+.pages-panel-head .ghost.sm {
+  width: 26px; height: 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages-panel-head .ghost.sm svg { width: 14px; height: 14px; }
+.pages-panel-head .ghost.sm.danger:hover:not(:disabled) { color: var(--danger, #c0392b); }
+.pages-panel .field input[type="text"],
+.pages-panel .field input[type="number"] { padding: 5px 8px; }
+.pages-panel .num { width: 70px; }
+.pages-panel hr { border: none; border-top: 1px solid var(--border); margin: 2px 0; }
+.pages-panel .section-label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; margin: 0; }
+.pages-panel .hint { font-size: 11px; margin: 0; }
+.day-chips { display: flex; gap: 4px; }
+.day-chip {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.day-chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+
 /* The blocks panel is always docked + opaque (a glassy/translucent panel was
    unreadable in dark mode); the top-bar toggle collapses its width to hide it. */
 .studio-side {

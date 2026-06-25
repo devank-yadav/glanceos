@@ -1,4 +1,4 @@
-import { Layout, type LayoutT, type WidgetT } from "@glanceos/schema";
+import { Layout, type LayoutT, type PageSettingT, type RowT, type WidgetT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { api, type DeviceSummary, type LayoutRecord } from "../api";
@@ -22,6 +22,7 @@ import { useToast } from "../components/Toast";
 import { LAYOUTS, applyLayout, type LayoutPreset } from "./layouts";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
+import { PagesStrip } from "./pagesStrip";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
 import { TableEditor } from "./tableEditor";
@@ -163,7 +164,9 @@ interface Editing {
 // auto name from their type ("Clock", "Clock 2"); user-set names are preserved.
 // Runs on every committed edit — idempotent once everything is named.
 function autoNameObjects(doc: LayoutT): void {
-  const blocks = doc.rows.flatMap((r) => r.blocks);
+  // Span the base page + every extra page so names stay unique across the whole
+  // multi-page board (objects are targeted by name from automations).
+  const blocks = [doc.rows, ...(doc.pages ?? [])].flatMap((rows) => rows.flatMap((r) => r.blocks));
   if (blocks.every((b) => b.name)) return; // fast path: nothing to name
   const taken = new Set<string>();
   for (const b of blocks) if (b.name) taken.add(b.name.toLowerCase());
@@ -227,6 +230,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
     return s ? (JSON.parse(s) as boolean) : true;
   });
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  // v10 multi-page: which page is being edited (0 = base `rows`, 1..N = pages[i-1]).
+  const [activePage, setActivePage] = useState(0);
+  const activePageRef = useRef(0);
+  activePageRef.current = activePage;
   const [objectsOpen, setObjectsOpen] = useState(false);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
@@ -309,7 +316,33 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [W, H] = SIZES_BY_ID[sizeKey] ?? [1920, 1080];
   const fitScale = Math.min(paneSize.w / W, paneSize.h / H);
   const scale = zoom ?? fitScale;
-  const geometry = useMemo(() => pageGeometry(state.present, W, H), [state.present, W, H]);
+  // v10: the editor edits ONE page at a time (a "lens"). viewDoc swaps the active
+  // page's rows into `.rows`, so geometry, the overlay, and the preview all operate
+  // on the page you're editing — every rows-based handler works unchanged.
+  const viewDoc = useMemo<LayoutT>(() => {
+    const d = state.present;
+    if (!activePage || !d.pages?.length) return d;
+    return { ...d, rows: d.pages[Math.min(activePage - 1, d.pages.length - 1)] ?? d.rows };
+  }, [state.present, activePage]);
+  const pageCount = (state.present.pages?.length ?? 0) + 1;
+  useEffect(() => { if (activePage > pageCount - 1) setActivePage(pageCount - 1); }, [pageCount, activePage]);
+  const geometry = useMemo(() => pageGeometry(viewDoc, W, H), [viewDoc, W, H]);
+  // What the editor preview iframe renders: the active page only (no rotation while
+  // you edit). The real screen still rotates the full doc.
+  const previewDoc = useMemo<LayoutT>(() => ({ ...viewDoc, pages: undefined, pageSettings: undefined, pageRotateSeconds: undefined, pageTransitionMs: undefined }), [viewDoc]);
+  // Overlay edits in terms of the active page (viewDoc): it reads viewDocRef and
+  // dispatches docs whose `.rows` are the resized active page; writeBackView folds
+  // those back into the right page slot so other pages are never disturbed.
+  const viewDocRef = useRef(viewDoc);
+  viewDocRef.current = viewDoc;
+  const writeBackView = (view: LayoutT): LayoutT => {
+    const ap = activePageRef.current;
+    const base = docRef.current;
+    if (!ap || !base.pages?.length) return view; // editing page 1 → view IS the full doc
+    const d = structuredClone(base);
+    d.pages![Math.min(ap - 1, d.pages!.length - 1)] = view.rows;
+    return d;
+  };
 
   // Persist the current doc now (shared by autosave + the error-banner Retry).
   const saveNow = async () => {
@@ -342,8 +375,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
 
   // preview data (structure excluded so drags cost no server calls)
   const dataKey = useMemo(
-    () => JSON.stringify(state.present.rows.flatMap((r) => r.blocks).map((b) => [b.id, b.type, b.props, b.source])),
-    [state.present],
+    () => JSON.stringify(viewDoc.rows.flatMap((r) => r.blocks).map((b) => [b.id, b.type, b.props, b.source])),
+    [viewDoc],
   );
   useEffect(() => {
     if (!loaded) return;
@@ -365,10 +398,28 @@ export function Studio({ layoutId }: { layoutId: number }) {
 
   const commitDoc = (doc: LayoutT) => { autoNameObjects(doc); dispatch({ type: "commit", doc }); };
 
+  // The rows currently being edited (active page) — the read-side counterpart to the
+  // stageEdit lens. Reads docRef/activePageRef so it's correct inside ref-based handlers.
+  const editRows = (): RowT[] => {
+    const d = docRef.current;
+    const ap = activePageRef.current;
+    if (!ap || !d.pages?.length) return d.rows;
+    return d.pages[Math.min(ap - 1, d.pages.length - 1)] ?? d.rows;
+  };
+
   const stageEdit = (mutate: (d: LayoutT) => void) => {
     dispatch({ type: "gestureStart" });
     const doc = structuredClone(docRef.current);
-    mutate(doc);
+    const ap = activePageRef.current;
+    if (ap && doc.pages?.length) {
+      // Lens: run the (rows-based) mutator against the active page, then write it back.
+      const idx = Math.min(ap - 1, doc.pages.length - 1);
+      const view: LayoutT = { ...doc, rows: doc.pages[idx]! };
+      mutate(view);
+      doc.pages[idx] = view.rows;
+    } else {
+      mutate(doc);
+    }
     autoNameObjects(doc); // every object carries a unique, editable name (used by automations)
     dispatch({ type: "gestureUpdate", doc });
     window.clearTimeout(typingTimer.current);
@@ -377,13 +428,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
 
   const selectedBlocks = (): WidgetT[] => {
     const ids = new Set(selectedRef.current);
-    return docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+    return editRows().flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
   };
 
   // Apply a "choose your layout" preset: rearrange the board into that rows×columns shape,
   // optionally pouring the existing blocks into its cells (one undo step via stageEdit).
   const applyPreset = (preset: LayoutPreset) => {
-    const hasContent = docRef.current.rows.some((r) => r.blocks.length > 0);
+    const hasContent = editRows().some((r) => r.blocks.length > 0);
     stageEdit((d) => { d.rows = applyLayout(d, preset, keepContent && hasContent); });
     setLayoutOpen(false);
     dispatch({ type: "select", id: null });
@@ -412,13 +463,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const lockSelected = () => {
     const ids = new Set(selectedRef.current);
     if (!ids.size) return;
-    const blocks = docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+    const blocks = editRows().flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
     const allLocked = blocks.length > 0 && blocks.every((b) => b.locked);
     stageEdit((d) => { for (const r of d.rows) for (const blk of r.blocks) if (ids.has(blk.id)) blk.locked = allLocked ? undefined : true; });
   };
   const invertSelected = () => {
     const ids = new Set(selectedRef.current);
-    const blocks = docRef.current.rows.flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
+    const blocks = editRows().flatMap((r) => r.blocks).filter((b) => ids.has(b.id));
     const allInv = blocks.length > 0 && blocks.every((b) => b.style?.invert);
     styleSelected({ invert: !allInv });
   };
@@ -444,7 +495,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   // v9.0 paint-format: copy the primary block's style, paste it onto every selected block.
   const copyStyle = () => {
     const id = primaryRef.current;
-    const b = id ? docRef.current.rows.flatMap((r) => r.blocks).find((x) => x.id === id) : null;
+    const b = id ? editRows().flatMap((r) => r.blocks).find((x) => x.id === id) : null;
     if (b) localStorage.setItem("glanceos.copiedStyle", JSON.stringify(b.style ?? {}));
   };
   const pasteStyle = () => {
@@ -465,7 +516,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const moveSelectedRow = (dir: "up" | "down") => {
     const id = primaryRef.current;
     if (!id) return;
-    const i = docRef.current.rows.findIndex((r) => r.blocks.some((b) => b.id === id));
+    const i = editRows().findIndex((r) => r.blocks.some((b) => b.id === id));
     const next = i < 0 ? null : moveRow(docRef.current, i, dir);
     if (next) commitDoc(next);
   };
@@ -514,7 +565,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
     stageEdit((d) => { for (const row of d.rows) if (row.blocks.length >= 2 && !row.blocks.some((b) => b.locked) && row.blocks.some((b) => ids.has(b.id))) for (const b of row.blocks) b.width = 1; });
   };
   // True when at least one selected block sits in a >=2-column row with no locked block.
-  const canEqualizeSelection = () => state.present.rows.some((r) => r.blocks.length >= 2 && !r.blocks.some((b) => b.locked) && r.blocks.some((b) => state.selectedIds.includes(b.id)));
+  const canEqualizeSelection = () => viewDoc.rows.some((r) => r.blocks.length >= 2 && !r.blocks.some((b) => b.locked) && r.blocks.some((b) => state.selectedIds.includes(b.id)));
 
   const performDrop = (source: { kind: "existing"; id: string } | { kind: "new"; type: WidgetType }, target: DropTarget, copy = false) => {
     const doc = docRef.current;
@@ -551,7 +602,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   };
 
   const startEditing = (id: string) => {
-    const block = docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === id);
+    const block = editRows().flatMap((r) => r.blocks).find((b) => b.id === id);
     const prop = block && TEXT_PROP[block.type];
     if (prop) setEditing({ id, prop, multiline: !SINGLE_LINE.has(block!.type) });
   };
@@ -627,7 +678,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   };
   const typeChar = (ch: string): boolean => {
     const id = primaryRef.current;
-    const block = id ? docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === id) : undefined;
+    const block = id ? editRows().flatMap((r) => r.blocks).find((b) => b.id === id) : undefined;
     const prop = block && TEXT_PROP[block.type];
     // a text block is focused → keep typing into it
     if (id && prop) {
@@ -635,7 +686,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
       return true;
     }
     // nothing focused on a non-empty board → continue the trailing text line.
-    const all = docRef.current.rows.flatMap((r) => r.blocks);
+    const all = editRows().flatMap((r) => r.blocks);
     const last = all[all.length - 1];
     const lastProp = last && TEXT_PROP[last.type];
     if (last && lastProp) {
@@ -645,13 +696,13 @@ export function Studio({ layoutId }: { layoutId: number }) {
     }
     // empty board, or the last block isn't text → start a new text line. Text is
     // part of the document, never an inserted "object".
-    insertTextWith(docRef.current.rows.length, ch);
+    insertTextWith(editRows().length, ch);
     return true;
   };
 
   // Backspace on an empty line: drop it and put the cursor at the line above.
   const deleteAndFocusPrev = (id: string) => {
-    const all = docRef.current.rows.flatMap((r) => r.blocks);
+    const all = editRows().flatMap((r) => r.blocks);
     const idx = all.findIndex((b) => b.id === id);
     const prev = idx > 0 ? all[idx - 1] : undefined;
     setEditing(null);
@@ -668,8 +719,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
       setSlashRow(index);
       return;
     }
-    const sel = docRef.current.rows.findIndex((r) => r.blocks.some((b) => b.id === primaryRef.current));
-    setSlashRow(sel === -1 ? docRef.current.rows.length : sel + 1);
+    const sel = editRows().findIndex((r) => r.blocks.some((b) => b.id === primaryRef.current));
+    setSlashRow(sel === -1 ? editRows().length : sel + 1);
   };
 
   useEffect(() => {
@@ -689,7 +740,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
       } else if (meta && e.key.toLowerCase() === "a") {
         e.preventDefault(); // select every object on the board
-        dispatch({ type: "selectMany", ids: docRef.current.rows.flatMap((r) => r.blocks).map((b) => b.id) });
+        dispatch({ type: "selectMany", ids: editRows().flatMap((r) => r.blocks).map((b) => b.id) });
       } else if (meta && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelected();
@@ -764,9 +815,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
       : null;
 
   const editBox = editing ? geometry.blocks.find((b) => b.id === editing.id) : undefined;
-  const editingBlock = editing ? state.present.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id) : undefined;
+  const editingBlock = editing ? viewDoc.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id) : undefined;
   const editValue = editing
-    ? String(((docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.props ?? {}) as Record<string, unknown>)[editing.prop] ?? "")
+    ? String(((editRows().flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.props ?? {}) as Record<string, unknown>)[editing.prop] ?? "")
     : "";
   const saveLabel = saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "";
 
@@ -774,7 +825,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const stageW = W * scale;
   const stageH = H * scale;
   const singleSel = state.selectedIds.length === 1;
-  const primaryBlock = primary ? state.present.rows.flatMap((r) => r.blocks).find((b) => b.id === primary) : undefined;
+  const primaryBlock = primary ? viewDoc.rows.flatMap((r) => r.blocks).find((b) => b.id === primary) : undefined;
   const primaryBox = primary ? geometry.blocks.find((b) => b.id === primary) : undefined;
   const optionsPos = primaryBox
     ? { x: Math.min(Math.max(8, primaryBox.x * scale), Math.max(8, stageW - 312)), y: Math.min(Math.max(8, primaryBox.y * scale + (primaryBox.y * scale < 60 ? 44 : -8)), Math.max(8, stageH - 392)) }
@@ -888,14 +939,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <AutomationsPage
             embedded
             layoutId={layoutId}
-            objects={state.present.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, type: b.type, settable: !b.source, prop: TEXT_PROP[b.type] }))}
+            objects={viewDoc.rows.flatMap((r) => r.blocks).filter((b) => b.name).map((b): ObjOption => ({ id: b.id, name: b.name!, label: blockFor(b.type).label, type: b.type, settable: !b.source, prop: TEXT_PROP[b.type] }))}
           />
         </Modal>
       )}
       {layoutOpen && (
         <Modal open={layoutOpen} onClose={() => setLayoutOpen(false)} title="Choose a layout" width={640}>
           <p class="muted layout-intro">Arrange this board into sections. Pick a layout, then click any cell to fill it in.</p>
-          {state.present.rows.some((r) => r.blocks.length > 0) && (
+          {viewDoc.rows.some((r) => r.blocks.length > 0) && (
             <label class="layout-keep">
               <input type="checkbox" checked={keepContent} onChange={(e) => setKeepContent((e.currentTarget as HTMLInputElement).checked)} />
               <span>Keep my content (flow existing objects into the new sections)</span>
@@ -1004,7 +1055,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                       <input type="checkbox" checked={d.layoutId === layoutId} onChange={() => toggleDisplayOn(d)} />
                       <span class={d.online ? "dot online" : "dot"} aria-hidden="true" />
                       <span class="display-name">{d.name ?? "Unnamed screen"}</span>
-                      {d.layoutId !== layoutId && d.layoutName && <span class="muted display-busy">{d.playlistId ? "playlist" : d.layoutName}</span>}
+                      {d.layoutId !== layoutId && d.layoutName && <span class="muted display-busy">{d.layoutName}</span>}
                     </label>
                   </li>
                 ))}
@@ -1021,9 +1072,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <button class="ghost" onClick={saveNow}>Retry</button>
         </p>
       )}
+      <PagesStrip doc={state.present} activePage={Math.min(activePage, pageCount - 1)} setActivePage={setActivePage} commitDoc={commitDoc} />
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>
-          <PreviewStage W={W} H={H} scale={scale} doc={state.present} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}
+          <PreviewStage W={W} H={H} scale={scale} doc={previewDoc} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}
             editMode
             onFocus={(id) => dispatch({ type: "select", id })}
             onSelect={(ids, add) => dispatch({ type: "selectMany", ids: add ? [...new Set([...selectedRef.current, ...ids])] : ids })}
@@ -1033,11 +1085,12 @@ export function Studio({ layoutId }: { layoutId: number }) {
           >
             <div class="drag-halo" ref={haloRef} />
             <Overlay
-              doc={state.present}
+              doc={viewDoc}
               geometry={geometry}
               scale={scale}
               selectedIds={state.selectedIds}
-              docRef={docRef}
+              docRef={viewDocRef}
+              writeBack={writeBackView}
               dispatch={dispatch}
               dragLayer={dragLayer}
               onDrop={(id, target, copy) => performDrop({ kind: "existing", id }, target, copy)}
@@ -1047,7 +1100,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
               onRowInsert={(rowIndex) => openSlash(rowIndex)}
               menuId={menuId}
             />
-            {loaded && state.present.rows.length === 0 && !editing && (
+            {loaded && viewDoc.rows.length === 0 && !editing && (
               <div class="empty-hint">Start typing — or press <kbd>/</kbd> for blocks</div>
             )}
             <div class="drop-indicator" ref={indicatorRef} />
@@ -1087,14 +1140,14 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 }}
                 onKeyDown={(e) => {
                   const ta = e.currentTarget as HTMLTextAreaElement;
-                  const type = docRef.current.rows.flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.type;
+                  const type = editRows().flatMap((r) => r.blocks).find((b) => b.id === editing.id)?.type;
                   if (e.key === "Escape") {
                     e.preventDefault();
                     setEditing(null);
                   } else if (e.key === "Enter" && !e.shiftKey && type && ENTER_BREAKS.has(type)) {
                     // type a document: Enter starts a fresh text line below (Shift+Enter = newline)
                     e.preventDefault();
-                    const rowIndex = docRef.current.rows.findIndex((r) => r.blocks.some((b) => b.id === editing.id));
+                    const rowIndex = editRows().findIndex((r) => r.blocks.some((b) => b.id === editing.id));
                     setEditing(null);
                     insertBlock("text", rowIndex + 1, true);
                   } else if (e.key === "Backspace" && ta.value === "") {
@@ -1117,7 +1170,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                   canBind={BINDABLE.has(primaryBlock.type)}
                   bound={!!primaryBlock.source}
                   locked={!!primaryBlock.locked}
-                  canEqualize={(() => { const r = state.present.rows.find((rr) => rr.blocks.some((b) => b.id === primary)); return !!r && r.blocks.length >= 2 && !r.blocks.some((b) => b.locked); })()}
+                  canEqualize={(() => { const r = viewDoc.rows.find((rr) => rr.blocks.some((b) => b.id === primary)); return !!r && r.blocks.length >= 2 && !r.blocks.some((b) => b.locked); })()}
                   editItems={primaryBlock.type === "tasks" ? "tasks" : primaryBlock.type === "queue" ? "queue" : null}
                   onEdit={() => { if (primary) startEditing(primary); setMenuId(null); }}
                   onConvert={() => { setOptionsOpen(false); setDataOpen(false); setMenuId(null); setConvertId(primary); }}
@@ -1174,7 +1227,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <div class="popover-backdrop" onPointerDown={() => setCanvasMenu(null)} />
                 <div class="canvas-menu" style={{ left: `${canvasMenu.x}px`, top: `${canvasMenu.y}px` }} onPointerDown={(e) => (e as unknown as Event).stopPropagation()}>
                   <button onClick={() => { paste(); setCanvasMenu(null); }}><Icon.copy /> Paste</button>
-                  <button onClick={() => { dispatch({ type: "selectMany", ids: docRef.current.rows.flatMap((r) => r.blocks).map((b) => b.id) }); setCanvasMenu(null); }}><Icon.grid /> Select all</button>
+                  <button onClick={() => { dispatch({ type: "selectMany", ids: editRows().flatMap((r) => r.blocks).map((b) => b.id) }); setCanvasMenu(null); }}><Icon.grid /> Select all</button>
                   <button onClick={() => { setCanvasMenu(null); openSlash(); }}><Icon.plus /> Add block</button>
                 </div>
               </>
@@ -1192,7 +1245,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
             docRef={docRef}
             dragLayer={dragLayer}
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
-            onClickInsert={(type) => { pushRecentBlock(type); insertBlock(type, docRef.current.rows.length, !!TEXT_PROP[type]); }}
+            onClickInsert={(type) => { pushRecentBlock(type); insertBlock(type, editRows().length, !!TEXT_PROP[type]); }}
           />
           <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
             <Icon.list /> <span>Objects</span>
