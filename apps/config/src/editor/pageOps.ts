@@ -2,7 +2,7 @@
 // `rows` (page 1, order index 0) plus optional extra `pages` (page 2…N) and an
 // index-aligned `pageSettings[]` (entry i = settings for order index i). These helpers
 // take a doc and return a NEW doc (never mutate the input) so they're trivially testable;
-// the structural ops also return the order index to make active. PagesStrip wires the
+// the structural ops also return the order index to make active. PagesPanel wires the
 // results through commitDoc + setActivePage. Kept free of Preact so they unit-test alone.
 import type { LayoutT, PageSettingT, RowT } from "@glanceos/schema";
 import { newWidgetId } from "./blocks";

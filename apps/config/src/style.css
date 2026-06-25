@@ -2234,118 +2234,59 @@ ul.tasks li:last-child {
 
 /* ---------- sidebar: palette + properties ---------- */
 
-/* v10 multi-page: the pages bar sits below the top toolbar, above the canvas.
-   Tabs switch which page you edit; the cog opens per-page + rotation settings.
-   (Uses the app palette: --soft/--card-bg surfaces, --rule borders, --fg text.) */
-.pages-strip {
-  border-bottom: 1px solid var(--rule);
-  background: var(--soft);
+/* v10 multi-page: "Pages" lives in the right sidebar as a section (same collapsible
+   pattern as Objects / Board settings). A vertical list — click a row to edit that
+   page; the active page's settings (name · dwell · schedule) expand inline beneath it.
+   Whole-board rotation lives in Board settings. Palette: --soft/--card-bg/--rule/--fg. */
+.pages-panel { display: flex; flex-direction: column; gap: 6px; }
+.pages-side-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pages-li { border-radius: var(--r-sm); }
+.pages-li.on { background: var(--soft); }
+.pages-row { display: flex; align-items: center; gap: 4px; }
+.pages-row-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px; border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--fg); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
 }
-.pages-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  overflow-x: auto;
+.pages-row-main:hover { background: var(--hover-bg); }
+.pages-li.on .pages-row-main { font-weight: 600; }
+.pages-li.on .pages-row-main::before { content: ""; flex: none; width: 3px; height: 15px; border-radius: 2px; background: var(--indigo); }
+.pages-row-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pages-row-tools { display: inline-flex; gap: 1px; flex: none; visibility: hidden; }
+.pages-li:hover .pages-row-tools,
+.pages-li.on .pages-row-tools { visibility: visible; }
+.pages-row-tools .ghost.sm {
+  width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; font-size: 12px;
 }
-.pages-tabs::before {
-  content: "Pages";
-  flex: 0 0 auto;
-  margin-right: 2px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
+.pages-row-tools .ghost.sm:hover:not(:disabled) { color: var(--fg); background: var(--hover-bg); }
+.pages-row-tools .ghost.sm:disabled { opacity: 0.3; cursor: default; }
+.pages-row-tools .ghost.sm svg { width: 13px; height: 13px; }
+.pages-row-tools .ghost.sm.danger:hover:not(:disabled) { color: var(--bad); }
+.pages-add-row {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  margin-top: 2px; padding: 6px 12px 6px 9px;
+  border: 1px dashed var(--rule); border-radius: var(--r-sm);
+  background: var(--card-bg); color: var(--fg); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
 }
-.page-tab {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 13px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: var(--card-bg);
-  color: var(--fg);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.page-tab:hover { background: var(--hover-bg); }
-.page-tab.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
-.page-tab[draggable="true"] { cursor: grab; }
-.page-tab.dragging { opacity: 0.4; }
-.page-tab.drag-over { box-shadow: inset 3px 0 0 var(--indigo); } /* drop indicator on the left edge */
-.page-tab-name { white-space: nowrap; }
-/* the "Base" pill on page 1 */
-.page-tab-base {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+.pages-add-row:hover { background: var(--hover-bg); }
+.pages-add-row svg { width: 14px; height: 14px; }
+/* "Base" pill on page 1 */
+.page-base-tag {
+  flex: none; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   padding: 1px 5px; border-radius: 999px;
   background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--muted);
 }
-.page-tab.on .page-tab-base { background: color-mix(in srgb, var(--indigo-fg) 22%, transparent); color: var(--indigo-fg); }
-/* schedule / custom-dwell status glyph — pure CSS, derived only from page settings */
-.page-glyph { display: inline-flex; align-items: center; gap: 4px; }
+/* schedule / custom-dwell status glyph — pure CSS, from page settings only */
+.page-glyph { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .pg-cal { width: 14px; height: 5px; border-radius: 1px; opacity: 0.85; background: repeating-linear-gradient(to right, var(--indigo) 0 2px, transparent 2px 4px); }
 .pg-dwell { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--indigo); }
-.page-tab.on .pg-cal { background: repeating-linear-gradient(to right, var(--indigo-fg) 0 2px, transparent 2px 4px); }
-.page-tab.on .pg-dwell { border-color: var(--indigo-fg); }
-.page-add {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 5px 12px 5px 9px;
-  border: 1px dashed var(--rule);
-  border-radius: 999px;
-  background: var(--card-bg);
-  color: var(--fg);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.page-cog {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 28px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--card-bg);
-  color: var(--muted);
-  cursor: pointer;
-}
-.page-add:hover,
-.page-cog:hover { color: var(--fg); background: var(--hover-bg); }
-.page-cog { margin-left: auto; }
-.page-cog.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
-.page-add svg { width: 14px; height: 14px; }
-.page-cog svg { width: 16px; height: 16px; }
-/* per-page settings popover body (sits inside the shared DraggablePanel .panel-body) */
-.pages-pop { display: flex; flex-direction: column; gap: 9px; }
-.block-popover:has(.pages-pop) { width: 336px; }
+/* active page's settings — shown below the page list (the list stays compact for
+   one-click switching), separated by a rule and headed with the page name */
+.pages-pop { display: flex; flex-direction: column; gap: 9px; padding: 10px 2px 4px; margin-top: 6px; border-top: 1px solid var(--rule); }
 .pages-pop .row.gap { flex-wrap: wrap; row-gap: 6px; }
-.page-base-tag {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 2px 7px; border-radius: 999px;
-  background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--muted);
-}
-.pages-panel-head { display: flex; align-items: center; gap: 6px; }
-.pages-panel-head .grow { flex: 1; }
-.pages-panel-head .ghost.sm {
-  width: 28px; height: 28px; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--card-bg); color: var(--muted); cursor: pointer;
-}
-.pages-panel-head .ghost.sm:hover:not(:disabled) { color: var(--fg); background: var(--hover-bg); }
-.pages-panel-head .ghost.sm:disabled { opacity: 0.4; cursor: default; }
-.pages-panel-head .ghost.sm svg { width: 14px; height: 14px; }
-.pages-panel-head .ghost.sm.danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+.pages-set-head { display: flex; align-items: center; gap: 6px; }
+.pages-set-name { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pages-pop .field { gap: 5px; }
 .pages-pop .field input[type="text"],
 .pages-pop .field input[type="number"],
@@ -2357,7 +2298,7 @@ ul.tasks li:last-child {
 .pages-pop .section-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; color: var(--faint); margin: 4px 0 0; }
 .pages-pop .section-label:first-of-type { margin-top: 0; }
 .pages-pop .hint { font-size: 11px; color: var(--muted); margin: 0; }
-.day-chips { display: flex; gap: 5px; }
+.day-chips { display: flex; gap: 5px; flex-wrap: wrap; }
 .day-chip {
   width: 30px; height: 30px;
   border: 1px solid var(--rule);

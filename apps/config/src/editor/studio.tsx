@@ -21,7 +21,7 @@ import { useToast } from "../components/Toast";
 import { LAYOUTS, applyLayout, type LayoutPreset } from "./layouts";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
-import { PagesStrip } from "./pagesStrip";
+import { PagesPanel } from "./pagesPanel";
 import { DraggablePanel } from "./DraggablePanel";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
@@ -186,6 +186,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [activePage, setActivePage] = useState(0);
   const activePageRef = useRef(0);
   activePageRef.current = activePage;
+  const [pagesOpen, setPagesOpen] = useState(true); // Pages section in the right sidebar (open by default)
   const [objectsOpen, setObjectsOpen] = useState(false);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
@@ -1024,7 +1025,6 @@ export function Studio({ layoutId }: { layoutId: number }) {
           <button class="ghost" onClick={saveNow}>Retry</button>
         </p>
       )}
-      <PagesStrip doc={state.present} activePage={Math.min(activePage, pageCount - 1)} setActivePage={setActivePage} commitDoc={commitDoc} />
       <div class="studio-body">
         <div class={`stage-pane${zoom ? " zoomed" : ""}`} ref={paneRef}>
           <PreviewStage W={W} H={H} scale={scale} doc={previewDoc} data={data} stageRef={stageRef} sizeLabel={SIZE_LABEL[sizeKey]}
@@ -1199,6 +1199,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
             onDrop={(type, target) => performDrop({ kind: "new", type }, target)}
             onClickInsert={(type) => { pushRecentBlock(type); insertBlock(type, editRows().length, !!TEXT_PROP[type]); }}
           />
+          <button class="settings-toggle" onClick={() => setPagesOpen((v) => !v)}>
+            <Icon.layers /> <span>Pages{pageCount > 1 ? ` (${pageCount})` : ""}</span>
+            <Icon.chevron class={`chevron${pagesOpen ? " open" : ""}`} />
+          </button>
+          {pagesOpen && <PagesPanel doc={state.present} activePage={Math.min(activePage, pageCount - 1)} setActivePage={setActivePage} commitDoc={commitDoc} />}
           <button class="settings-toggle" onClick={() => setObjectsOpen((v) => !v)}>
             <Icon.list /> <span>Objects</span>
             <Icon.chevron class={`chevron${objectsOpen ? " open" : ""}`} />
