@@ -2595,3 +2595,409 @@ reg({
     };
   },
 });
+
+// ---- E5: more keyless public-data providers (flights/transit / weather / energy / museums / sports / food / fun) ----
+
+reg({
+  id: "opensky", label: "OpenSky Network", category: "place", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 15_000,
+  resources: [{ id: "opensky.states", label: "Aircraft in an area", shape: "list" }],
+  async resolve(ctx) {
+    const clampLat = (v: unknown, d: number) => Math.min(Math.max(Number(v) || d, -90), 90);
+    const clampLon = (v: unknown, d: number) => Math.min(Math.max(Number(v) || d, -180), 180);
+    const lamin = clampLat(ctx.query.lamin, 45.8389);
+    const lamax = clampLat(ctx.query.lamax, 47.8229);
+    const lomin = clampLon(ctx.query.lomin, 5.9962);
+    const lomax = clampLon(ctx.query.lomax, 10.5226);
+    const max = Math.min(Number(ctx.query.max) || 20, 60);
+    const raw = (await getJSON(`https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`, UA)) as { states?: (string | number | boolean | null)[][] | null } | null;
+    return {
+      items: (raw?.states ?? []).slice(0, max).map((s) => {
+        const callsign = String(s?.[1] ?? "").trim();
+        const country = String(s?.[2] ?? "");
+        const altM = typeof s?.[7] === "number" ? Math.round(s[7] as number) : null;
+        const velMs = typeof s?.[9] === "number" ? Math.round((s[9] as number) * 3.6) : null;
+        return {
+          title: callsign || "(unknown)",
+          label: country,
+          value: altM != null ? `${altM} m${velMs != null ? ` · ${velMs} km/h` : ""}` : "",
+        };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "aviationweather", label: "Aviation Weather (METAR)", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "aviationweather.metar", label: "Airport METAR", shape: "scalar" }],
+  async resolve(ctx) {
+    const id = (String(ctx.query.ids ?? ctx.query.station ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "") || "KJFK").slice(0, 4);
+    const raw = (await getJSON(`https://aviationweather.gov/api/data/metar?ids=${id}&format=json`, UA)) as { rawOb?: string }[] | null;
+    return { value: raw?.[0]?.rawOb ?? "" };
+  },
+});
+
+reg({
+  id: "overpass", label: "OpenStreetMap Overpass", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "overpass.stations", label: "Transit stations nearby", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Math.min(Math.max(Number(ctx.query.lat) || 48.8566, -90), 90);
+    const lon = Math.min(Math.max(Number(ctx.query.lon) || 2.3522, -180), 180);
+    const radius = Math.min(Math.max(Number(ctx.query.radius) || 1500, 100), 10_000);
+    const max = Math.min(Math.max(Number(ctx.query.max) || 15, 1), 50);
+    const q = `[out:json][timeout:25];node["railway"="station"](around:${radius},${lat},${lon});out body ${max};`;
+    const raw = (await getJSON(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, UA)) as { elements?: { tags?: { name?: string; station?: string; railway?: string } }[] } | null;
+    return {
+      items: (raw?.elements ?? [])
+        .filter((e) => e?.tags?.name)
+        .slice(0, max)
+        .map((e) => ({
+          title: e?.tags?.name ?? "",
+          label: e?.tags?.station ?? e?.tags?.railway ?? "station",
+        })),
+    };
+  },
+});
+
+reg({
+  id: "openmeteo", label: "Open-Meteo Forecast", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [{ id: "openmeteo.current", label: "Current weather", shape: "scalar" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 51.5072;
+    const lon = Number(ctx.query.lon) || -0.1276;
+    const raw = (await getJSON(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&timezone=auto`,
+      UA,
+    )) as {
+      current?: {
+        temperature_2m?: number;
+        apparent_temperature?: number;
+        relative_humidity_2m?: number;
+        wind_speed_10m?: number;
+        weather_code?: number;
+        is_day?: number;
+      } | null;
+      current_units?: { temperature_2m?: string } | null;
+    } | null;
+    const c = raw?.current ?? null;
+    const codes: Record<number, string> = {
+      0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+      45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle",
+      55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle",
+      61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain",
+      67: "Freezing rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
+      77: "Snow grains", 80: "Light showers", 81: "Showers", 82: "Violent showers",
+      85: "Snow showers", 86: "Snow showers", 95: "Thunderstorm",
+      96: "Thunderstorm w/ hail", 99: "Thunderstorm w/ hail",
+    };
+    const t = c?.temperature_2m;
+    const unit = raw?.current_units?.temperature_2m ?? "°C";
+    const cond = codes[Number(c?.weather_code)] ?? "";
+    return { value: t == null ? "" : `${Math.round(t)}${unit}${cond ? " · " + cond : ""}` };
+  },
+});
+
+reg({
+  id: "openmeteoflood", label: "Open-Meteo Flood", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "openmeteoflood.discharge", label: "River discharge forecast", shape: "list" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat) || 51.5072;
+    const lon = Number(ctx.query.lon) || -0.1276;
+    const days = Math.min(Number(ctx.query.days) || 7, 30);
+    const raw = (await getJSON(
+      `https://flood-api.open-meteo.com/v1/flood?latitude=${lat}&longitude=${lon}&daily=river_discharge&forecast_days=${days}`,
+      UA,
+    )) as {
+      daily?: { time?: string[]; river_discharge?: (number | null)[] } | null;
+      daily_units?: { river_discharge?: string } | null;
+    } | null;
+    const times = raw?.daily?.time ?? [];
+    const flows = raw?.daily?.river_discharge ?? [];
+    const unit = raw?.daily_units?.river_discharge ?? "m³/s";
+    return {
+      items: times.map((day, i) => {
+        const q = flows[i];
+        return { title: day ?? "", label: day ?? "", value: q == null ? "" : `${q} ${unit}` };
+      }),
+    };
+  },
+});
+
+reg({
+  id: "carbonintensity", label: "UK Carbon Intensity", category: "science", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "carbonintensity.mix", label: "GB generation mix", shape: "list" }],
+  async resolve() {
+    const raw = (await getJSON(
+      "https://api.carbonintensity.org.uk/generation",
+      UA,
+    )) as {
+      data?: {
+        generationmix?: { fuel?: string; perc?: number }[];
+      } | null;
+    } | null;
+    const mix = raw?.data?.generationmix ?? [];
+    return {
+      items: mix
+        .slice()
+        .sort((a, b) => (b?.perc ?? 0) - (a?.perc ?? 0))
+        .map((f) => ({
+          title: f?.fuel ?? "",
+          label: f?.fuel ?? "",
+          value: `${f?.perc ?? 0}%`,
+        })),
+    };
+  },
+});
+
+reg({
+  id: "metmuseum", label: "The Met", category: "art", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "metmuseum.search", label: "Met collection search", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "painting").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 80) || "painting";
+    const max = Math.min(Number(ctx.query.max) || 8, 20);
+    const search = (await getJSON(`https://collectionapi.metmuseum.org/public/collection/v1/search?q=${encodeURIComponent(q)}&hasImages=true`, UA)) as { objectIDs?: number[] } | null;
+    const ids = (search?.objectIDs ?? []).slice(0, max);
+    const objs = await Promise.all(
+      ids.map(async (id) => (await getJSON(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, UA)) as { title?: string; artistDisplayName?: string; objectDate?: string } | null),
+    );
+    return {
+      items: objs
+        .filter((o): o is { title?: string; artistDisplayName?: string; objectDate?: string } => !!o)
+        .map((o) => ({ title: o.title ?? "Untitled", label: o.artistDisplayName ?? "", value: o.objectDate ?? "" })),
+    };
+  },
+});
+
+reg({
+  id: "clevelandart", label: "Cleveland Museum of Art", category: "art", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "clevelandart.search", label: "CMA open-access search", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 80);
+    const max = Math.min(Number(ctx.query.max) || 12, 50);
+    const qs = q ? `&q=${encodeURIComponent(q)}` : "";
+    const raw = (await getJSON(`https://openaccess-api.clevelandart.org/api/artworks/?has_image=1&limit=${max}${qs}`, UA)) as {
+      data?: { title?: string; creation_date?: string; creators?: { description?: string }[] }[];
+    } | null;
+    return {
+      items: (raw?.data ?? []).map((a) => ({
+        title: a.title ?? "Untitled",
+        label: a.creators?.[0]?.description ?? "",
+        value: a.creation_date ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "vam", label: "V&A Museum", category: "art", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "vam.search", label: "V&A collection search", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 80);
+    const max = Math.min(Number(ctx.query.max) || 12, 30);
+    const qs = q ? `q=${encodeURIComponent(q)}&` : "";
+    const raw = (await getJSON(`https://api.vam.ac.uk/v2/objects/search?${qs}page_size=${max}&images_exist=1`, UA)) as {
+      records?: { _primaryTitle?: string; _primaryDate?: string; _primaryMaker?: { name?: string } }[];
+    } | null;
+    return {
+      items: (raw?.records ?? []).map((r) => ({
+        title: r._primaryTitle?.trim() || "Untitled",
+        label: r._primaryMaker?.name ?? "",
+        value: r._primaryDate ?? "",
+      })),
+    };
+  },
+});
+
+reg({
+  id: "nhl", label: "NHL", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [
+    { id: "nhl.standings", label: "NHL standings", shape: "list" },
+    { id: "nhl.scores", label: "NHL scores (today)", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const res = String(ctx.resource || "").replace(/[^a-z.]/g, "");
+    if (res === "nhl.scores") {
+      const raw = (await getJSON("https://api-web.nhle.com/v1/score/now", UA)) as {
+        games?: {
+          gameState?: string;
+          startTimeUTC?: string;
+          homeTeam?: { abbrev?: string; name?: { default?: string }; score?: number };
+          awayTeam?: { abbrev?: string; name?: { default?: string }; score?: number };
+        }[];
+      } | null;
+      return {
+        items: (raw?.games ?? []).map((g) => {
+          const h = g.homeTeam, a = g.awayTeam;
+          const home = h?.abbrev ?? h?.name?.default ?? "";
+          const away = a?.abbrev ?? a?.name?.default ?? "";
+          const live = (g.gameState ?? "") !== "FUT" && (g.gameState ?? "") !== "PRE";
+          return {
+            title: `${away} @ ${home}`,
+            label: g.gameState ?? "",
+            value: live ? `${a?.score ?? 0}-${h?.score ?? 0}` : (g.startTimeUTC ?? ""),
+          };
+        }),
+      };
+    }
+    const max = Math.min(Number(ctx.query.max) || 16, 32);
+    const raw = (await getJSON("https://api-web.nhle.com/v1/standings/now", UA)) as {
+      standings?: {
+        teamName?: { default?: string };
+        teamAbbrev?: { default?: string };
+        points?: number;
+        wins?: number;
+        losses?: number;
+        otLosses?: number;
+        gamesPlayed?: number;
+      }[];
+    } | null;
+    return {
+      items: (raw?.standings ?? []).slice(0, max).map((t) => ({
+        title: t.teamName?.default ?? t.teamAbbrev?.default ?? "",
+        label: `${t.wins ?? 0}-${t.losses ?? 0}-${t.otLosses ?? 0}`,
+        value: t.points ?? 0,
+      })),
+    };
+  },
+});
+
+reg({
+  id: "openligadb", label: "OpenLigaDB (Bundesliga)", category: "sports", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 30_000,
+  resources: [
+    { id: "openligadb.table", label: "League table", shape: "list" },
+    { id: "openligadb.matches", label: "Matchday fixtures", shape: "list" },
+  ],
+  async resolve(ctx) {
+    const res = String(ctx.resource || "").replace(/[^a-z.]/g, "");
+    const league = (String(ctx.query.league || "bl1").replace(/[^a-z0-9]/g, "")) || "bl1";
+    const season = (String(ctx.query.season || "2025").replace(/[^0-9]/g, "")) || "2025";
+    if (res === "openligadb.matches") {
+      const raw = (await getJSON(`https://api.openligadb.de/getmatchdata/${league}`, UA)) as {
+        team1?: { teamName?: string; shortName?: string };
+        team2?: { teamName?: string; shortName?: string };
+        matchIsFinished?: boolean;
+        matchDateTimeUTC?: string;
+        matchResults?: { resultTypeID?: number; pointsTeam1?: number; pointsTeam2?: number }[];
+      }[] | null;
+      return {
+        items: (raw ?? []).map((m) => {
+          const t1 = m.team1?.shortName ?? m.team1?.teamName ?? "";
+          const t2 = m.team2?.shortName ?? m.team2?.teamName ?? "";
+          const fin = (m.matchResults ?? []).find((r) => r.resultTypeID === 2) ?? (m.matchResults ?? [])[(m.matchResults ?? []).length - 1];
+          return {
+            title: `${t1} - ${t2}`,
+            label: m.matchIsFinished ? "FT" : (m.matchDateTimeUTC ?? ""),
+            value: m.matchIsFinished && fin ? `${fin.pointsTeam1 ?? 0}-${fin.pointsTeam2 ?? 0}` : "",
+          };
+        }),
+      };
+    }
+    const max = Math.min(Number(ctx.query.max) || 18, 24);
+    const raw = (await getJSON(`https://api.openligadb.de/getbltable/${league}/${season}`, UA)) as {
+      teamName?: string;
+      shortName?: string;
+      points?: number;
+      won?: number;
+      draw?: number;
+      lost?: number;
+      matches?: number;
+      goalDiff?: number;
+    }[] | null;
+    return {
+      items: (raw ?? []).slice(0, max).map((t) => ({
+        title: t.teamName ?? t.shortName ?? "",
+        label: `${t.won ?? 0}-${t.draw ?? 0}-${t.lost ?? 0}`,
+        value: t.points ?? 0,
+      })),
+    };
+  },
+});
+
+reg({
+  id: "openfoodfacts", label: "Open Food Facts", category: "food", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "openfoodfacts.search", label: "Product search", shape: "list" }],
+  async resolve(ctx) {
+    const q = String(ctx.query.q ?? "chocolate").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 60) || "chocolate";
+    const max = Math.min(Number(ctx.query.max) || 10, 30);
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&json=1&page_size=${max}&fields=product_name,brands,nutriscore_grade`;
+    const raw = (await getJSON(url, UA)) as { products?: { product_name?: string; brands?: string; nutriscore_grade?: string }[] } | null;
+    return {
+      items: (raw?.products ?? [])
+        .filter((p) => (p?.product_name ?? "").trim() !== "")
+        .map((p) => ({
+          title: p.product_name ?? "",
+          label: p.brands ?? "",
+          value: (p.nutriscore_grade ?? "").toUpperCase(),
+        })),
+    };
+  },
+});
+
+reg({
+  id: "fruityvice", label: "Fruityvice", category: "food", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "fruityvice.all", label: "Fruit nutrition", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 20, 50);
+    const raw = (await getJSON("https://www.fruityvice.com/api/fruit/all", UA)) as { name?: string; family?: string; nutritions?: { calories?: number } }[] | null;
+    return {
+      items: (raw ?? [])
+        .filter((f) => (f?.name ?? "").trim() !== "")
+        .slice(0, max)
+        .map((f) => ({
+          title: f.name ?? "",
+          label: f.family ?? "",
+          value: f.nutritions?.calories != null ? `${f.nutritions.calories} kcal` : "",
+        })),
+    };
+  },
+});
+
+reg({
+  id: "boredapi", label: "Bored API", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "boredapi.activities", label: "Things to do when bored", shape: "list" }],
+  async resolve(ctx) {
+    const types = ["education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"];
+    const type = types.includes(ctx.query.type || "") ? ctx.query.type : "";
+    const max = Math.min(Number(ctx.query.max) || 10, 25);
+    const url = type ? `https://bored-api.appbrewery.com/filter?type=${type}` : "https://bored-api.appbrewery.com/filter";
+    const raw = (await getJSON(url, UA)) as { activity?: string; type?: string; participants?: number; duration?: string }[] | null;
+    const list = Array.isArray(raw) ? raw : [];
+    return { items: list.slice(0, max).map((a) => ({ title: a.activity ?? "", label: [a.type, a.participants ? `${a.participants}p` : "", a.duration].filter(Boolean).join(" · ").slice(0, 80) })) };
+  },
+});
+
+reg({
+  id: "yesno", label: "Yes or No", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 10_000,
+  resources: [{ id: "yesno.answer", label: "A yes / no / maybe", shape: "scalar" }],
+  async resolve(ctx) {
+    const f = String(ctx.query.force ?? "").toLowerCase().replace(/[^a-z]/g, "");
+    const force = ["yes", "no", "maybe"].includes(f) ? f : "";
+    const url = force ? `https://yesno.wtf/api?force=${force}` : "https://yesno.wtf/api";
+    const raw = (await getJSON(url, UA)) as { answer?: string } | null;
+    return { value: raw?.answer ?? "" };
+  },
+});
+
+reg({
+  id: "kanyerest", label: "Kanye Quotes", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 10_000,
+  resources: [{ id: "kanyerest.quote", label: "A Kanye West quote", shape: "scalar" }],
+  async resolve() {
+    const raw = (await getJSON("https://api.kanye.rest/", UA)) as { quote?: string } | null;
+    return { value: raw?.quote ?? "" };
+  },
+});

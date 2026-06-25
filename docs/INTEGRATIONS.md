@@ -1,6 +1,6 @@
 # Integrations
 
-GlanceOS connects to **137 data sources**. Each is a server-side *provider* — it knows how
+GlanceOS connects to **153 data sources**. Each is a server-side *provider* — it knows how
 to fetch a *resource* and return a raw payload, which a block's **SourceMap** then shapes to
 fit. Binding happens in the Studio's **⟿ Data** tab (or one-click via a provider's preset
 "objects" on **Settings → Connections**). Tokens and secret URLs are encrypted on the server
@@ -118,10 +118,12 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Steam** `steam` · keyless · steam.players
 - **Twitch** `twitch` · OAuth · twitch.user
 
-### Sports (4)
+### Sports (6)
 - **ESPN Scoreboard** `espn` · keyless · espn.scoreboard
 - **Formula 1** `f1` · keyless · f1.next
 - **MLB Scores** `mlb` · keyless · mlb.schedule
+- **NHL** `nhl` · keyless · nhl.standings, nhl.scores
+- **OpenLigaDB (Bundesliga)** `openligadb` · keyless · openligadb.table, openligadb.matches
 - **TheSportsDB** `thesportsdb` · keyless · thesportsdb.next, thesportsdb.last
 
 ### Books (2)
@@ -137,45 +139,59 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 - **Wikipedia** `wikipedia` · keyless · wikipedia.onthisday, wikipedia.search
 - **World Bank** `worldbank` · keyless · worldbank.indicator
 
-### Science (4)
+### Science (5)
 - **GBIF Biodiversity** `gbif` · keyless · gbif.species
 - **Natural Events (NASA)** `eonet` · keyless · eonet.events
 - **Open-Meteo Air Quality** `openmeteoair` · keyless · openmeteoair.current
 - **Open-Meteo Marine** `openmarine` · keyless · openmarine.current
+- **UK Carbon Intensity** `carbonintensity` · keyless · carbonintensity.mix
 
 ### Space (3)
 - **ISS tracker** `iss` · keyless · iss.position
 - **Spaceflight News** `spaceflightnews` · keyless · spaceflightnews.articles
 - **SpaceX** `spacex` · keyless · spacex.upcoming
 
-### Weather (2)
+### Weather (5)
+- **Aviation Weather (METAR)** `aviationweather` · keyless · aviationweather.metar
 - **Civil Forecast** `civilweather` · keyless · civilweather.daily
+- **Open-Meteo Flood** `openmeteoflood` · keyless · openmeteoflood.discharge
+- **Open-Meteo Forecast** `openmeteo` · keyless · openmeteo.current
 - **US Weather Alerts** `nws` · keyless · nws.alerts
 
-### Travel & place (4)
+### Travel & place (6)
+- **OpenSky Network** `opensky` · keyless · opensky.states
+- **OpenStreetMap Overpass** `overpass` · keyless · overpass.stations
 - **Postal Code Lookup** `zippopotam` · keyless · zippopotam.place
 - **Sunrise / Sunset** `sunrise` · keyless · sunrise.times
 - **Travel time (OSRM)** `osrm` · keyless · osrm.route
 - **World Time** `worldtime` · keyless · worldtime.now
 
-### Food & drink (3)
+### Food & drink (5)
+- **Fruityvice** `fruityvice` · keyless · fruityvice.all
 - **Open Brewery DB** `openbrewerydb` · keyless · openbrewerydb.byCity
+- **Open Food Facts** `openfoodfacts` · keyless · openfoodfacts.search
 - **TheCocktailDB** `thecocktaildb` · keyless · thecocktaildb.search, thecocktaildb.random
 - **TheMealDB (recipes)** `themealdb` · keyless · themealdb.search, themealdb.random
 
-### Art (1)
+### Art (4)
 - **Art Institute of Chicago** `artic` · keyless · artic.artworks, artic.search
+- **Cleveland Museum of Art** `clevelandart` · keyless · clevelandart.search
+- **The Met** `metmuseum` · keyless · metmuseum.search
+- **V&A Museum** `vam` · keyless · vam.search
 
-### Fun (9)
+### Fun (12)
 - **Advice Slip** `adviceslip` · keyless · adviceslip.random
 - **Affirmations** `affirmations` · keyless · affirmations.random
+- **Bored API** `boredapi` · keyless · boredapi.activities
 - **Cat Facts** `catfact` · keyless · catfact.random
 - **Chuck Norris Jokes** `chucknorris` · keyless · chucknorris.random
 - **Dad Jokes** `dadjoke` · keyless · dadjoke.random
+- **Kanye Quotes** `kanyerest` · keyless · kanyerest.quote
 - **Official Joke API** `officialjoke` · keyless · officialjoke.list, officialjoke.random
 - **Open Trivia DB** `opentdb` · keyless · opentdb.questions
 - **Random Facts** `uselessfacts` · keyless · uselessfacts.random
 - **xkcd** `xkcd` · keyless · xkcd.latest
+- **Yes or No** `yesno` · keyless · yesno.answer
 
 ### Finance (9)
 - **Binance (crypto)** `binance` · keyless · binance.tickers

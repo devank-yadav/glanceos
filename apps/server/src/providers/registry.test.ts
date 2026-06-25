@@ -4,7 +4,7 @@ import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fi
 
 describe("provider registry", () => {
   it("registers the providers (incl. v5.0 smart-life + B1-B7 integrations)", () => {
-    expect(PROVIDERS.size).toBe(137);
+    expect(PROVIDERS.size).toBe(153);
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     // E1 — more keyless public-data providers
     for (const id of ["hackernews", "wikipedia", "frankfurter", "iss", "spaceflightnews", "nager", "gutendex", "dictionary", "quotable", "xkcd", "freetogame", "binance"]) expect(PROVIDERS.has(id)).toBe(true);
@@ -28,6 +28,13 @@ describe("provider registry", () => {
     expect(PROVIDERS.get("coinlore")?.category).toBe("finance");
     expect(PROVIDERS.get("espn")?.category).toBe("sports");
     expect(PROVIDERS.get("civilweather")?.category).toBe("weather");
+    // E5 — more keyless providers (flights/transit/weather/energy/museums/sports/food/fun)
+    for (const id of ["opensky", "aviationweather", "overpass", "openmeteo", "openmeteoflood", "carbonintensity", "metmuseum", "clevelandart", "vam", "nhl", "openligadb", "openfoodfacts", "fruityvice", "boredapi", "yesno", "kanyerest"]) expect(PROVIDERS.has(id)).toBe(true);
+    for (const id of ["opensky", "aviationweather", "overpass", "openmeteo", "openmeteoflood", "carbonintensity", "metmuseum", "clevelandart", "vam", "nhl", "openligadb", "openfoodfacts", "fruityvice", "boredapi", "yesno", "kanyerest"]) expect(PROVIDERS.get(id)?.authKind).toBe("none");
+    expect(PROVIDERS.get("openmeteo")?.category).toBe("weather");
+    expect(PROVIDERS.get("metmuseum")?.category).toBe("art");
+    expect(PROVIDERS.get("nhl")?.category).toBe("sports");
+    expect(PROVIDERS.get("openfoodfacts")?.category).toBe("food");
     for (const id of ["osrm", "gmail", "outlookmail", "fitbit", "oura"]) expect(PROVIDERS.has(id)).toBe(true);
     // B1 — keyless social/dev/books/gaming/sports
     for (const id of ["reddit", "devto", "lobsters", "npm", "bluesky", "mastodon", "openlibrary", "steam", "thesportsdb"]) expect(PROVIDERS.has(id)).toBe(true);
