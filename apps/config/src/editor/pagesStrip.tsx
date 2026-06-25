@@ -142,7 +142,7 @@ export function PagesStrip({ doc, activePage, setActivePage, commitDoc }: {
           </button>
         ))}
         {total < MAX_PAGES && (
-          <button class="page-add" title="Add a page" onClick={addPage}><Icon.plus /></button>
+          <button class="page-add" title="Add a page" onClick={addPage}><Icon.plus /> Page</button>
         )}
         <button class={`page-cog${open ? " on" : ""}`} title="Page & rotation settings" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <Icon.settings />
