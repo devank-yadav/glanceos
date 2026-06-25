@@ -82,6 +82,8 @@ export function PagesStrip({ doc, activePage, setActivePage, commitDoc }: {
 }) {
   const [settingsFor, setSettingsFor] = useState<number | null>(null); // page whose popover is open (null = closed)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null); // popover spawn point (viewport coords)
+  const [dragFrom, setDragFrom] = useState<number | null>(null); // order index being dragged (≥1)
+  const [dragOver, setDragOver] = useState<number | null>(null); // order index hovered while dragging
   const tabsRef = useRef<HTMLDivElement>(null);
   const total = (doc.pages?.length ?? 0) + 1;
   const idx = Math.min(activePage, total - 1);
@@ -124,6 +126,26 @@ export function PagesStrip({ doc, activePage, setActivePage, commitDoc }: {
     setActivePage(j);
   };
 
+  // Move an extra page (order index ≥1) to another position by drag-and-drop. The base
+  // page (0) is fixed and never a drag source or target.
+  const reorderPage = (from: number, to: number) => {
+    if (from < 1 || to < 1 || from === to || !doc.pages?.length) return;
+    const d = structuredClone(doc);
+    const p = [...d.pages!];
+    const [moved] = p.splice(from - 1, 1);
+    p.splice(to - 1, 0, moved!);
+    d.pages = p;
+    if (d.pageSettings) {
+      const ps = [...d.pageSettings];
+      while (ps.length <= Math.max(from, to)) ps.push(undefined as unknown as PageSettingT);
+      const [movedS] = ps.splice(from, 1);
+      ps.splice(to, 0, movedS!);
+      d.pageSettings = ps;
+    }
+    commitDoc(normalize(d));
+    setActivePage(to);
+  };
+
   const openSettings = (i: number, anchor: HTMLElement) => {
     const r = anchor.getBoundingClientRect();
     setPos({ x: r.left, y: r.bottom + 6 }); // just below the clicked control; DraggablePanel clamps to viewport
@@ -150,10 +172,15 @@ export function PagesStrip({ doc, activePage, setActivePage, commitDoc }: {
               role="tab"
               aria-selected={i === idx}
               data-page={i}
-              class={`page-tab${i === idx ? " on" : ""}`}
+              class={`page-tab${i === idx ? " on" : ""}${dragFrom === i ? " dragging" : ""}${dragOver === i && dragFrom !== null && dragFrom !== i ? " drag-over" : ""}`}
               title={pageTitle(doc, i)}
+              draggable={i !== 0}
               onClick={() => { setActivePage(i); if (settingsFor !== null) setSettingsFor(i); }}
               onDblClick={(e) => openSettings(i, e.currentTarget as HTMLElement)}
+              onDragStart={(e) => { if (i === 0) { e.preventDefault(); return; } setDragFrom(i); try { (e as unknown as DragEvent).dataTransfer?.setData("text/plain", String(i)); } catch { /* jsdom */ } }}
+              onDragOver={(e) => { if (dragFrom !== null && i !== 0) { e.preventDefault(); if (dragOver !== i) setDragOver(i); } }}
+              onDrop={(e) => { e.preventDefault(); if (dragFrom !== null && i !== 0) reorderPage(dragFrom, i); setDragFrom(null); setDragOver(null); }}
+              onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
             >
               {i === 0 && <span class="page-tab-base">Base</span>}
               <span class="page-tab-name">{pageLabel(doc, i)}</span>

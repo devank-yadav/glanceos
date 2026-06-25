@@ -2275,6 +2275,9 @@ ul.tasks li:last-child {
 }
 .page-tab:hover { background: var(--hover-bg); }
 .page-tab.on { background: var(--indigo); color: var(--indigo-fg); border-color: var(--indigo); }
+.page-tab[draggable="true"] { cursor: grab; }
+.page-tab.dragging { opacity: 0.4; }
+.page-tab.drag-over { box-shadow: inset 3px 0 0 var(--indigo); } /* drop indicator on the left edge */
 .page-tab-name { white-space: nowrap; }
 /* the "Base" pill on page 1 */
 .page-tab-base {
