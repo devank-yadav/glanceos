@@ -5,7 +5,11 @@
 
 ## What it looks like
 
-Real boards rendered by the actual **&lt;30 KB screen runtime** — monochrome by design, light *and* dark, all built from the standard blocks (no bespoke art):
+One board, several pages, rotating on the wall clock — captured from the actual **&lt;30 KB screen runtime** (not a mock):
+
+<p align="center"><img src="docs/images/demo.gif" alt="A GlanceOS board rotating between a glanceable clock and a café menu, rendered live by the screen runtime" width="640"></p>
+
+Real boards rendered by the actual runtime — monochrome by design, light *and* dark, all built from the standard blocks (no bespoke art):
 
 <table>
 <tr>
