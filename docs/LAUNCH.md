@@ -3,8 +3,8 @@
 Ready-to-edit copy + a launch-day checklist for shipping GlanceOS as a **free,
 open-source** project. Everything here is a draft — tweak voice, fill the `<…>`
 placeholders, and **verify every number against the repo the day you post**
-(they drift): today it's **213 block types · 159 starter templates · 165
-integrations · 96 one-click objects**, MIT, one-container self-host.
+(they drift): today it's **213 block types · 159 starter templates · 177
+integrations · 104 one-click objects**, MIT, one-container self-host.
 
 Positioning in one line: **GlanceOS turns any screen — a TV, an old tablet, a Pi
 — into a calm, glanceable dashboard you compose like a document. Free, open
@@ -25,7 +25,7 @@ source, self-hosted. No subscription, no cloud, your data stays yours.**
 > at your server; it shows a short code; you claim it from your phone and start
 > dragging blocks. 213 block types (clocks, weather, calendars, charts, gauges,
 > countdowns, transit, signage…), 159 ready-made full-screen templates across 28
-> use-cases (home, gym, classroom, café, clinic, office…), and 165 integrations
+> use-cases (home, gym, classroom, café, clinic, office…), and 177 integrations
 > (many keyless — Hacker News, weather, crypto, ISS, calendars, RSS…) you bind to
 > a block with one click.
 >
@@ -56,7 +56,7 @@ roadmap). HN rewards candor.
 > - **One container.** `docker compose up -d` (multi-arch image, runs on a Pi). One SQLite file is all your data.
 > - **Free, MIT, no cloud.** Every feature free; no account with anyone, no telemetry. Premium tier is undecided — the open-source app is the product.
 > - **Compose like a doc.** 213 blocks, 159 full-screen templates, drag/drop Studio with a live preview that *is* the real renderer.
-> - **165 integrations**, many keyless so they work with zero setup; tokens are encrypted at rest.
+> - **177 integrations**, many keyless so they work with zero setup; tokens are encrypted at rest.
 > - **Any screen:** TVs, tablets, monitors, e-ink, + native shells (Android TV/Fire TV, Apple TV, Tizen, webOS, Pi).
 > - **Self-host friendly:** reverse-proxy ready, `/health`+`/ready`, backups (`docs/BACKUP.md`), deploy configs for Fly/Render (`docs/DEPLOY.md`).
 >
@@ -71,7 +71,7 @@ and "no telemetry" — that crowd cares.)
 
 - **Name:** GlanceOS
 - **Tagline (≤60 chars):** `Turn any screen into a calm, self-hosted dashboard`
-- **Description:** `GlanceOS is a free, open-source, self-hosted dashboard wall. Compose boards like a document from 213 blocks and 159 templates, bind 165 integrations with one click, and run them on any TV, tablet, monitor, e-ink panel, or Raspberry Pi — one container, no subscription, your data stays yours.`
+- **Description:** `GlanceOS is a free, open-source, self-hosted dashboard wall. Compose boards like a document from 213 blocks and 159 templates, bind 177 integrations with one click, and run them on any TV, tablet, monitor, e-ink panel, or Raspberry Pi — one container, no subscription, your data stays yours.`
 - **Topics:** Open Source, Self-Hosted, Productivity, Smart Home, Developer Tools
 - **First comment:** the maker story (the DAKboard/MagicMirror gap) + a clear "free, premium maybe later, here's how to self-host in 2 minutes."
 
