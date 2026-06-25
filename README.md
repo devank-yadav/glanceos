@@ -120,7 +120,7 @@ The wedge, in one line: **a fully open server + claim-code plug-and-play + one s
 | [`packages/schema`](packages/schema) | The layout/widget schema — the contract everything else obeys |
 | [`devices/pi-image`](devices/pi-image) | Bootable Raspberry Pi kiosk image ("the OS" part) |
 | [`devices/esp32-eink`](devices/esp32-eink) | Battery e-paper firmware |
-| [`docs/`](docs) | Architecture, roadmap, learning path, decision log, [device API](docs/DEVICE-API.md), [platform support tiers](docs/PLATFORMS.md) |
+| [`docs/`](docs) | Architecture, roadmap, learning path, decision log, [device API](docs/DEVICE-API.md), [platform support tiers](docs/PLATFORMS.md), [press kit](docs/PRESS.md) |
 
 ## Roadmap snapshot
 
