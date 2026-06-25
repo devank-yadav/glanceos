@@ -47,6 +47,8 @@ No analytics, no phone-home. Self-hostable, MIT-spirit.
 
 Most rows are webview shells that obey the contract above. **`esp32-eink` is the exception:** it has no browser. It deep-sleeps, wakes, fetches a server-rendered 1-bit bitmap with `If-None-Match`, draws it, and sleeps again — the polling path, with its own protocol and its own README. Read [`esp32-eink/README.md`](./esp32-eink/README.md) before assuming anything in this section applies to it.
 
+> **Support tiers & honest on-hardware status:** see **[docs/PLATFORMS.md](../docs/PLATFORMS.md)**. In short — **Tier 1** (recommended, CI-tested) is the **web/PWA** runtime in any browser plus the Docker server; the webview shells above are **Tier 2** (build-from-source / sideload, not yet verified on physical hardware); **`esp32-eink` is Tier 3** (experimental, scaffold only — not a launch claim).
+
 ## The platform-identity wire
 
 `?platform=<id>` and the optional `&native=<shell version>` ride along on the screen URL so the **fleet dashboard** can tell an Apple TV from a Fire Stick from a Pi, and which shell build each one is running. That's the only thing the shell adds to the wire — identity, not behavior. Keep the id stable per target (the table above is the source of truth) and bump `native=` when you ship a new shell build.
