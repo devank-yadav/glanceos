@@ -106,6 +106,27 @@ describe("pageOps — settings + normalize", () => {
   });
 });
 
+describe("pageOps — scheduleSummary + friendly presets", () => {
+  const sched = (s: object) => mk({ pages: [page("a")], pageSettings: [undefined, { schedule: s }] as never });
+  it("returns null when a page has no schedule", () => {
+    expect(ops.scheduleSummary(mk({ pages: [page("a")] }), 1)).toBeNull();
+  });
+  it("describes days + time in plain language", () => {
+    expect(ops.scheduleSummary(sched({ daysMask: 62, startMin: 540, endMin: 1020 }), 1)).toBe("Mon–Fri · 9am–5pm");
+    expect(ops.scheduleSummary(sched({ daysMask: 65 }), 1)).toBe("Weekends");
+    expect(ops.scheduleSummary(sched({ startMin: 540, endMin: 1020 }), 1)).toBe("9am–5pm"); // no day constraint → no "every day"
+    expect(ops.scheduleSummary(sched({ daysMask: 5 }), 1)).toBe("Sun, Tue"); // bits 0 + 2
+    expect(ops.scheduleSummary(sched({ startMin: 1020 }), 1)).toBe("from 5pm");
+  });
+  it("presets match the runtime conventions (daysMask = getDay bit, minute-of-day windows)", () => {
+    expect(ops.DAY_PRESETS.find((p) => p.label === "Weekdays")!.mask).toBe(62);
+    expect(ops.DAY_PRESETS.find((p) => p.label === "Weekends")!.mask).toBe(65);
+    expect(ops.DAY_PRESETS.find((p) => p.label === "Every day")!.mask).toBeUndefined();
+    expect(ops.TIME_PRESETS.find((p) => p.label === "Business")).toMatchObject({ startMin: 540, endMin: 1020 });
+    expect(ops.DWELL_PRESETS).toEqual([5, 10, 30, 60]);
+  });
+});
+
 describe("pageOps — labels + time helpers", () => {
   it("pageLabel / pageTitle reflect name, base, dwell, schedule", () => {
     const doc = mk({ pages: [page("a")], pageSettings: [undefined, { name: " Lobby ", seconds: 20, schedule: { daysMask: 3 } }] as never });

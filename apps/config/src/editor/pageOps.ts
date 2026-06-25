@@ -72,6 +72,49 @@ export function patchSchedule(doc: LayoutT, i: number, patch: Partial<PageSchedu
 export const minToTime = (m: number | undefined): string => (m == null ? "" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
 export const timeToMin = (t: string): number | undefined => { const m = /^(\d{2}):(\d{2})$/.exec(t); return m ? Number(m[1]) * 60 + Number(m[2]) : undefined; };
 
+// ── Friendly one-tap presets for the UI (no id-typing) ──
+// daysMask bit i = Date.getDay() (0 = Sunday); 127 (all days) ≡ no constraint → store undefined.
+export const DAY_PRESETS: { label: string; mask: number | undefined }[] = [
+  { label: "Every day", mask: undefined },
+  { label: "Weekdays", mask: 62 }, // Mon–Fri = bits 1..5
+  { label: "Weekends", mask: 65 }, // Sun + Sat = bits 0,6
+];
+export const TIME_PRESETS: { label: string; title: string; startMin: number | undefined; endMin: number | undefined }[] = [
+  { label: "All day", title: "No time limit", startMin: undefined, endMin: undefined },
+  { label: "Morning", title: "6:00 AM – 12:00 PM", startMin: 360, endMin: 720 },
+  { label: "Business", title: "9:00 AM – 5:00 PM", startMin: 540, endMin: 1020 },
+  { label: "Evening", title: "5:00 PM – 10:00 PM", startMin: 1020, endMin: 1320 },
+];
+export const DWELL_PRESETS = [5, 10, 30, 60]; // seconds: 5s / 10s / 30s / 1m
+
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const fmt12 = (min: number): string => {
+  const h = Math.floor(min / 60), m = min % 60, ap = h < 12 ? "am" : "pm", h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+};
+const daysText = (mask: number | undefined): string => {
+  if (mask == null || mask === 127) return "";
+  if (mask === 62) return "Mon–Fri";
+  if (mask === 65) return "Weekends";
+  const out: string[] = [];
+  for (let b = 0; b < 7; b++) if ((mask >> b) & 1) out.push(DAY_ABBR[b]!);
+  return out.join(", ");
+};
+// A compact, human description of a page's schedule for the row label (e.g. "Mon–Fri ·
+// 9am–5pm"), or null when the page has no schedule. Pure → unit-testable.
+export function scheduleSummary(doc: LayoutT, i: number): string | null {
+  const sc = settingsAt(doc, i)?.schedule;
+  if (!sc || Object.keys(sc).length === 0) return null;
+  const parts: string[] = [];
+  const d = daysText(sc.daysMask);
+  if (d) parts.push(d);
+  if (sc.startMin != null && sc.endMin != null) parts.push(`${fmt12(sc.startMin)}–${fmt12(sc.endMin)}`);
+  else if (sc.startMin != null) parts.push(`from ${fmt12(sc.startMin)}`);
+  else if (sc.endMin != null) parts.push(`until ${fmt12(sc.endMin)}`);
+  if (sc.fromDate || sc.toDate) parts.push(`${(sc.fromDate ?? "…").slice(5)}–${(sc.toDate ?? "…").slice(5)}`);
+  return parts.length ? parts.join(" · ") : "Scheduled";
+}
+
 // ── Structural ops: take a doc, return { doc, active } or null when it's a no-op
 // (at the page cap, or an illegal move of the base page). The caller commits + switches.
 export type PageEdit = { doc: LayoutT; active: number };
