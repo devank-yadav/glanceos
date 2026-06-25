@@ -336,7 +336,7 @@ function ScheduleEditor({ deviceId, setups, onClose, onSaved }: { deviceId: stri
 
   return (
     <div class="sched-editor">
-      <p class="muted" style={{ marginTop: 0 }}>Show different boards by time of day. The highest-priority active window wins; outside every window the screen falls back to its playlist or assigned setup.</p>
+      <p class="muted" style={{ marginTop: 0 }}>Show different boards by time of day. The highest-priority active window wins; outside every window the screen falls back to its assigned setup.</p>
       <label class="field grow">
         <span>Timezone <em>(blank = account default, then server)</em></span>
         <TimezoneSelect value={tz} onChange={setTz} placeholder="Account default" />

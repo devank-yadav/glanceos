@@ -5,7 +5,6 @@ import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type Devi
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
 import { getLayout } from "./layouts";
-import { currentPlaylistLayout } from "./playlists";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
 import { sunTimes } from "./astro";
@@ -20,16 +19,15 @@ function geoForDevice(device: DeviceRow): { latitude: number; longitude: number 
 }
 
 /** The layout a device shows right now. The device's own settings win — schedule
- *  → playlist → plain setup — then it falls back to its display group's:
- *  group schedule → group playlist → group default. No group / no group settings
- *  → exactly the previous behavior. */
+ *  → plain setup — then it falls back to its display group's: group schedule →
+ *  group default. No group / no group settings → exactly the previous behavior.
+ *  (Board rotation now lives inside a board as pages, not as device playlists.) */
 export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
   // Wall-clock fallback: screen tz → account default tz → server tz.
   const accountTz = device.user_id ? getUser(device.user_id)?.defaultTimezone ?? null : null;
   const deviceTz = device.timezone ?? accountTz;
   const scheduled = activeScheduledLayout(device.id, now, deviceTz);
   if (scheduled) return scheduled;
-  if (device.playlist_id) return currentPlaylistLayout(device.playlist_id, now);
   if (device.layout_id) return device.layout_id;
 
   if (device.group_id) {
@@ -38,7 +36,6 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
       const tz = device.timezone ?? group.timezone ?? accountTz;
       const gSched = activeGroupScheduledLayout(group.id, now, tz);
       if (gSched) return gSched;
-      if (group.playlist_id) return currentPlaylistLayout(group.playlist_id, now);
       if (group.layout_id) return group.layout_id;
     }
   }
@@ -133,10 +130,8 @@ export async function pushDevice(deviceId: string): Promise<void> {
 }
 
 export async function pushDevicesUsingLayout(layoutId: number): Promise<void> {
-  const direct = devicesUsingLayout(layoutId).map((d) => d.id);
-  // a layout edited inside a playlist also affects connected rotating screens
-  const ids = new Set([...direct, ...connectedDeviceIds().filter((id) => getDevice(id)?.playlist_id)]);
-  await Promise.all([...ids].map((id) => pushDevice(id)));
+  const ids = devicesUsingLayout(layoutId).map((d) => d.id);
+  await Promise.all(ids.map((id) => pushDevice(id)));
 }
 
 // Spread N pushes evenly across `windowMs` so a periodic tick doesn't compose +
@@ -148,12 +143,6 @@ async function pushSpread(ids: string[], windowMs: number): Promise<void> {
   await Promise.all(ids.map((id, i) => new Promise<void>((resolve) => {
     setTimeout(() => { pushDevice(id).catch(() => {}).finally(resolve); }, Math.floor(i * step));
   })));
-}
-
-/** Re-push connected rotating screens so they advance to the playlist's current item. */
-export async function pushRotatingDevices(staggerMs = 0): Promise<void> {
-  const ids = connectedDeviceIds().filter((id) => getDevice(id)?.playlist_id);
-  await pushSpread(ids, staggerMs);
 }
 
 /** Re-push connected scheduled screens so they flip at window boundaries. */

@@ -9,7 +9,7 @@ describe("i18n t()", () => {
 
   it("interpolates {vars} and leaves unknown placeholders intact", () => {
     expect(t("toast.connected", { name: "Slack" })).toBe("Connected Slack");
-    expect(t("toast.restored", { layouts: 3, playlists: 1 })).toBe("Restored 3 board(s), 1 playlist(s)");
+    expect(t("toast.restored", { layouts: 3, connections: 2 })).toBe("Restored 3 board(s), 2 connection(s)");
     expect(t("toast.connected")).toBe("Connected {name}"); // no vars → placeholder kept
   });
 

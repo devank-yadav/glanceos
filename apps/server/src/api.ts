@@ -25,7 +25,7 @@ import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
   authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
-  registerDevice, setDeviceLocation, setDevicePlaylist, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
+  registerDevice, setDeviceLocation, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
 import { geocodeSearch, reverseGeocode } from "./fetchers/geocode";
@@ -46,9 +46,6 @@ import {
   createShare, getReadableLayout, getWritableLayout, listSharesByOwner, revokeShare, sharedLayouts, updateShareAccess,
 } from "./shares";
 import { isScope, listKeys, mintKey, resolveKey, revokeKey, SCOPES, type Scope } from "./apikeys";
-import {
-  createPlaylist, deletePlaylist, getOwnedPlaylist, listPlaylists, updatePlaylist,
-} from "./playlists";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
@@ -61,7 +58,7 @@ import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
-  pushGroupDevices, pushRotatingDevices, pushUserDevices,
+  pushGroupDevices, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
@@ -129,7 +126,6 @@ function deviceSummary(d: DeviceRow) {
     claimed: d.claimed_at !== null,
     layoutId: d.layout_id,
     layoutName: layout?.name ?? null,
-    playlistId: d.playlist_id,
     online: isConnected(d.id),
     refreshSeconds: d.refresh_seconds,
     battery: d.battery,
@@ -495,7 +491,7 @@ export function buildApp(): Hono<Env> {
     const userId = c.get("userId");
     const prior = getDevice(id);
     const body = (await c.req.json().catch(() => ({}))) as {
-      name?: string; layoutId?: number | null; refreshSeconds?: number; playlistId?: number | null; renderOpts?: Record<string, unknown>;
+      name?: string; layoutId?: number | null; refreshSeconds?: number; renderOpts?: Record<string, unknown>;
       tv?: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null; quietHours?: DeviceProfile["quietHours"] | null };
       groupId?: number | null;
       timezone?: string | null;
@@ -517,28 +513,17 @@ export function buildApp(): Hono<Env> {
     if (body.groupId !== undefined) {
       if (!setDeviceGroup(id, body.groupId, userId)) return c.json({ error: "device or group not found" }, 404);
     }
-    // Assigning a playlist clears the single layout, and vice-versa.
-    if (body.playlistId !== undefined) {
-      if (body.playlistId !== null && !getOwnedPlaylist(body.playlistId, userId)) {
-        return c.json({ error: "playlist not found" }, 404);
-      }
-      if (!setDevicePlaylist(id, body.playlistId, userId)) return c.json({ error: "device not found" }, 404);
-      if (body.playlistId !== null) updateDevice(id, { layoutId: null }, userId);
-    }
     if (body.refreshSeconds !== undefined && !setRefresh(id, body.refreshSeconds, userId)) {
       return c.json({ error: "device not found" }, 404);
     }
     if (body.name !== undefined || body.layoutId !== undefined) {
       const updated = updateDevice(id, body, userId);
       if (!updated) return c.json({ error: "device or setup not found" }, 404);
-      if (body.layoutId !== undefined && body.layoutId !== null) setDevicePlaylist(id, null, userId);
     }
     const device = getDevice(id);
     if (!device || device.user_id !== userId) return c.json({ error: "device not found" }, 404);
     // Notify only on a genuine content change (assignment differs from before).
-    if (body.playlistId !== undefined && body.playlistId !== null && body.playlistId !== prior?.playlist_id) {
-      notifyContentChanged(userId, id, device.name, getOwnedPlaylist(body.playlistId, userId)?.name ?? "a playlist");
-    } else if (body.layoutId !== undefined && body.layoutId !== null && body.layoutId !== prior?.layout_id) {
+    if (body.layoutId !== undefined && body.layoutId !== null && body.layoutId !== prior?.layout_id) {
       notifyContentChanged(userId, id, device.name, getOwnedLayout(body.layoutId, userId)?.name ?? "a board");
     }
     await pushDevice(device.id);
@@ -621,28 +606,6 @@ export function buildApp(): Hono<Env> {
     }
   });
 
-  // ---- playlists ----
-
-  app.get("/api/playlists", (c) => c.json(listPlaylists(c.get("userId"))));
-
-  app.post("/api/playlists", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; intervalSeconds?: number };
-    return c.json(createPlaylist(c.get("userId"), body.name ?? "Playlist", body.intervalSeconds ?? 300), 201);
-  });
-
-  app.patch("/api/playlists/:id", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; intervalSeconds?: number; layoutIds?: number[] };
-    const updated = updatePlaylist(Number(c.req.param("id")), c.get("userId"), body);
-    if (!updated) return c.json({ error: "not found" }, 404);
-    await pushRotatingDevices();
-    return c.json(updated);
-  });
-
-  app.delete("/api/playlists/:id", (c) => {
-    if (!deletePlaylist(Number(c.req.param("id")), c.get("userId"))) return c.json({ error: "not found" }, 404);
-    return c.json({ ok: true });
-  });
-
   // ---- display groups (signage) ----
 
   app.get("/api/groups", (c) => c.json(listGroups(c.get("userId"))));
@@ -654,7 +617,7 @@ export function buildApp(): Hono<Env> {
   });
 
   app.patch("/api/groups/:id", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; timezone?: string | null; layoutId?: number | null; playlistId?: number | null };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; timezone?: string | null; layoutId?: number | null };
     const updated = updateGroup(Number(c.req.param("id")), c.get("userId"), body);
     if (!updated) return c.json({ error: "not found" }, 404);
     await pushGroupDevices(updated.id);

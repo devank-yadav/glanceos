@@ -3,7 +3,7 @@ import { db } from "./db";
 // Time-of-day / day-of-week schedules per device. The active layout is chosen
 // from the device's wall clock (its IANA timezone, else server local) so SSE
 // browsers and polled e-ink devices agree without coordination — same spirit as
-// playlists. Highest priority wins on overlap.
+// (board pages handle in-board rotation). Highest priority wins on overlap.
 
 export interface Schedule {
   id?: number;

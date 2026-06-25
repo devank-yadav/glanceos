@@ -23,7 +23,6 @@ export interface DeviceSummary {
   claimed: boolean;
   layoutId: number | null;
   layoutName: string | null;
-  playlistId: number | null;
   online: boolean;
   refreshSeconds: number;
   battery: number | null;
@@ -56,19 +55,7 @@ export interface DisplayGroup {
   name: string;
   timezone: string | null;
   layoutId: number | null;
-  playlistId: number | null;
   deviceCount: number;
-}
-
-export interface PlaylistItem {
-  layoutId: number;
-  name: string;
-}
-export interface Playlist {
-  id: number;
-  name: string;
-  intervalSeconds: number;
-  items: PlaylistItem[];
 }
 
 export interface SetupSummary {

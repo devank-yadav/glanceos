@@ -58,7 +58,7 @@ export function notifyClaimed(userId: string, deviceId: string, name: string | n
   createIfAbsent(userId, deviceId, "claimed", `${name ?? "A screen"} was connected`, `claimed:${deviceId}`);
 }
 
-/** The board/playlist a screen shows was changed (once per target per day). */
+/** The board a screen shows was changed (once per target per day). */
 export function notifyContentChanged(userId: string, deviceId: string, name: string | null, what: string): void {
   createIfAbsent(userId, deviceId, "content", `${name ?? "A screen"} now shows ${what}`, `content:${what}:${dayOf()}`);
 }

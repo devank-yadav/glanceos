@@ -38,11 +38,11 @@ export function AccountPage() {
     if (!file) { toast.error("Choose a backup file first"); return; }
     let dump: unknown;
     try { dump = JSON.parse(await file.text()); } catch { toast.error("That file isn't valid JSON"); return; }
-    if (importMode === "replace" && !(await confirm({ title: "Replace everything?", body: "This deletes your current boards, playlists, connections and tasks, then restores from the file. This can't be undone.", confirmLabel: "Replace all", danger: true }))) return;
+    if (importMode === "replace" && !(await confirm({ title: "Replace everything?", body: "This deletes your current boards, connections and tasks, then restores from the file. This can't be undone.", confirmLabel: "Replace all", danger: true }))) return;
     setImportBusy(true);
     try {
-      const r = await api.post<{ layouts: number; playlists: number; connections: number; tasks: number; skipped: number }>("/api/account/import", { dump, mode: importMode });
-      toast.success(`Restored ${r.layouts} board(s), ${r.playlists} playlist(s), ${r.connections} connection(s)${r.skipped ? `, ${r.skipped} skipped` : ""}. Reconnect any apps to re-add their tokens.`);
+      const r = await api.post<{ layouts: number; connections: number; tasks: number; skipped: number }>("/api/account/import", { dump, mode: importMode });
+      toast.success(`Restored ${r.layouts} board(s), ${r.connections} connection(s)${r.skipped ? `, ${r.skipped} skipped` : ""}. Reconnect any apps to re-add their tokens.`);
       if (fileRef.current) fileRef.current.value = "";
     } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
     finally { setImportBusy(false); }
@@ -99,7 +99,7 @@ export function AccountPage() {
   };
   const deleteAccount = async () => {
     if (!delPw) { toast.error("Enter your password to delete the account"); return; }
-    if (!(await confirm({ title: "Delete your account?", body: "This permanently removes your boards, screens, playlists, connections and tasks. This cannot be undone.", confirmLabel: "Delete account", danger: true }))) return;
+    if (!(await confirm({ title: "Delete your account?", body: "This permanently removes your boards, screens, connections and tasks. This cannot be undone.", confirmLabel: "Delete account", danger: true }))) return;
     try {
       await api.del("/api/account", { password: delPw });
       toLogin();
@@ -145,7 +145,7 @@ export function AccountPage() {
           </label>
           <div class="restore-block">
             <h3>Restore from a backup</h3>
-            <p class="muted">Rebuilds your boards, playlists and connection settings from a backup file. App tokens aren't included — reconnect each app afterwards.</p>
+            <p class="muted">Rebuilds your boards and connection settings from a backup file. App tokens aren't included — reconnect each app afterwards.</p>
             <div class="row wrap restore-row">
               <input ref={fileRef} type="file" accept="application/json,.json" />
               <select value={importMode} onChange={(e) => setImportMode((e.currentTarget as HTMLSelectElement).value as "append" | "replace")}>

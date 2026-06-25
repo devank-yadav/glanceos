@@ -258,27 +258,9 @@ describe("multi-user auth, pairing, setups, hub", () => {
     expect(summary.lastSeen).toBeGreaterThan(0);
   });
 
-  it("rotates a screen through a playlist", async () => {
-    const a = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Rot A", document: LOCAL_LAYOUT }) })).json();
-    const b = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Rot B", document: LOCAL_LAYOUT }) })).json();
-    const pl = await (await app.request("/api/playlists", { method: "POST", ...authed(cookieA, { name: "Loop", intervalSeconds: 5 }) })).json();
-    await app.request(`/api/playlists/${pl.id}`, { method: "PATCH", ...authed(cookieA, { layoutIds: [a.id, b.id] }) });
-
-    const assigned = await (await app.request(`/api/devices/${device.deviceId}`, { method: "PATCH", ...authed(cookieA, { playlistId: pl.id }) })).json();
-    expect(assigned.playlistId).toBe(pl.id);
-    expect(assigned.layoutId).toBeNull(); // a playlist replaces the single setup
-
-    // the device's composed state shows one of the two rotating setups
-    const me = await (await app.request("/api/devices/me", {
-      headers: { "x-device-id": device.deviceId, "x-device-secret": device.deviceSecret },
-    })).json();
-    expect(["Rot A", "Rot B"]).toContain(me.state.layout.name);
-
-    const playlists = await (await app.request("/api/playlists", { headers: { cookie: cookieA } })).json();
-    expect(playlists.find((p: { id: number }) => p.id === pl.id).items).toHaveLength(2);
-  });
-
-  it("a time-of-day schedule wins over the device's playlist", async () => {
+  it("a time-of-day schedule wins over the device's default board", async () => {
+    const base = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Base Board", document: LOCAL_LAYOUT }) })).json();
+    await app.request(`/api/devices/${device.deviceId}`, { method: "PATCH", ...authed(cookieA, { layoutId: base.id }) });
     const sched = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieA, { name: "Scheduled", document: LOCAL_LAYOUT }) })).json();
     // an always-on window (every day, all minutes) → schedule layout should always be active
     const put = await app.request(`/api/devices/${device.deviceId}/schedules`, {
@@ -291,14 +273,14 @@ describe("multi-user auth, pairing, setups, hub", () => {
     const me = await (await app.request("/api/devices/me", {
       headers: { "x-device-id": device.deviceId, "x-device-secret": device.deviceSecret },
     })).json();
-    expect(me.state.layout.name).toBe("Scheduled"); // schedule beats the playlist assigned earlier
+    expect(me.state.layout.name).toBe("Scheduled"); // schedule beats the default board
 
-    // clearing schedules restores playlist behavior
+    // clearing schedules falls back to the device's default board
     await app.request(`/api/devices/${device.deviceId}/schedules`, { method: "PUT", ...authed(cookieA, { schedules: [] }) });
     const after = await (await app.request("/api/devices/me", {
       headers: { "x-device-id": device.deviceId, "x-device-secret": device.deviceSecret },
     })).json();
-    expect(["Rot A", "Rot B"]).toContain(after.state.layout.name);
+    expect(after.state.layout.name).toBe("Base Board");
   });
 
   it("accepts an image upload and rejects bad type / oversized", async () => {
@@ -418,24 +400,19 @@ describe("backup export → import", () => {
 
   it("round-trips a user's data into another account (append), without secrets", async () => {
     const cookieX = await reg("Xan", "x@example.com");
-    const lay = await (await app.request("/api/layouts", { method: "POST", ...authed(cookieX, { name: "Board X", document: LOCAL_LAYOUT }) })).json();
-    const pl = await (await app.request("/api/playlists", { method: "POST", ...authed(cookieX, { name: "Loop X", intervalSeconds: 7 }) })).json();
-    await app.request(`/api/playlists/${pl.id}`, { method: "PATCH", ...authed(cookieX, { layoutIds: [lay.id] }) });
+    await app.request("/api/layouts", { method: "POST", ...authed(cookieX, { name: "Board X", document: LOCAL_LAYOUT }) });
     await app.request("/api/connections", { method: "POST", ...authed(cookieX, { provider: "todoist", label: "My Todoist", secret: "sekret-token-123" }) });
     await app.request("/api/tasks", { method: "POST", ...authed(cookieX, { text: "X task" }) });
 
     const dump = await (await app.request("/api/account/export", { headers: { cookie: cookieX } })).json();
-    expect(dump.playlistItems).toHaveLength(1); // the export fix — items are present
     expect(JSON.stringify(dump)).not.toContain("sekret-token"); // secrets never exported
 
     const cookieY = await reg("Yad", "y@example.com");
     const r = await (await app.request("/api/account/import", { method: "POST", ...authed(cookieY, { dump, mode: "append" }) })).json();
-    expect(r).toMatchObject({ ok: true, layouts: 1, playlists: 1, playlistItems: 1, connections: 1, tasks: 1 });
+    expect(r).toMatchObject({ ok: true, layouts: 1, connections: 1, tasks: 1 });
 
     const yLayouts = await (await app.request("/api/layouts", { headers: { cookie: cookieY } })).json() as { name: string }[];
     expect(yLayouts.some((l) => l.name === "Board X")).toBe(true);
-    const yPlaylists = await (await app.request("/api/playlists", { headers: { cookie: cookieY } })).json() as { name: string; items: unknown[] }[];
-    expect(yPlaylists.find((p) => p.name === "Loop X")!.items).toHaveLength(1); // playlist item remapped
     const yConns = await (await app.request("/api/connections", { headers: { cookie: cookieY } })).json() as { id: string; label: string; status: string }[];
     const yConn = yConns.find((cc) => cc.label === "My Todoist")!;
     expect(yConn.status).toBe("needs_auth"); // no secret imported

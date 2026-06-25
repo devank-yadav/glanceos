@@ -10,7 +10,7 @@ import { pruneProofOfPlay } from "./playlog";
 import { gcRateLimits } from "./ratelimit";
 import { undecryptableSecretCount } from "./rotate";
 import { seedTemplates } from "./seed";
-import { pushAllConnected, pushRotatingDevices, pushScheduledDevices } from "./state";
+import { pushAllConnected, pushScheduledDevices } from "./state";
 import { gcUploads } from "./uploads";
 
 validateConfig(); // fail fast on a broken GLANCEOS_* env
@@ -41,11 +41,6 @@ serve({ fetch: buildApp().fetch, port }, (info) => {
 setInterval(() => {
   pushAllConnected(2 * 60 * 1000).catch(() => {}); // spread over 2 min
 }, 5 * 60 * 1000);
-
-// Advance rotating (playlist) screens to their current item.
-setInterval(() => {
-  pushRotatingDevices(8 * 1000).catch(() => {}); // spread over 8s of the 10s window
-}, 10 * 1000);
 
 // Flip scheduled screens at their window boundaries (minute granularity is
 // enough). Staggered across ~30s so a big fleet doesn't all recompose at once.

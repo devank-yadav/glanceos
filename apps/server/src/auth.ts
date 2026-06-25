@@ -195,7 +195,7 @@ export function destroyAllSessions(userId: string): void {
 
 /** Delete the account after verifying the password. Every user-scoped table
  *  cascades on user_id (foreign_keys = ON), so this removes layouts, devices,
- *  playlists, connections, oauth apps, tasks, notifications, uploads and sessions. */
+ *  connections, oauth apps, tasks, notifications, uploads and sessions. */
 export function deleteUser(userId: string, password: string): boolean {
   const row = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string } | undefined;
   if (!row || !verifyHash(password, row.password_hash)) return false;

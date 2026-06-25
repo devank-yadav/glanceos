@@ -8,7 +8,6 @@ const en: Record<string, string> = {
   "nav.fleet": "Fleet",
   "nav.groups": "Groups",
   "nav.setups": "Setups",
-  "nav.playlists": "Playlists",
   "nav.hub": "Hub",
   "nav.integrations": "Integrations",
   "nav.inlets": "Inlets",
@@ -31,7 +30,7 @@ const en: Record<string, string> = {
   // common toasts (with {var} interpolation)
   "toast.saved": "Saved",
   "toast.connected": "Connected {name}",
-  "toast.restored": "Restored {layouts} board(s), {playlists} playlist(s)",
+  "toast.restored": "Restored {layouts} board(s), {connections} connection(s)",
 
   // language picker
   "settings.language": "Language",

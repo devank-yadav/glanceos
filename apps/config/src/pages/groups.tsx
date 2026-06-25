@@ -8,8 +8,8 @@ import { TimezoneSelect } from "../components/TimezoneSelect";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 
-// Display groups: manage many screens as one. A group has a default board (or
-// playlist) its members fall back to; assign screens to a group on the Screens
+// Display groups: manage many screens as one. A group has a default board its
+// members fall back to; assign screens to a group on the Screens
 // page. (Per-group time-of-day schedules are supported by the API; a dedicated
 // editor is a small follow-up.)
 export function GroupsPage() {

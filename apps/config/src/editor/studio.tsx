@@ -1013,7 +1013,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 ))}
               </ul>
             )}
-            <p class="muted display-hint">Checking a screen sets it to show this board directly. Screens driven by a playlist or schedule aren't changed unless you check them.</p>
+            <p class="muted display-hint">Checking a screen sets it to show this board directly. Screens driven by a schedule aren't changed unless you check them.</p>
           </div>
         </>,
         document.body,

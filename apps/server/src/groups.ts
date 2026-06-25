@@ -2,7 +2,7 @@ import { db } from "./db";
 import { wallClock } from "./schedules";
 
 // Display groups: manage many screens as one. A device with no group is
-// unaffected; a grouped device falls back to its group's board/playlist/schedule
+// unaffected; a grouped device falls back to its group's board/schedule
 // when it has none of its own (see state.currentLayoutId). Group schedules reuse
 // the device-schedule engine verbatim — just keyed by group.
 
@@ -11,14 +11,13 @@ export interface DisplayGroup {
   name: string;
   timezone: string | null;
   layoutId: number | null;
-  playlistId: number | null;
   deviceCount: number;
 }
-interface GroupRow { id: number; user_id: string; name: string; timezone: string | null; layout_id: number | null; playlist_id: number | null; created_at: number }
+interface GroupRow { id: number; user_id: string; name: string; timezone: string | null; layout_id: number | null; created_at: number }
 
 function summarize(r: GroupRow): DisplayGroup {
   const { n } = db.prepare("SELECT COUNT(*) AS n FROM devices WHERE group_id = ?").get(r.id) as { n: number };
-  return { id: r.id, name: r.name, timezone: r.timezone, layoutId: r.layout_id, playlistId: r.playlist_id, deviceCount: n };
+  return { id: r.id, name: r.name, timezone: r.timezone, layoutId: r.layout_id, deviceCount: n };
 }
 
 export function getOwnedGroup(id: number, userId: string): GroupRow | undefined {
@@ -39,19 +38,15 @@ export function createGroup(userId: string, name: string, timezone: string | nul
   return summarize(getOwnedGroup(Number(r.lastInsertRowid), userId)!);
 }
 
-export interface GroupPatch { name?: string; timezone?: string | null; layoutId?: number | null; playlistId?: number | null }
+export interface GroupPatch { name?: string; timezone?: string | null; layoutId?: number | null }
 export function updateGroup(id: number, userId: string, patch: GroupPatch): DisplayGroup | null {
   const g = getOwnedGroup(id, userId);
   if (!g) return null;
   const name = patch.name?.trim() || g.name;
   const timezone = patch.timezone !== undefined ? patch.timezone : g.timezone;
-  // a default board and a default playlist are mutually exclusive (mirrors devices)
-  let layoutId = patch.layoutId !== undefined ? patch.layoutId : g.layout_id;
-  let playlistId = patch.playlistId !== undefined ? patch.playlistId : g.playlist_id;
-  if (patch.layoutId !== undefined && patch.layoutId !== null) playlistId = null;
-  if (patch.playlistId !== undefined && patch.playlistId !== null) layoutId = null;
-  db.prepare("UPDATE display_groups SET name = ?, timezone = ?, layout_id = ?, playlist_id = ? WHERE id = ?")
-    .run(name, timezone, layoutId, playlistId, id);
+  const layoutId = patch.layoutId !== undefined ? patch.layoutId : g.layout_id;
+  db.prepare("UPDATE display_groups SET name = ?, timezone = ?, layout_id = ? WHERE id = ?")
+    .run(name, timezone, layoutId, id);
   return summarize(getOwnedGroup(id, userId)!);
 }
 
