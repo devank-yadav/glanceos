@@ -3190,3 +3190,159 @@ reg({
     }) };
   },
 });
+
+// ---- E7 keyless providers (space / place / transit / reference / science / finance / fun / weather / civic) ----
+// Every endpoint + response shape below was confirmed live (curl) before writing
+// the resolver — no guessed shapes.
+
+reg({
+  id: "astros", label: "People in Space", category: "space", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "astros.people", label: "Astronauts currently in space", shape: "list" }],
+  async resolve() {
+    const raw = (await getJSON("http://api.open-notify.org/astros.json", UA)) as { people?: { name?: string; craft?: string }[] } | null;
+    return { items: (raw?.people ?? []).map((p) => ({ title: p.name ?? "", label: p.craft ?? "" })) };
+  },
+});
+
+reg({
+  id: "openmeteogeo", label: "Open-Meteo Geocoding", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "openmeteogeo.search", label: "City search", shape: "list" }],
+  async resolve(ctx) {
+    const name = encodeURIComponent(String(ctx.query.name ?? "Berlin").slice(0, 80));
+    const count = Math.min(Number(ctx.query.count) || 5, 20);
+    const raw = (await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${name}&count=${count}`, UA)) as { results?: { name?: string; country?: string; admin1?: string; population?: number; latitude?: number; longitude?: number }[] } | null;
+    return { items: (raw?.results ?? []).map((r) => ({ title: r.name ?? "", label: [r.admin1, r.country].filter(Boolean).join(", "), value: r.population ? r.population.toLocaleString() : `${r.latitude}, ${r.longitude}` })) };
+  },
+});
+
+reg({
+  id: "ipwhois", label: "IP Geolocation (ipwho.is)", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "ipwhois.lookup", label: "Locate an IP address", shape: "scalar" }],
+  async resolve(ctx) {
+    const ip = String(ctx.query.ip ?? "").replace(/[^0-9a-fA-F.:]/g, "").slice(0, 45);
+    const raw = (await getJSON(`https://ipwho.is/${ip}`, UA)) as { success?: boolean; ip?: string; city?: string; region?: string; country?: string; connection?: { isp?: string } } | null;
+    if (!raw?.success) return { value: "" };
+    const place = [raw.city, raw.region, raw.country].filter(Boolean).join(", ");
+    const isp = raw.connection?.isp ? ` · ${raw.connection.isp}` : "";
+    return { value: `${raw.ip}: ${place}${isp}` };
+  },
+});
+
+reg({
+  id: "tfl", label: "Transport for London", category: "transit", authKind: "none",
+  defaultTtlMs: TTL.m5, minRefreshMs: 30_000,
+  resources: [{ id: "tfl.status", label: "Line status", shape: "list" }],
+  async resolve(ctx) {
+    const mode = String(ctx.query.mode ?? "tube").replace(/[^a-z,-]/gi, "") || "tube";
+    const raw = (await getJSON(`https://api.tfl.gov.uk/Line/Mode/${mode}/Status`, UA)) as { name?: string; lineStatuses?: { statusSeverityDescription?: string }[] }[] | null;
+    return { items: (raw ?? []).map((l) => ({ title: l.name ?? "", value: l.lineStatuses?.[0]?.statusSeverityDescription ?? "" })) };
+  },
+});
+
+reg({
+  id: "citybikes", label: "CityBikes", category: "transit", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "citybikes.networks", label: "Bike-share networks", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 25, 100);
+    const country = String(ctx.query.country ?? "").trim().toUpperCase().slice(0, 2);
+    const raw = (await getJSON("https://api.citybik.es/v2/networks?fields=id,name,location", UA)) as { networks?: { name?: string; location?: { city?: string; country?: string } }[] } | null;
+    let nets = raw?.networks ?? [];
+    if (country) nets = nets.filter((n) => (n.location?.country ?? "") === country);
+    return { items: nets.slice(0, max).map((n) => ({ title: n.name ?? "", label: [n.location?.city, n.location?.country].filter(Boolean).join(", ") })) };
+  },
+});
+
+reg({
+  id: "wikitrends", label: "Wikipedia Most Read", category: "reference", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "wikitrends.top", label: "Most-viewed articles", shape: "list" }],
+  async resolve(ctx) {
+    const lang = String(ctx.query.lang ?? "en").replace(/[^a-z]/g, "").slice(0, 8) || "en";
+    const max = Math.min(Number(ctx.query.max) || 12, 40);
+    const d = new Date(Date.now() - 2 * 86_400_000); // pageviews lag ~1-2 days
+    const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, "0"), day = String(d.getUTCDate()).padStart(2, "0");
+    const raw = (await getJSON(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/${lang}.wikipedia/all-access/${y}/${m}/${day}`, UA)) as { items?: { articles?: { article?: string; views?: number }[] }[] } | null;
+    const arts = raw?.items?.[0]?.articles ?? [];
+    return { items: arts.filter((a) => a.article && !/^(Main_Page|Special:|Wikipedia:)/.test(a.article)).slice(0, max).map((a) => ({ title: (a.article ?? "").replace(/_/g, " "), value: (a.views ?? 0).toLocaleString() })) };
+  },
+});
+
+reg({
+  id: "nominatim", label: "OpenStreetMap Nominatim", category: "place", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "nominatim.search", label: "Geocode a place", shape: "list" }],
+  async resolve(ctx) {
+    const q = encodeURIComponent(String(ctx.query.q ?? "Eiffel Tower").slice(0, 120));
+    const max = Math.min(Number(ctx.query.max) || 5, 10);
+    const raw = (await getJSON(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=${max}`, UA)) as { display_name?: string; name?: string; lat?: string; lon?: string; type?: string }[] | null;
+    return { items: (raw ?? []).map((p) => ({ title: p.name || (p.display_name ?? "").split(",")[0] || "", label: p.type ?? "", value: p.lat && p.lon ? `${Number(p.lat).toFixed(4)}, ${Number(p.lon).toFixed(4)}` : "" })) };
+  },
+});
+
+reg({
+  id: "openmeteoelev", label: "Open-Meteo Elevation", category: "science", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "openmeteoelev.point", label: "Elevation at a point", shape: "scalar" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat ?? ctx.query.latitude ?? 51.5);
+    const lon = Number(ctx.query.lon ?? ctx.query.longitude ?? -0.12);
+    const raw = (await getJSON(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`, UA)) as { elevation?: number[] } | null;
+    const e = raw?.elevation?.[0];
+    return { value: Number.isFinite(e) ? `${Math.round(e as number)} m` : "" };
+  },
+});
+
+reg({
+  id: "exchangeapi", label: "Exchange Rates (currency-api)", category: "finance", authKind: "none",
+  defaultTtlMs: TTL.h1, minRefreshMs: 30_000,
+  resources: [{ id: "exchangeapi.rates", label: "Rates from a base currency", shape: "list" }],
+  async resolve(ctx) {
+    const base = String(ctx.query.base ?? "usd").toLowerCase().replace(/[^a-z]/g, "").slice(0, 8) || "usd";
+    const targets = String(ctx.query.targets ?? "eur,gbp,jpy,inr,btc").toLowerCase().split(",").map((t) => t.replace(/[^a-z0-9]/g, "")).filter(Boolean).slice(0, 20);
+    const raw = (await getJSON(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${base}.min.json`, UA)) as Record<string, unknown> | null;
+    const rates = (raw?.[base] ?? {}) as Record<string, number>;
+    return { items: targets.map((t) => ({ title: `${base.toUpperCase()} → ${t.toUpperCase()}`, value: rates[t] != null ? String(rates[t]) : "" })) };
+  },
+});
+
+reg({
+  id: "rickandmorty", label: "Rick and Morty", category: "fun", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 30_000,
+  resources: [{ id: "rickandmorty.characters", label: "Characters", shape: "list" }],
+  async resolve(ctx) {
+    const name = encodeURIComponent(String(ctx.query.name ?? "").slice(0, 40));
+    const max = Math.min(Number(ctx.query.max) || 10, 20);
+    const raw = (await getJSON(`https://rickandmortyapi.com/api/character/?name=${name}`, UA)) as { results?: { name?: string; species?: string; status?: string }[] } | null;
+    return { items: (raw?.results ?? []).slice(0, max).map((c) => ({ title: c.name ?? "", label: c.species ?? "", value: c.status ?? "" })) };
+  },
+});
+
+reg({
+  id: "metno", label: "MET Norway (Yr)", category: "weather", authKind: "none",
+  defaultTtlMs: TTL.m10, minRefreshMs: 60_000,
+  resources: [{ id: "metno.now", label: "Current conditions", shape: "scalar" }],
+  async resolve(ctx) {
+    const lat = Number(ctx.query.lat ?? 51.5).toFixed(4);
+    const lon = Number(ctx.query.lon ?? -0.12).toFixed(4);
+    const raw = (await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`, UA)) as { properties?: { timeseries?: { data?: { instant?: { details?: { air_temperature?: number; wind_speed?: number } } } }[] } } | null;
+    const d = raw?.properties?.timeseries?.[0]?.data?.instant?.details;
+    if (!d || d.air_temperature == null) return { value: "" };
+    const wind = d.wind_speed != null ? `, wind ${d.wind_speed} m/s` : "";
+    return { value: `${d.air_temperature}°C${wind}` };
+  },
+});
+
+reg({
+  id: "openfda", label: "openFDA Food Recalls", category: "civic", authKind: "none",
+  defaultTtlMs: TTL.h12, minRefreshMs: 60_000,
+  resources: [{ id: "openfda.recalls", label: "Food enforcement / recalls", shape: "list" }],
+  async resolve(ctx) {
+    const max = Math.min(Number(ctx.query.max) || 10, 50);
+    const raw = (await getJSON(`https://api.fda.gov/food/enforcement.json?sort=recall_initiation_date:desc&limit=${max}`, UA)) as { results?: { product_description?: string; recalling_firm?: string; classification?: string }[] } | null;
+    return { items: (raw?.results ?? []).map((r) => ({ title: (r.product_description ?? "").slice(0, 120), label: r.recalling_firm ?? "", value: r.classification ?? "" })) };
+  },
+});

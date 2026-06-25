@@ -22,7 +22,7 @@ const CAT_LABEL: Record<string, string> = {
   finance: "Finance", news: "News", civic: "Civic & science", analytics: "Analytics", money: "Money",
   ops: "Observability", bookmarks: "Bookmarks", "time-tracking": "Time tracking",
   reference: "Reference", space: "Space", fun: "Fun", food: "Food & drink", art: "Art & museums",
-  weather: "Weather", science: "Science",
+  weather: "Weather", science: "Science", transit: "Transit & mobility",
 };
 
 interface ProviderInfo {
