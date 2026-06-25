@@ -13,7 +13,7 @@ const FEATURES = [
   { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
   { icon: Icon.pencil, title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
   { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
-  { icon: Icon.link, title: "Connect 137 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 131 more. Many need no login; tokens stay encrypted server-side." },
+  { icon: Icon.link, title: "Connect 165 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 159 more. Many need no login; tokens stay encrypted server-side." },
   { icon: Icon.convert, title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
   { icon: Icon.layers, title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
   { icon: Icon.home, title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
@@ -34,7 +34,7 @@ const COMPARE = [
   { dim: "Source", us: "Open source (MIT) — audit it, fork it", them: "Typically closed source" },
   { dim: "Screens", us: "Any browser — TV, tablet or e-ink panel", them: "Often one specific device or app" },
   { dim: "Make it yours", us: `${BLOCKS.length} blocks + a Notion-style editor`, them: "Fixed templates, limited layout" },
-  { dim: "Live data", us: "137 sources, ~24 with no login at all", them: "Varies; often a paid add-on" },
+  { dim: "Live data", us: "165 sources, ~96 with no login at all", them: "Varies; often a paid add-on" },
 ];
 
 function BridgeMotif() {
