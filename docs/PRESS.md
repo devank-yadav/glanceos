@@ -12,7 +12,7 @@ code. Copy freely.
 
 GlanceOS is a free, open-source, self-hosted dashboard for any screen — a TV,
 an old tablet, an e-ink panel, or a browser tab. Compose boards like a document,
-bind live data from 150+ keyless and connected sources, and run it on your own
+bind live data from 165 keyless and connected sources, and run it on your own
 server. No subscription, no telemetry.
 
 ## Long description (≈ 90 words)
@@ -20,7 +20,7 @@ server. No subscription, no telemetry.
 GlanceOS is an open platform (MIT) that turns spare screens into calm,
 glanceable dashboards. You build boards in a Notion-style editor from 213 block
 types — clocks, weather, lists, stats, gauges, countdowns, signage — and any
-block can be made *live*, pulling from 153 server-side integrations (about half
+block can be made *live*, pulling from 165 server-side integrations (over half
 need no login at all) or any public URL. Boards stream to connected screens over
 SSE and render through a sub-30 KB runtime, so they work on old smart-TVs and
 battery e-ink panels alike. It's self-hosted in one container: your data never
@@ -36,8 +36,8 @@ leaves your server. Every feature is free.
 | **Privacy** | Your data stays on your server; no telemetry, no phone-home |
 | **Blocks** | 213 block types |
 | **Templates** | 159 ready-made full-screen boards (incl. zero-setup live ones) |
-| **Integrations** | 153 server-side data sources (~half keyless / no login) |
-| **Preset objects** | 85 one-click pre-bound blocks |
+| **Integrations** | 165 server-side data sources (~96 keyless / no login) |
+| **Preset objects** | 96 one-click pre-bound blocks |
 | **Screens** | Any browser — TV, tablet, monitor, e-ink, Raspberry Pi; native shells for Android TV/Fire TV, Tizen, webOS, tvOS |
 | **Runtime size** | Screen runtime ≤ 30 KB gzipped (CI-gated) |
 | **Stack** | TypeScript monorepo — Hono + SQLite server, Preact config app, zero-dependency vanilla-TS screen runtime |
