@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea, a new integration, or a board template
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the use case or the problem — the "why", not just the "what".
+      placeholder: I want my wall to show…
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What would solve it? For a new integration, link the public API / docs.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New integration / data source
+        - New block or object
+        - New board template
+        - Studio / editor improvement
+        - Device / platform support
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Anything you've already tried or considered.

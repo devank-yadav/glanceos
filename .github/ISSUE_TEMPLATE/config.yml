@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/devank-yadav/glanceos/security/advisories/new
+    about: Please report security issues privately — not as a public issue. See SECURITY.md.
+  - name: Question or idea (Discussions)
+    url: https://github.com/devank-yadav/glanceos/discussions
+    about: For open-ended questions, setup help, and "show your wall" — use Discussions.

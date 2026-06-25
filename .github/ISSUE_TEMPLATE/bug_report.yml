@@ -1,0 +1,58 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please **don't** report security
+        issues here — see [SECURITY.md](../blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: When I…, I expected…, but instead…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to…
+        2. Click…
+        3. See…
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - config app (the site you log into)
+        - screen runtime (the TV / e-ink display)
+        - server / API
+        - a device shell (Pi, Android TV, Tizen, webOS, tvOS)
+        - an integration / data source
+        - not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: A tag (e.g. v9.7.0) or the short commit you're running.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: How you run it (Docker / Fly / Render / bare Node), browser, and the display device if relevant.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Relevant server logs or browser console output. Redact any tokens or secret URLs.
+      render: shell
