@@ -1,7 +1,7 @@
 import type { LayoutT } from "@glanceos/schema";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type DeviceSummary, type DisplayGroup, type LayoutRecord, type Playlist, type SetupSummary } from "../api";
+import { api, type DeviceSummary, type DisplayGroup, type LayoutRecord, type SetupSummary } from "../api";
 import { PENDING_CLAIM_KEY } from "../claim";
 import { BoardPreview, BoardPreviewById } from "../components/BoardPreview";
 import { ClaimForm } from "../components/ClaimForm";
@@ -21,7 +21,6 @@ import { navigate } from "../router";
 export function ScreensPage() {
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [setups, setSetups] = useState<SetupSummary[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const toast = useToast();
@@ -38,12 +37,11 @@ export function ScreensPage() {
 
   const refresh = async () => {
     try {
-      const [d, s, p] = await Promise.all([
+      const [d, s] = await Promise.all([
         api.get<DeviceSummary[]>("/api/devices"),
         api.get<SetupSummary[]>("/api/layouts"),
-        api.get<Playlist[]>("/api/playlists"),
       ]);
-      setDevices(d); setSetups(s); setPlaylists(p); setError(false);
+      setDevices(d); setSetups(s); setError(false);
     } catch {
       // First load fails → show an inline retry (below) rather than toast-spamming
       // every 5s; a background refresh that fails keeps the last-good cards quietly.
@@ -80,7 +78,7 @@ export function ScreensPage() {
         ) : (
           <div class="cards">
             {devices.map((d) => (
-              <DeviceCard key={d.id} device={d} playlists={playlists} setups={setups} onChanged={refresh} onPick={() => setPickerFor(d.id)} />
+              <DeviceCard key={d.id} device={d} setups={setups} onChanged={refresh} onPick={() => setPickerFor(d.id)} />
             ))}
           </div>
         )}
@@ -89,7 +87,7 @@ export function ScreensPage() {
           <ClaimForm onClaimed={onClaimed} initialCode={pendingClaim} />
         </Modal>
         {pickerFor && (
-          <SetupPicker deviceId={pickerFor} setups={setups} playlists={playlists} onClose={() => setPickerFor(null)} onDone={refresh} />
+          <SetupPicker deviceId={pickerFor} setups={setups} onClose={() => setPickerFor(null)} onDone={refresh} />
         )}
       </div>
     </>
@@ -112,7 +110,7 @@ function FirstScreen({ onClaim }: { onClaim: () => void }) {
 }
 
 
-function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: DeviceSummary; playlists: Playlist[]; setups: SetupSummary[]; onChanged: () => Promise<void>; onPick: () => void }) {
+function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSummary; setups: SetupSummary[]; onChanged: () => Promise<void>; onPick: () => void }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(device.name ?? "");
   const [previewing, setPreviewing] = useState(false);
@@ -154,7 +152,6 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
     } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
-  const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
   const ro = device.renderOpts ?? {};
   const setRenderOpt = async (patch: Record<string, unknown>) => {
     try { await api.patch(`/api/devices/${device.id}`, { renderOpts: { algo: ro.algo ?? "floyd", threshold: ro.threshold ?? 128, gamma: ro.gamma ?? 1, ...patch } }); await onChanged(); }
@@ -163,7 +160,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
 
   return (
     <div class="card device-card">
-      <DevicePreview device={device} playlists={playlists} />
+      <DevicePreview device={device} />
       <div class="device-card-body">
       <div class="row spread">
         <div class="row device-id">
@@ -190,9 +187,7 @@ function DeviceCard({ device, playlists, setups, onChanged, onPick }: { device: 
       </div>
 
       <p class={`tile-status${device.online ? " live" : " muted"}`} title={device.online ? "Online" : "Offline"}>
-        {playlist ? <>Rotating <strong>{playlist.name}</strong> · {playlist.items.length} board{playlist.items.length === 1 ? "" : "s"}</>
-          : device.layoutName ? <>Showing <strong>{device.layoutName}</strong></>
-            : <>No content yet</>}
+        {device.layoutName ? <>Showing <strong>{device.layoutName}</strong></> : <>No content yet</>}
       </p>
       <div class="device-meta row">
         <StatChip title="Resolution">{device.resolution}</StatChip>
@@ -474,7 +469,7 @@ function TvEditor({ device, onClose, onSaved }: { device: DeviceSummary; onClose
 }
 
 /** Post-claim (and change-setup) picker: existing setup, new blank, or the hub. */
-function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceId: string; setups: SetupSummary[]; playlists: Playlist[]; onClose: () => void; onDone: () => Promise<void> }) {
+function SetupPicker({ deviceId, setups, onClose, onDone }: { deviceId: string; setups: SetupSummary[]; onClose: () => void; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -487,11 +482,6 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
       if (thenEdit) navigate(`/edit/${layoutId}`);
       else toast.success("Board attached");
     } finally { setBusy(false); }
-  };
-  const assignPlaylist = async (playlistId: number) => {
-    setBusy(true);
-    try { await api.patch(`/api/devices/${deviceId}`, { playlistId }); await onDone(); onClose(); toast.success("Rotation attached"); }
-    finally { setBusy(false); }
   };
   const createBlank = async () => {
     setBusy(true);
@@ -519,19 +509,6 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
           </div>
         </>
       )}
-      {playlists.length > 0 && (
-        <>
-          <p class="muted">…or play a <a href="#/playlists" onClick={onClose}>rotation</a> that cycles boards:</p>
-          <ul class="picker-list">
-            {playlists.map((p) => (
-              <li key={p.id} class="row spread">
-                <span><strong>{p.name}</strong> <span class="muted">{p.items.length} boards · every {fmtDuration(p.intervalSeconds)}</span></span>
-                <button disabled={busy || p.items.length === 0} onClick={() => assignPlaylist(p.id)}>Play</button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
       <p class="muted">Want a starting point? <a href="#/hub" onClick={onClose}>Start from a template</a>, then attach it here.</p>
     </Modal>
   );
@@ -539,11 +516,10 @@ function SetupPicker({ deviceId, setups, playlists, onClose, onDone }: { deviceI
 
 /** A live, scaled mini-render of what a screen is currently showing, with clear
  *  empty states for offline / unconfigured screens. */
-function DevicePreview({ device, playlists }: { device: DeviceSummary; playlists: Playlist[] }) {
+function DevicePreview({ device }: { device: DeviceSummary }) {
   const [doc, setDoc] = useState<LayoutT | null>(null);
   const [failed, setFailed] = useState(false);
-  const playlist = device.playlistId ? playlists.find((p) => p.id === device.playlistId) : undefined;
-  const layoutId = device.layoutId ?? playlist?.items[0]?.layoutId ?? null;
+  const layoutId = device.layoutId ?? null;
   const [w, h] = parseResolution(device.resolution);
 
   useEffect(() => {

@@ -1,13 +1,12 @@
-// Sub-navigation for the "Screens" area — the three things you do with physical
-// displays: the screens themselves, the groups that show the same thing, and the
-// rotations (was "playlists") that cycle boards. Rendered at the top of each page.
+// Sub-navigation for the "Screens" area — the screens themselves and the groups
+// that show the same thing. (Board rotation now lives inside a board as pages, so
+// the old "Rotations"/playlists tab is gone.) Rendered at the top of each page.
 const TABS: { name: string; label: string; href: string }[] = [
   { name: "screens", label: "Screens", href: "#/screens" },
   { name: "groups", label: "Groups", href: "#/groups" },
-  { name: "playlists", label: "Rotations", href: "#/playlists" },
 ];
 
-export function ScreensTabs({ active }: { active: "screens" | "groups" | "playlists" }) {
+export function ScreensTabs({ active }: { active: "screens" | "groups" }) {
   return (
     <div class="tabs" role="tablist">
       {TABS.map((t) => (

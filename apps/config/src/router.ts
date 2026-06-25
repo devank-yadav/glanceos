@@ -9,7 +9,6 @@ export type Route =
   | { name: "screens" }
   | { name: "fleet" }
   | { name: "groups" }
-  | { name: "playlists" }
   | { name: "hub" }
   | { name: "integrations" }
   | { name: "inlets" }
@@ -26,7 +25,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/boards" || path === "/setups") return { name: "boards" }; // /setups = legacy alias
   if (path === "/screens" || path === "/fleet" || path === "/remote") return { name: "screens" }; // fleet + remote folded into Screens
   if (path === "/groups") return { name: "groups" };
-  if (path === "/playlists") return { name: "playlists" };
+  if (path === "/playlists") return { name: "screens" }; // legacy: rotations folded into board pages
   if (path === "/hub") return { name: "hub" };
   if (path === "/integrations") return { name: "integrations" };
   if (path === "/inlets") return { name: "inlets" };
@@ -45,7 +44,6 @@ export const SECTION: Record<string, { path: string; label: string }> = {
   screens: { path: "#/screens", label: "Screens" },
   fleet: { path: "#/fleet", label: "Fleet" },
   groups: { path: "#/groups", label: "Groups" },
-  playlists: { path: "#/playlists", label: "Rotations" },
   hub: { path: "#/hub", label: "Templates" },
   integrations: { path: "#/integrations", label: "Connections" },
   inlets: { path: "#/inlets", label: "Data inlets" },

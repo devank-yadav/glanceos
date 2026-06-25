@@ -16,7 +16,7 @@ describe("router", () => {
   });
 
   it("SECTION covers every nav section + account (for breadcrumbs)", () => {
-    for (const k of ["boards", "screens", "fleet", "playlists", "hub", "integrations", "account"]) {
+    for (const k of ["boards", "screens", "fleet", "groups", "hub", "integrations", "account"]) {
       expect(SECTION[k]?.label).toBeTruthy();
       expect(SECTION[k]?.path).toMatch(/^#\//);
     }

@@ -16,7 +16,6 @@ import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
-import { PlaylistsPage } from "./pages/playlists";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
@@ -163,7 +162,6 @@ export function App() {
     { id: "nav-templates", label: "Browse templates", hint: "Page", icon: <Icon.convert />, run: () => navigate("/hub") },
     { id: "nav-shared", label: "Shared with me", hint: "Page", icon: <Icon.copy />, run: () => navigate("/shared") },
     { id: "nav-groups", label: "Screen groups", hint: "Page", icon: <Icon.layers />, run: () => navigate("/groups") },
-    { id: "nav-playlists", label: "Rotations", hint: "Page", icon: <Icon.play />, run: () => navigate("/playlists") },
     { id: "nav-automations", label: "Automations", hint: "Page", icon: <Icon.target />, run: () => navigate("/automations") },
     { id: "nav-integrations", label: "Connections", hint: "Page", icon: <Icon.link />, run: () => navigate("/integrations") },
     { id: "help-onboard", label: "Show the setup guide", hint: "Help", icon: <Icon.help />, run: () => { try { localStorage.removeItem(DISMISS_KEY); } catch { /* ignore */ } setOnboard(true); } },
@@ -226,7 +224,6 @@ export function App() {
           {page.name === "boards" && <SetupsPage />}
           {page.name === "screens" && <ScreensPage />}
           {page.name === "groups" && <GroupsPage />}
-          {page.name === "playlists" && <PlaylistsPage />}
           {page.name === "hub" && <HubPage />}
           {page.name === "integrations" && <IntegrationsPage />}
           {page.name === "inlets" && <InletsPage />}
