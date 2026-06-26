@@ -1210,6 +1210,19 @@ const pipes = (s: string): Array<[string, string]> =>
     return i === -1 ? [ln.trim(), ""] : [ln.slice(0, i).trim(), ln.slice(i + 1).trim()];
   });
 
+// A label|value chart (leaderboard / ranking / score ticker) binds to the server-resolved
+// array of {label,value}-ish objects when present, else its typed "Label | Value" props.
+// Returns the same [label, value] string-pair shape as pipes(), so renderers are unchanged.
+const boundPairs = (w: WidgetT, data: unknown): Array<[string, string]> =>
+  Array.isArray(data)
+    ? (data as unknown[]).map((x) => {
+        const o = x as Record<string, unknown>;
+        return x && typeof x === "object"
+          ? [String(o.label ?? o.name ?? o.text ?? o.title ?? ""), String(o.value ?? o.n ?? o.count ?? "")] as [string, string]
+          : [String(x), ""] as [string, string];
+      })
+    : pipes((w.props as { items?: string }).items ?? "");
+
 // ---- text & structure ----
 const signature: Render = (el, w) => {
   if (w.type !== "signature") return;
@@ -1323,9 +1336,9 @@ const bulletGraph: Render = (el, w) => {
   el.appendChild(wrap);
   el.appendChild(div("bullet-read", `${w.props.value} / ${w.props.target}`));
 };
-const horizontalBars: Render = (el, w) => {
+const horizontalBars: Render = (el, w, data) => {
   if (w.type !== "horizontalBars") return;
-  const rows = pipes(w.props.items).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
+  const rows = boundPairs(w, data).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
   const max = Math.max(1, ...rows.map((r) => r[1]));
   const list = div("hbars");
   for (const [label, v] of rows) {
@@ -1340,9 +1353,9 @@ const horizontalBars: Render = (el, w) => {
   }
   el.appendChild(list);
 };
-const rankingList: Render = (el, w) => {
+const rankingList: Render = (el, w, data) => {
   if (w.type !== "rankingList") return;
-  const rows = pipes(w.props.items).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
+  const rows = boundPairs(w, data).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
   const max = Math.max(1, ...rows.map((r) => r[1]));
   const list = div("ranking");
   rows.forEach(([label, v], i) => {
@@ -1404,9 +1417,9 @@ const comparison: Render = (el, w) => {
   legendRow.append(div("cmp-l", `${w.props.leftLabel} ${w.props.leftValue}`), div("cmp-r", `${w.props.rightValue} ${w.props.rightLabel}`));
   el.append(bar, legendRow);
 };
-const percentList: Render = (el, w) => {
+const percentList: Render = (el, w, data) => {
   if (w.type !== "percentList") return;
-  const rows = pipes(w.props.items).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
+  const rows = boundPairs(w, data).map(([l, v]) => [l, Number(v) || 0] as [string, number]);
   const total = Math.max(1, rows.reduce((n, r) => n + r[1], 0));
   const bar = div("pct-bar");
   rows.forEach(([, v], i) => {
@@ -1894,10 +1907,10 @@ const unitStat: Render = (el, w) => {
   row.append(div("metric-value", w.props.value), div("metric-unit", w.props.unit));
   el.appendChild(row);
 };
-const progressBars: Render = (el, w) => {
+const progressBars: Render = (el, w, data) => {
   if (w.type !== "progressBars") return;
   const list = div("progress-bars");
-  for (const [label, val] of pipes(w.props.items)) {
+  for (const [label, val] of boundPairs(w, data)) {
     const row = div("pb-row");
     row.append(div("pb-label", label), pctBar(Number(val) || 0), div("pb-val", `${Number(val) || 0}%`));
     list.appendChild(row);
@@ -1906,9 +1919,9 @@ const progressBars: Render = (el, w) => {
 };
 
 // ---- charts ----
-const lollipopChart: Render = (el, w) => {
+const lollipopChart: Render = (el, w, d) => {
   if (w.type !== "lollipopChart") return;
-  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const data = boundPairs(w, d).map(([l, n]) => ({ l, n: Number(n) || 0 }));
   const max = Math.max(1, ...data.map((d) => d.n));
   const list = div("lollipop");
   for (const d of data) {
@@ -1954,9 +1967,9 @@ const rangeBar: Render = (el, w) => {
   ends.append(div("rb-end", String(w.props.min)), div("rb-cur", String(w.props.value)), div("rb-end", String(w.props.max)));
   el.appendChild(ends);
 };
-const bubbleScale: Render = (el, w) => {
+const bubbleScale: Render = (el, w, d) => {
   if (w.type !== "bubbleScale") return;
-  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const data = boundPairs(w, d).map(([l, n]) => ({ l, n: Number(n) || 0 }));
   const max = Math.max(1, ...data.map((d) => d.n));
   const wrap = div("bubbles");
   for (const d of data) {
@@ -1978,9 +1991,9 @@ const starBar: Render = (el, w) => {
   for (let i = 0; i < w.props.max; i++) row.appendChild(glyph("sb-star", i < n ? STAR_FULL : STAR_EMPTY));
   el.appendChild(row);
 };
-const columnLabels: Render = (el, w) => {
+const columnLabels: Render = (el, w, d) => {
   if (w.type !== "columnLabels") return;
-  const data = pipes(w.props.items).map(([l, n]) => ({ l, n: Number(n) || 0 }));
+  const data = boundPairs(w, d).map(([l, n]) => ({ l, n: Number(n) || 0 }));
   const max = Math.max(1, ...data.map((d) => d.n));
   const wrap = div("collabels");
   for (const d of data) {
@@ -1994,10 +2007,10 @@ const columnLabels: Render = (el, w) => {
   }
   el.appendChild(wrap);
 };
-const deltaList: Render = (el, w) => {
+const deltaList: Render = (el, w, data) => {
   if (w.type !== "deltaList") return;
   const list = div("kv");
-  for (const [label, d] of pipes(w.props.items)) {
+  for (const [label, d] of boundPairs(w, data)) {
     const row = div("kv-row");
     const down = d.trim().startsWith("-");
     const val = div("kv-val", `${down ? "▾" : "▴"} ${d}`);

@@ -1,7 +1,7 @@
 import type { BlockSourceT, WidgetT } from "@glanceos/schema";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
-import { LIST_BLOCKS, PASSTHROUGH_BLOCKS, SERIES_BLOCKS } from "./blocks";
+import { LIST_BLOCKS, PAIR_BLOCKS, PASSTHROUGH_BLOCKS, SERIES_BLOCKS } from "./blocks";
 import { arrayPaths, atPath, itemKeys, scalarPaths } from "./inspectShape";
 import { compileNotionFilter, NOTION_OPERATORS, type NotionFilterRow, type NotionFilterType } from "./notionFilter";
 
@@ -54,6 +54,8 @@ export function DataPanel({
 }) {
   const isSeries = SERIES_BLOCKS.has(block.type);
   const isList = LIST_BLOCKS.has(block.type);
+  const isPair = PAIR_BLOCKS.has(block.type); // label|value charts: a label field + a value field
+  const isArr = isSeries || isList || isPair; // all array-shaped sinks (need an items path)
   const isPass = PASSTHROUGH_BLOCKS.has(block.type);
   const existing = block.source;
 
@@ -69,6 +71,7 @@ export function DataPanel({
   );
   const [items, setItems] = useState(existing?.map?.items ?? "");
   const [field, setField] = useState(existing?.map?.fields?.value ?? existing?.map?.fields?.text ?? existing?.map?.path ?? "");
+  const [labelField, setLabelField] = useState(existing?.map?.fields?.label ?? ""); // pair charts: the per-item label field
   const [transform, setTransform] = useState<string>(existing?.map?.transform ?? "first");
   const [transformArg, setTransformArg] = useState<string>(existing?.map?.transformArg ?? "");
   const [preview, setPreview] = useState("");
@@ -98,13 +101,18 @@ export function DataPanel({
       const compiled = compileNotionFilter(nf, nfComb);
       if (compiled.filter) query.body = JSON.stringify(compiled);
     }
+    const pairFields: Record<string, string> = {};
+    if (labelField) pairFields.label = labelField;
+    if (field) pairFields.value = field;
     const map = !shaped
       ? { path: "", transform: "none" as const }
       : isSeries
         ? { path: "", items: items || undefined, fields: field ? { value: field } : undefined, transform: "series" as const }
         : isList
           ? { path: "", items: items || undefined, fields: field ? { text: field } : undefined, transform: "join" as const }
-          : { path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"], transformArg: (transform in TRANSFORM_ARGS && transformArg) ? transformArg : undefined };
+          : isPair
+            ? { path: "", items: items || undefined, fields: Object.keys(pairFields).length ? pairFields : undefined, transform: "none" as const }
+            : { path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"], transformArg: (transform in TRANSFORM_ARGS && transformArg) ? transformArg : undefined };
     return { connectionId: connId || undefined, kind, query, map } as BlockSourceT;
   };
 
@@ -127,7 +135,7 @@ export function DataPanel({
 
   // ---- shape inspector: turn the previewed payload into clickable path suggestions ----
   const arrSugg = previewData != null ? arrayPaths(previewData).slice(0, 8) : [];
-  const fieldSugg = (isSeries || isList)
+  const fieldSugg = isArr
     ? itemKeys(atPath(previewData, items) ?? (arrSugg[0] ? atPath(previewData, arrSugg[0].path) : previewData))
     : previewData != null ? scalarPaths(previewData).slice(0, 16) : [];
 
@@ -212,17 +220,23 @@ export function DataPanel({
       {shaped && (
         <>
           <label class="field grow">
-            <span>{isSeries || isList ? "Array path (items)" : "Field path"}</span>
-            <input value={isSeries || isList ? items : field} placeholder={isSeries || isList ? "results (blank = root)" : "data.total"} onInput={(e) => ((isSeries || isList) ? setItems : setField)((e.currentTarget as HTMLInputElement).value)} />
-            <span class="field-hint">{isSeries || isList ? "Dotted path to the list, e.g. results — blank uses the whole response." : "Dotted path to one value, e.g. main.temp — blank uses the whole response."}</span>
+            <span>{isArr ? "Array path (items)" : "Field path"}</span>
+            <input value={isArr ? items : field} placeholder={isArr ? "results (blank = root)" : "data.total"} onInput={(e) => (isArr ? setItems : setField)((e.currentTarget as HTMLInputElement).value)} />
+            <span class="field-hint">{isArr ? "Dotted path to the list, e.g. results — blank uses the whole response." : "Dotted path to one value, e.g. main.temp — blank uses the whole response."}</span>
           </label>
-          {(isSeries || isList) && (
+          {isPair && (
             <label class="field grow">
-              <span>{isSeries ? "Value field (per item)" : "Text field (per item)"}</span>
-              <input value={field} placeholder={isSeries ? "count" : "content / title"} onInput={(e) => setField((e.currentTarget as HTMLInputElement).value)} />
+              <span>Label field (per item)</span>
+              <input value={labelField} placeholder="name / title" onInput={(e) => setLabelField((e.currentTarget as HTMLInputElement).value)} />
             </label>
           )}
-          {!isSeries && !isList && (
+          {(isSeries || isList || isPair) && (
+            <label class="field grow">
+              <span>{isList ? "Text field (per item)" : "Value field (per item)"}</span>
+              <input value={field} placeholder={isList ? "content / title" : "value / count"} onInput={(e) => setField((e.currentTarget as HTMLInputElement).value)} />
+            </label>
+          )}
+          {!isArr && (
             <label class="field">
               <span>Transform</span>
               <select value={transform} onChange={(e) => { setTransform((e.currentTarget as HTMLSelectElement).value); setTransformArg(""); }}>
@@ -230,7 +244,7 @@ export function DataPanel({
               </select>
             </label>
           )}
-          {!isSeries && !isList && transform in TRANSFORM_ARGS && (
+          {!isArr && transform in TRANSFORM_ARGS && (
             <label class="field">
               <span>Format</span>
               <input value={transformArg} placeholder={TRANSFORM_ARGS[transform]} onInput={(e) => setTransformArg((e.currentTarget as HTMLInputElement).value)} />
@@ -249,7 +263,7 @@ export function DataPanel({
       {previewData != null && shaped && (arrSugg.length > 0 || fieldSugg.length > 0) && (
         <div class="data-inspect">
           <span class="muted data-inspect-hint">Click a path to fill the mapping:</span>
-          {(isSeries || isList) && arrSugg.length > 0 && (
+          {isArr && arrSugg.length > 0 && (
             <div class="di-row">
               <span class="di-label">List</span>
               {arrSugg.map((a) => (
@@ -257,9 +271,17 @@ export function DataPanel({
               ))}
             </div>
           )}
+          {isPair && fieldSugg.length > 0 && (
+            <div class="di-row">
+              <span class="di-label">Label</span>
+              {fieldSugg.map((f) => (
+                <button key={f} class="di-chip" onClick={() => setLabelField(f)}>{f}</button>
+              ))}
+            </div>
+          )}
           {fieldSugg.length > 0 && (
             <div class="di-row">
-              <span class="di-label">{isSeries || isList ? "Field" : "Value"}</span>
+              <span class="di-label">{isList ? "Field" : isArr ? "Value" : "Value"}</span>
               {fieldSugg.map((f) => (
                 <button key={f} class="di-chip" onClick={() => setField(f)}>{f}</button>
               ))}

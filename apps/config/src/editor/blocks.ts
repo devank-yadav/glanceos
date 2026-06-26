@@ -434,9 +434,15 @@ export const SCALAR_BLOCKS = new Set<WidgetType>([
 ]);
 // Newline-joined text lists (Todoist/Notion/GitHub issues → a list block).
 export const LIST_BLOCKS = new Set<WidgetType>(["bulletList", "numberedList", "checklist"]);
+// label|value charts — leaderboards, rankings, score tickers, price lists. Bind to an
+// array of {label,value} objects (a per-item label field + value field), so live scores /
+// prices / standings render with both fields. Falls back to typed "Label | Value" props.
+export const PAIR_BLOCKS = new Set<WidgetType>([
+  "horizontalBars", "rankingList", "percentList", "progressBars", "lollipopChart", "bubbleScale", "columnLabels", "deltaList",
+]);
 // Already-typed live shapes — bind the whole block, no field mapping needed.
 export const PASSTHROUGH_BLOCKS = new Set<WidgetType>(["calendar", "headlines", "nowPlaying", "upNext", "dayTimeline", "focusNow", "leaveBy", "myDay"]);
-export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PASSTHROUGH_BLOCKS]);
+export const BINDABLE = new Set<WidgetType>([...SERIES_BLOCKS, ...SCALAR_BLOCKS, ...LIST_BLOCKS, ...PAIR_BLOCKS, ...PASSTHROUGH_BLOCKS]);
 
 // Single-line types: never hold their own newlines.
 export const SINGLE_LINE = new Set<WidgetType>([
