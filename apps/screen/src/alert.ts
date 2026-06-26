@@ -3,7 +3,7 @@
 // every state push — and auto-removes after its ttl. Dependency-free; all styling
 // lives in CSS so it costs nothing against the screen JS size budget.
 
-export interface AlertPayload { severity?: "info" | "warn" | "critical"; title?: string; body?: string; ttl?: number }
+export interface AlertPayload { severity?: "info" | "warn" | "critical"; title?: string; body?: string; ttl?: number; quiet?: boolean }
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -13,7 +13,9 @@ export function showAlert(a: AlertPayload): void {
 
   const el = document.createElement("div");
   el.id = "glance-alert";
-  el.className = `glance-alert sev-${a.severity === "critical" || a.severity === "warn" ? a.severity : "info"}`;
+  // `quiet` (respectQuiet → soften): a calm banner during a screen's quiet hours —
+  // no slide-in, muted, never a loud red flash at 2am.
+  el.className = `glance-alert sev-${a.severity === "critical" || a.severity === "warn" ? a.severity : "info"}${a.quiet ? " quiet" : ""}`;
   const title = document.createElement("div");
   title.className = "ga-title";
   title.textContent = a.title || "Alert"; // textContent — never markup

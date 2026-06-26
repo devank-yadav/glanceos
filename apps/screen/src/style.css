@@ -836,6 +836,8 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
 .glance-alert .ga-title { font-size: calc(3.2vmin * var(--font-scale, 1)); font-weight: 700; line-height: 1.15; }
 .glance-alert .ga-body { font-size: calc(2.4vmin * var(--font-scale, 1)); margin-top: 0.4vmin; opacity: 0.92; }
 @keyframes ga-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+/* respectQuiet "soften": appear calmly during quiet hours — no slide-in, muted, flat. */
+.glance-alert.quiet { animation: none; opacity: 0.9; box-shadow: none; }
 .otd-row { display: flex; gap: 1.4vmin; font-size: calc(2.3vmin * var(--font-scale, 1)); padding: 0.4vmin 0; }
 .otd-year { font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
 .otd-text { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

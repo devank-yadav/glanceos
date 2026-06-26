@@ -905,6 +905,12 @@ function ActionFields({ action, objects, devices, boards, loaded, onChange }: { 
           <option value="info">info</option><option value="warn">warn</option><option value="critical">critical</option>
         </select>
         {txt("title", "title", "grow")}
+        <select value={String(action.respectQuiet ?? "off")} onChange={(e) => f("respectQuiet", (e.currentTarget as HTMLSelectElement).value)} title="What this alert does during a screen's quiet hours">
+          <option value="off">Quiet hrs: always show</option>
+          <option value="soften">Quiet hrs: soften</option>
+          <option value="hold">Quiet hrs: hold till morning</option>
+          <option value="suppress">Quiet hrs: skip</option>
+        </select>
       </>
     );
     case "webhook": return txt("url", "https://…", "grow");

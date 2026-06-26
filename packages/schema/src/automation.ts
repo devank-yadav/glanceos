@@ -76,7 +76,11 @@ export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick"
 // `afterMinutes` (v7.0): when set, the step is not run inline — it's queued and the
 // engine tick runs it that many minutes later ("then, 10 min later, switch the board").
 // No recursion: any action can be deferred by this one optional field. Bounded queue.
-const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional(), afterMinutes: z.number().int().min(1).max(1440).optional() });
+// `respectQuiet` (v11): how an interruption behaves during a screen's quiet-hours
+// window. Honored by the `alert` action (the full-screen banner) — soften = downgrade
+// to a calm, flash/chime-free info banner; suppress = skip that screen; hold = defer the
+// alert until quiet hours end. Default off = always interrupt (current behavior).
+const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional(), afterMinutes: z.number().int().min(1).max(1440).optional(), respectQuiet: z.enum(["off", "hold", "suppress", "soften"]).optional() });
 export const Action = z.discriminatedUnion("kind", [
   act({ kind: z.literal("setData"), key: z.string().min(1).max(100), value: z.unknown() }),
   act({ kind: z.literal("addTask"), listId: z.string().max(60).default("default"), text: z.string().min(1).max(500) }),

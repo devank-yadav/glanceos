@@ -4,10 +4,11 @@ import { getCustomData, listCustomData, setCustomData } from "../customdata";
 import { getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
 import { advanceQueue } from "../queues";
-import { devicesOwnedBy, getDevice, updateDevice } from "../devices";
+import { deviceProfile, devicesOwnedBy, getDevice, updateDevice, type DeviceRow } from "../devices";
 import { getWritableLayout } from "../shares";
 import { createIfAbsent } from "../notifications";
-import { pushDevice, pushUserDevices } from "../state";
+import { pushDevice, pushUserDevices, windowActive } from "../state";
+import { wallClock } from "../schedules";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
@@ -403,14 +404,44 @@ function resolveSustained(
 
 const dayOf = (ctx: Ctx): number => Math.floor(ctx.time.ts / 86_400_000);
 
-async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
-  const payload = { severity: a.severity, title: a.title, body: a.body, ttl: a.ttlSeconds };
+// Is this device inside its quiet-hours window right now, and if so how many minutes
+// until it ends? (used by respectQuiet — don't flash a 2am alert at a bedroom screen.)
+function deviceQuiet(d: DeviceRow): { quiet: boolean; minsToEnd: number } {
+  const q = deviceProfile(d).quietHours;
+  if (!q) return { quiet: false, minsToEnd: 0 };
+  const { weekday, minute } = wallClock(Date.now(), d.timezone);
+  if (!windowActive(q, minute, weekday)) return { quiet: false, minsToEnd: 0 };
+  let mins = q.endMin - minute;
+  if (mins <= 0) mins += 1440; // window end is later today / tomorrow morning
+  return { quiet: true, minsToEnd: mins };
+}
+
+// The connected screens an alert targets (a specific device, or all the user's screens).
+function alertTargets(userId: string, a: Extract<ActionT, { kind: "alert" }>): DeviceRow[] {
   if (a.target === "device" && a.deviceId) {
     const d = getDevice(a.deviceId);
-    if (d?.user_id === userId && isConnected(a.deviceId)) await emit(a.deviceId, "alert", payload);
-    return;
+    return d && d.user_id === userId && isConnected(d.id) ? [d] : [];
   }
-  for (const d of devicesOwnedBy(userId)) if (isConnected(d.id)) await emit(d.id, "alert", payload);
+  return devicesOwnedBy(userId).filter((d) => isConnected(d.id));
+}
+
+async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
+  const payload = { severity: a.severity, title: a.title, body: a.body, ttl: a.ttlSeconds };
+  const mode = a.respectQuiet ?? "off";
+  for (const d of alertTargets(userId, a)) {
+    if (mode !== "off" && mode !== "hold" && deviceQuiet(d).quiet) {
+      if (mode === "suppress") continue; // skip this sleeping screen entirely
+      if (mode === "soften") { await emit(d.id, "alert", { ...payload, severity: "info", quiet: true }); continue; } // calm, no flash/chime
+    }
+    await emit(d.id, "alert", payload);
+  }
+}
+
+// hold: if any target screen is in quiet hours now, how long until the soonest window
+// ends (so runActions can defer the whole alert until then). 0 = none are quiet.
+function alertHoldMinutes(userId: string, a: Extract<ActionT, { kind: "alert" }>): number {
+  const ends = alertTargets(userId, a).map((d) => deviceQuiet(d)).filter((q) => q.quiet).map((q) => q.minsToEnd);
+  return ends.length ? Math.min(...ends) : 0;
 }
 
 /** Execute ONE action's effect (the raw switch). Returns whether it touched user data
@@ -502,6 +533,13 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, b
   for (const a of actions) {
     if (a.enabled === false) continue; // a step toggled off in the builder
     if (a.afterMinutes && a.afterMinutes > 0) { enqueueDeferred(userId, a, ctx, board, a.afterMinutes); run++; continue; } // run later
+    // respectQuiet "hold": if any target screen is in quiet hours, defer the alert until
+    // the soonest window ends. The deferred copy uses "suppress" so a drain that lands
+    // while a screen is still quiet stays calm instead of firing loudly.
+    if (a.kind === "alert" && a.respectQuiet === "hold") {
+      const mins = alertHoldMinutes(userId, a);
+      if (mins > 0) { enqueueDeferred(userId, { ...a, respectQuiet: "suppress" }, ctx, board, mins); run++; continue; }
+    }
     try { if (await execAction(a, userId, ctx, board)) touched = true; run++; }
     catch (e) { errors.push(`${a.kind}: ${e instanceof Error ? e.message : String(e)}`); }
   }
