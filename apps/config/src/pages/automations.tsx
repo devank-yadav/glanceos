@@ -33,10 +33,10 @@ interface Automation { id?: string; name: string; enabled: boolean; trigger: Tri
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
 export interface ObjOption { id: string; name: string; label: string; type?: string; settable: boolean; prop?: string }
 
-const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed", "stale"];
+const OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "crossesAbove", "crossesBelow", "between", "contains", "startsWith", "endsWith", "matches", "exists", "changed", "stale"];
 const NO_VALUE_OPS = new Set(["exists", "changed", "rising", "falling", "steady"]); // these ops take no comparison value
-const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed", rising: "is rising", falling: "is falling", steady: "is steady", stale: "hasn't changed in (min)" };
-const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "changed", "rising", "falling", "steady", "stale"];
+const OP_LABEL: Record<string, string> = { eq: "is", ne: "is not", gt: "greater than", gte: "≥", lt: "less than", lte: "≤", crossesAbove: "rises above", crossesBelow: "drops below", between: "between", contains: "contains", startsWith: "starts with", endsWith: "ends with", matches: "matches (regex)", exists: "exists", changed: "changed", rising: "is rising", falling: "is falling", steady: "is steady", stale: "hasn't changed in (min)" };
+const NUM_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "crossesAbove", "crossesBelow", "between", "changed", "rising", "falling", "steady", "stale"];
 const TEXT_OPS = ["eq", "ne", "contains", "startsWith", "endsWith", "matches", "exists", "changed", "stale"];
 const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -135,7 +135,7 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   // Data & webhooks
   { id: "webhook", group: "Data", label: "When a webhook arrives", trigger: { kind: "webhook" } },
   { id: "flag-on", group: "Data", label: "When a flag turns on", trigger: { kind: "tick" }, conditions: fcond("data.flag", "eq", true) },
-  { id: "counter-cross", group: "Data", label: "When a counter crosses a number", trigger: { kind: "tick" }, conditions: fcond("data.count", "gte", 10) },
+  { id: "counter-cross", group: "Data", label: "When a counter crosses a number (once)", trigger: { kind: "tick" }, conditions: fcond("data.count", "crossesAbove", 10) },
   { id: "value-changed", group: "Data", label: "When a value changes", trigger: { kind: "tick" }, conditions: fcond("data.value", "changed", "") },
   { id: "value-stale", group: "Data", label: "When a value goes stale (no update)", trigger: { kind: "tick" }, conditions: fcond("data.value", "stale", 30) },
 ];

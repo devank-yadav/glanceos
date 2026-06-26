@@ -9,7 +9,10 @@ import { z } from "zod";
 // ring-buffer) — direction over a window, not a level. They take no comparison value.
 // v7.0 `stale` reads the same in-memory change-history as the trend buffer: true when a
 // field hasn't changed for `value` minutes (dead-sensor / "no update in a while" detection).
-export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches", "rising", "falling", "steady", "stale"] as const;
+// `crossesAbove`/`crossesBelow` are EDGE comparators: true only on the tick where the
+// field transitions across `value` (was on one side last tick, is now on the other) — one
+// quiet fire per real event, not every tick a level stays past the line. Need a prev sample.
+export const COMPARATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "changed", "between", "startsWith", "endsWith", "matches", "rising", "falling", "steady", "stale", "crossesAbove", "crossesBelow"] as const;
 export const Comparator = z.enum(COMPARATORS);
 export type ComparatorT = (typeof COMPARATORS)[number];
 

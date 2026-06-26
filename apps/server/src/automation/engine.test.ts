@@ -507,3 +507,45 @@ describe("objects — board-scoped reads & writes (v4.0)", () => {
     expect(ghost.errors[0]).toMatch(/not found/);
   });
 });
+
+describe("evaluate — crossesAbove/crossesBelow edge comparators (F4)", () => {
+  const cur = (v: number) => ({ ...ctx(), data: { x: v } }) as Parameters<typeof evaluate>[1];
+  it("crossesAbove fires only on the upward transition tick", () => {
+    expect(evaluate(field("data.x", "crossesAbove", 60), cur(61), cur(59))).toBe(true); // 59 → 61 crosses up
+    expect(evaluate(field("data.x", "crossesAbove", 60), cur(61), cur(62))).toBe(false); // already above last tick
+    expect(evaluate(field("data.x", "crossesAbove", 60), cur(59), cur(40))).toBe(false); // still below
+    expect(evaluate(field("data.x", "crossesAbove", 60), cur(61))).toBe(false); // no prev → undetectable
+    expect(evaluate(field("data.x", "crossesAbove", 60), cur(60), cur(59))).toBe(false); // equal is not above
+  });
+  it("crossesBelow fires only on the downward transition tick", () => {
+    expect(evaluate(field("data.x", "crossesBelow", 60), cur(59), cur(61))).toBe(true);
+    expect(evaluate(field("data.x", "crossesBelow", 60), cur(59), cur(58))).toBe(false); // already below
+    expect(evaluate(field("data.x", "crossesBelow", 60), cur(61), cur(62))).toBe(false);
+  });
+  it("the schema accepts the new comparators", () => {
+    expect(Condition.safeParse({ type: "field", field: "data.x", op: "crossesAbove", value: 60 }).success).toBe(true);
+    expect(Condition.safeParse({ type: "field", field: "data.x", op: "crossesBelow", value: 60 }).success).toBe(true);
+  });
+});
+
+describe("buildContext — live blocks are sensable via objects.<id> (F1)", () => {
+  const liveBlock = { id: "prs", name: "PRs", type: "stat", width: 1, h: 4, props: { value: "0", label: "PRs" }, style: {}, source: { kind: "github.search", connectionId: "c1", query: {}, map: { transform: "count" } } };
+  const layout = { schemaVersion: 3, name: "t", rows: [{ id: "r", h: 4, blocks: [liveBlock] }] } as Parameters<typeof buildContext>[1]["layout"];
+  it("populates objects.<id>.value from the resolved live map (scalar)", () => {
+    const c = buildContext(user.id, { layout, liveObjects: { prs: 7 } });
+    expect(c.objects.prs!.value).toBe(7);
+    expect(c.objects.prs!.kind).toBe("live");
+    expect(evaluate(field("objects.prs.value", "gt", 5), c)).toBe(true);
+    expect(evaluate(field("objects.PRs.value", "gt", 5), c)).toBe(true); // name alias resolves too
+  });
+  it("a list source exposes .count and value = length", () => {
+    const c = buildContext(user.id, { layout, liveObjects: { prs: [1, 2, 3, 4, 5, 6] } });
+    expect(c.objects.prs!.count).toBe(6);
+    expect(evaluate(field("objects.prs.value", "gte", 6), c)).toBe(true);
+  });
+  it("without liveObjects a live block is present but valueless (offline / no rule)", () => {
+    const c = buildContext(user.id, { layout });
+    expect(c.objects.prs!.value).toBeUndefined();
+    expect(c.objects.prs!.kind).toBe("live");
+  });
+});

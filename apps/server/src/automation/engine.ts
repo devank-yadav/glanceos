@@ -14,6 +14,7 @@ import { resolvePath } from "../fetchers/jsonfeed";
 import { connLookupForOrg, listConnections } from "../connections";
 import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
+import { allBlocks } from "../widgets";
 import { weatherData } from "../fetchers/weather";
 import { precipData } from "../fetchers/openmeteo";
 import { sunTimes, tzMinuteOfDay } from "../astro";
@@ -27,7 +28,7 @@ import { allUserIds, enabledByTrigger, getAutomation, recordRun } from "../autom
 // A named object on a board, as seen by automations. Keyed in ctx.objects by BOTH
 // the block's stable id (what conditions/actions reference — survives renames) and
 // its current name (for readability/debug). `settable` is false for live-data blocks.
-export interface ObjEntry { value: unknown; settable: boolean; kind: "data" | "static" | "live"; key?: string; prop?: string }
+export interface ObjEntry { value: unknown; settable: boolean; kind: "data" | "static" | "live"; key?: string; prop?: string; count?: number }
 
 export interface Ctx {
   data: Record<string, unknown>; // the user's custom-data store, keyed by key
@@ -63,12 +64,30 @@ function primaryProp(props: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+// Reduce a resolved live source (what resolveSource/applyMap returns) to a sensable
+// scalar for objects.<id>.value, plus a .count for list sources. A scalar (number/
+// string from a stat/metric map) passes through; an array exposes its length as both
+// value and count so "objects.prs.value > 5" reads naturally on a list; an object with
+// a .value/.count field uses it. null/undefined → value undefined (offline → no fire).
+function liveScalar(out: unknown): { value: unknown; count?: number } {
+  if (out == null) return { value: undefined };
+  if (Array.isArray(out)) return { value: out.length, count: out.length };
+  if (typeof out === "object") {
+    const o = out as Record<string, unknown>;
+    const count = typeof o.count === "number" ? o.count : undefined;
+    return { value: o.value ?? count, count };
+  }
+  return { value: out }; // number | string | boolean
+}
+
 /** A board's named objects → {value, settable} keyed by id AND name. Pure: object
- *  values come from the doc (static) or the already-built custom-data store (bound);
- *  live-data blocks are present but read-only (value undefined offline). */
-function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>): Record<string, ObjEntry> {
+ *  values come from the doc (static), the already-built custom-data store (bound), or
+ *  — when `liveObjects` is supplied — the resolved value of a live-data block, so
+ *  automations can sense any integration (objects.<id>.value / .count). Without
+ *  liveObjects a live block is present but valueless (the offline/no-rule case). */
+function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>, liveObjects?: Record<string, unknown>): Record<string, ObjEntry> {
   const out: Record<string, ObjEntry> = {};
-  const named = layout.rows.flatMap((r) => r.blocks).filter((b) => b.name);
+  const named = allBlocks(layout).filter((b) => b.name);
   const entryFor = (block: WidgetT): ObjEntry => {
     const props = block.props as Record<string, unknown>;
     if (block.type === "customData") {
@@ -76,7 +95,7 @@ function buildLayoutObjects(layout: LayoutT, dataStore: Record<string, unknown>)
       // No data key (malformed) → read nothing, not dataStore[""].
       return key ? { value: dataStore[key], settable: true, kind: "data", key } : { value: undefined, settable: false, kind: "data", key: "" };
     }
-    if (block.source) return { value: undefined, settable: false, kind: "live" };
+    if (block.source) { const { value, count } = liveScalar(liveObjects?.[block.id]); return { value, count, settable: false, kind: "live" }; }
     const prop = primaryProp(props);
     return { value: prop ? props[prop] : undefined, settable: !!prop, kind: "static", prop };
   };
@@ -162,6 +181,13 @@ export function evaluate(
       if (cond.op === "exists") return actual !== undefined && actual !== null;
       if (cond.op === "changed") return safeStringify(actual) !== safeStringify(prev ? resolvePath(prev, cond.field) : undefined);
       if (cond.op === "between") { const a = num(actual), lo = num(cond.value), hi = num(cond.value2); return a !== null && lo !== null && hi !== null && a >= Math.min(lo, hi) && a <= Math.max(lo, hi); }
+      // Edge comparators: fire only on the transition tick. Need both the current and the
+      // prior sample (no prev → no crossing detectable → false, like "changed").
+      if (cond.op === "crossesAbove" || cond.op === "crossesBelow") {
+        const a = num(actual), t = num(cond.value), p = prev ? num(resolvePath(prev, cond.field)) : null;
+        if (a === null || t === null || p === null) return false;
+        return cond.op === "crossesAbove" ? p <= t && a > t : p >= t && a < t;
+      }
       return compare(cond.op, actual, cond.value);
     }
   }
@@ -217,7 +243,7 @@ function sunContext(userId: string, now: Date, tz: string, nowMin: number): Ctx[
   };
 }
 
-export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date; layout?: LayoutT; live?: LiveCtx } = {}): Ctx {
+export function buildContext(userId: string, opts: { webhook?: unknown; device?: Record<string, unknown>; now?: Date; layout?: LayoutT; live?: LiveCtx; liveObjects?: Record<string, unknown> } = {}): Ctx {
   const now = opts.now ?? new Date();
   const data: Record<string, unknown> = {};
   for (const e of listCustomData(userId)) data[e.key] = e.value;
@@ -232,7 +258,7 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
     weather: opts.live?.weather,
     presence: presenceFromData(data),
     calendar: opts.live?.calendar,
-    objects: opts.layout ? buildLayoutObjects(opts.layout, data) : {},
+    objects: opts.layout ? buildLayoutObjects(opts.layout, data, opts.liveObjects) : {},
   });
 }
 
@@ -582,6 +608,26 @@ export async function fireAutomations(
   const trendNeeded = new Set<string>();
   const staleNeeded = new Set<string>();
   for (const a of autos) { collectTrendFields(a.conditions, trendNeeded); collectStaleFields(a.conditions, staleNeeded); }
+  // Live-block sensing: for any board whose rules read objects.*, resolve its named
+  // live-data blocks once (cached via resolveSource → typically the same fetch the
+  // screen already did, so usually free) into objects.<id>.value/.count. Gated by
+  // refsField so a tick with no objects.* rule fetches nothing — mirrors the lazy
+  // weather/calendar resolution above. User-scoped, so the user's personal-org
+  // connections back the lookup (a team-only connection degrades to no value).
+  const liveObjectsByLayout = new Map<number, Record<string, unknown>>();
+  const objBoards = new Set<number>();
+  for (const a of autos) if (a.layoutId != null && refsField(a.conditions, "objects")) objBoards.add(a.layoutId);
+  if (objBoards.size) {
+    const lookup = connLookupForOrg(ensurePersonalOrg(userId));
+    for (const lid of objBoards) {
+      const board = loadBoard(userId, lid);
+      if (!board) continue;
+      const sources = allBlocks(board.document).filter((b) => b.name && b.source);
+      const map: Record<string, unknown> = {};
+      await Promise.all(sources.map(async (b) => { const r = await resolveSource(b.source!, lookup).catch(() => null); if (r != null) map[b.id] = r; }));
+      liveObjectsByLayout.set(lid, map);
+    }
+  }
   type Resolved = { board?: { id: number; document: LayoutT }; ctx: Ctx; trend: Record<string, "rising" | "falling" | "steady" | null>; staleMs: Record<string, number> };
   // Build each referenced context once (board objects read from the doc + data),
   // record this tick's trend samples + change-stamps for it, and snapshot the results.
@@ -590,7 +636,7 @@ export async function fireAutomations(
     let c = ctxCache.get(layoutId);
     if (!c) {
       const board = layoutId == null ? undefined : loadBoard(userId, layoutId);
-      const ctx = layoutId == null ? baseCtx : board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live }) : baseCtx;
+      const ctx = layoutId == null ? baseCtx : board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live, liveObjects: liveObjectsByLayout.get(layoutId) }) : baseCtx;
       const tkey = ctxKey(userId, layoutId);
       const trend: Resolved["trend"] = {};
       for (const f of trendNeeded) {
