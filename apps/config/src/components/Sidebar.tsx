@@ -1,9 +1,11 @@
+import type { OrgSummary } from "../api";
 import { Icon } from "../editor/icons";
 import type { Theme } from "../hooks/useTheme";
 import { t } from "../i18n";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
 import { NotificationsBell } from "./NotificationsBell";
+import { OrgSwitcher } from "./OrgSwitcher";
 
 // Notion-style left navigation: brand, search (⌘K), the page links, and an
 // account menu (theme + log out) pinned to the bottom. Collapses to icons.
@@ -22,6 +24,8 @@ export function Sidebar({
   collapsed,
   onToggle,
   userName,
+  orgs,
+  activeOrgId,
   onLogout,
   theme,
   onCycleTheme,
@@ -32,6 +36,8 @@ export function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
   userName: string;
+  orgs: OrgSummary[];
+  activeOrgId: string | null;
   onLogout: () => void;
   theme: Theme;
   onCycleTheme: () => void;
@@ -44,6 +50,8 @@ export function Sidebar({
         <a class="brand" href="#/">glanceos</a>
         <IconButton class="sidebar-collapse" icon={<Icon.panelToggle />} label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={onToggle} />
       </div>
+
+      <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} onNavigate={onNavigate} />
 
       <button class="sidebar-search" onClick={onOpenPalette} title="Search & commands (⌘K)">
         <Icon.search />

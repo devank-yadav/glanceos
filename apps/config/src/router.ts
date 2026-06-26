@@ -16,6 +16,8 @@ export type Route =
   | { name: "shared" }
   | { name: "remote" }
   | { name: "account" }
+  | { name: "members" }
+  | { name: "invite"; token: string }
   | { name: "edit"; layoutId: number };
 
 export function parseRoute(hash: string): Route {
@@ -33,6 +35,9 @@ export function parseRoute(hash: string): Route {
   if (path === "/shared") return { name: "shared" };
   if (path === "/remote") return { name: "remote" };
   if (path === "/account") return { name: "account" };
+  if (path === "/members" || path === "/team") return { name: "members" };
+  const invite = /^\/invite\/([A-Za-z0-9]+)$/.exec(path);
+  if (invite) return { name: "invite", token: invite[1]! };
   const edit = /^\/edit\/(\d+)$/.exec(path);
   if (edit) return { name: "edit", layoutId: Number(edit[1]) };
   return { name: "boards" }; // Boards is home
@@ -51,6 +56,7 @@ export const SECTION: Record<string, { path: string; label: string }> = {
   shared: { path: "#/shared", label: "Shared with me" },
   remote: { path: "#/remote", label: "Remote" },
   account: { path: "#/account", label: "Settings" },
+  members: { path: "#/members", label: "Team" },
 };
 
 // Remember the last section the user was on, so a full-screen page (the Studio)

@@ -16,6 +16,7 @@ import { AutomationsPage } from "./pages/automations";
 import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
+import { AcceptInvite, MembersPage } from "./pages/members";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
@@ -66,7 +67,7 @@ export function App() {
 
   const refreshAuth = async () => {
     try { setStatus(await api.get<AuthStatus>("/api/auth/status")); }
-    catch { setStatus({ authed: false, user: null, registrationOpen: true }); }
+    catch { setStatus({ authed: false, user: null, registrationOpen: true, activeOrg: null, role: null, orgs: [] }); }
   };
 
   useEffect(() => { refreshAuth(); }, []);
@@ -177,11 +178,17 @@ export function App() {
   if (!status) return <Splash />;
 
   if (!status.authed) {
-    if (route.name === "login" || route.name === "register") {
-      return <AuthPage mode={route.name} registrationOpen={status.registrationOpen} onDone={refreshAuth} />;
+    // A logged-out visitor following an invite link logs in first; the #/invite/:token
+    // hash is preserved, so after auth they land back on the acceptance screen.
+    if (route.name === "login" || route.name === "register" || route.name === "invite") {
+      const mode = route.name === "register" ? "register" : "login";
+      return <AuthPage mode={mode} registrationOpen={status.registrationOpen} onDone={refreshAuth} />;
     }
     return <Landing registrationOpen={status.registrationOpen} />;
   }
+
+  // Invite acceptance is a full-screen landing (now that we know who they are).
+  if (route.name === "invite") return <AcceptInvite token={route.token} />;
 
   const page = route.name === "login" || route.name === "register" ? ({ name: "screens" } as const) : route;
 
@@ -200,6 +207,8 @@ export function App() {
           collapsed={collapsed}
           onToggle={toggleCollapse}
           userName={status.user!.name}
+          orgs={status.orgs}
+          activeOrgId={status.activeOrg?.id ?? null}
           onLogout={logout}
           theme={theme}
           onCycleTheme={cycleTheme}
@@ -229,6 +238,7 @@ export function App() {
           {page.name === "inlets" && <InletsPage />}
           {page.name === "automations" && <AutomationsPage />}
           {page.name === "shared" && <SharedPage />}
+          {page.name === "members" && <MembersPage />}
           {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />

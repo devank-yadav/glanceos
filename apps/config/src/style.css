@@ -3770,3 +3770,42 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .slash-glyph svg { width: 17px; height: 17px; }
 .block-chip-glyph svg { width: 14px; height: 14px; }
 .feature-glyph svg { width: 22px; height: 22px; }
+
+/* ── Teams: workspace switcher (sidebar), members page, invite landing ── */
+.org-switcher {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  margin: 2px 0 6px; padding: 7px 9px;
+  border: 1px solid var(--rule); border-radius: var(--r-md);
+  background: var(--card-bg); color: var(--fg); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: left;
+}
+.org-switcher:hover { background: var(--hover-bg); }
+.org-switcher-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-switcher svg { width: 14px; height: 14px; flex: none; color: var(--muted); }
+.app-shell.collapsed .org-switcher { justify-content: center; padding: 7px; }
+
+.invite-row, .team-create { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.invite-row .field { margin: 0; }
+.invite-email { flex: 1 1 240px; }
+.invite-role { flex: 0 0 130px; }
+.invite-row .primary, .team-create .primary { flex: none; }
+
+.member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.member-row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 1px solid var(--rule); }
+.member-row:first-child { border-top: 0; }
+.member-id { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.member-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-email { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-role { flex: none; min-width: 96px; }
+.member-role-static { flex: none; font-size: 13px; }
+.member-row .avatar { flex: none; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--soft); color: var(--fg); font-weight: 700; font-size: 13px; }
+.invite-avatar svg { width: 15px; height: 15px; color: var(--muted); }
+.ghost.sm { padding: 5px 8px; font-size: 12px; border: 0; background: transparent; color: var(--muted); border-radius: var(--r-sm); cursor: pointer; }
+.ghost.sm:hover { background: var(--hover-bg); color: var(--fg); }
+.ghost.sm.danger:hover { color: var(--bad); }
+.ghost.sm svg { width: 14px; height: 14px; }
+
+.invite-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.invite-card { max-width: 440px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 14px; padding: 32px; }
+.invite-title { margin: 0; font-size: 22px; }
+.invite-actions { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }

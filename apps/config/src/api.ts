@@ -11,11 +11,47 @@ export interface UserInfo {
   isAdmin: boolean;
 }
 
+export type OrgRole = "owner" | "admin" | "editor" | "viewer";
+
+export interface OrgSummary {
+  id: string;
+  name: string;
+  slug: string;
+  personal: boolean;
+  role: OrgRole;
+  plan: string;
+}
+
+export interface OrgMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: OrgRole;
+  createdAt: number;
+}
+
+export interface OrgInvite {
+  token: string;
+  email: string;
+  role: OrgRole;
+  invitedBy: string | null;
+  expiresAt: number;
+  createdAt: number;
+}
+
 export interface AuthStatus {
   authed: boolean;
   user: UserInfo | null;
   registrationOpen: boolean;
+  activeOrg: { id: string; name: string; slug: string; personal: boolean; plan: string } | null;
+  role: OrgRole | null;
+  orgs: OrgSummary[];
 }
+
+/** Role capability helper, mirrored from the server's ROLE_RANK. */
+export const ROLE_RANK: Record<OrgRole, number> = { viewer: 1, editor: 2, admin: 3, owner: 4 };
+export const canEdit = (r: OrgRole | null | undefined): boolean => !!r && ROLE_RANK[r] >= ROLE_RANK.editor;
+export const canManageTeam = (r: OrgRole | null | undefined): boolean => !!r && ROLE_RANK[r] >= ROLE_RANK.admin;
 
 export interface DeviceSummary {
   id: string;
