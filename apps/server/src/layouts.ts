@@ -14,7 +14,8 @@ export interface LayoutRecord {
   version: number;
   document: LayoutT;
   isTemplate: boolean;
-  userId: string | null;
+  userId: string | null; // creator (created_by); kept for authorship + back-compat
+  orgId: string | null; // owning org — the access boundary (null for global templates)
   published: boolean;
   description: string;
   importCount: number;
@@ -43,6 +44,7 @@ interface LayoutRow {
   document: string;
   is_template: number;
   user_id: string | null;
+  org_id: string | null;
   published: number;
   description: string;
   import_count: number;
@@ -59,6 +61,7 @@ function toRecord(row: LayoutRow): LayoutRecord {
     document: parseDocument(JSON.parse(row.document)),
     isTemplate: row.is_template === 1,
     userId: row.user_id,
+    orgId: row.org_id ?? null,
     published: row.published === 1,
     description: row.description,
     importCount: row.import_count,
@@ -71,45 +74,47 @@ export function getLayout(id: number): LayoutRecord | undefined {
   return row ? toRecord(row) : undefined;
 }
 
-export function getOwnedLayout(id: number, userId: string): LayoutRecord | undefined {
+/** A board owned by this ORG (the access boundary). Global templates (orgId null)
+ *  are never "owned" — they're imported, not edited. */
+export function getOwnedLayout(id: number, orgId: string): LayoutRecord | undefined {
   const layout = getLayout(id);
-  return layout && layout.userId === userId ? layout : undefined;
+  return layout && layout.orgId === orgId ? layout : undefined;
 }
 
 // ---- public read-only share links (optional expiry + password) ----
 
 export interface ShareInfo { token: string; expiresAt: number | null; hasPassword: boolean }
 
-/** Current share token for an owned layout (null if not shared). */
-export function getShareToken(id: number, userId: string): string | null {
-  const row = db.prepare("SELECT share_token FROM layouts WHERE id = ? AND user_id = ?").get(id, userId) as { share_token: string | null } | undefined;
+/** Current share token for an org-owned layout (null if not shared). */
+export function getShareToken(id: number, orgId: string): string | null {
+  const row = db.prepare("SELECT share_token FROM layouts WHERE id = ? AND org_id = ?").get(id, orgId) as { share_token: string | null } | undefined;
   return row?.share_token ?? null;
 }
 
 /** Share status for the owner UI (null if not shared). */
-export function getShareInfo(id: number, userId: string): ShareInfo | null {
-  const row = db.prepare("SELECT share_token, share_expires_at, share_pw_hash FROM layouts WHERE id = ? AND user_id = ?")
-    .get(id, userId) as { share_token: string | null; share_expires_at: number | null; share_pw_hash: string | null } | undefined;
+export function getShareInfo(id: number, orgId: string): ShareInfo | null {
+  const row = db.prepare("SELECT share_token, share_expires_at, share_pw_hash FROM layouts WHERE id = ? AND org_id = ?")
+    .get(id, orgId) as { share_token: string | null; share_expires_at: number | null; share_pw_hash: string | null } | undefined;
   if (!row?.share_token) return null;
   return { token: row.share_token, expiresAt: row.share_expires_at, hasPassword: !!row.share_pw_hash };
 }
 
 /** Enable/update sharing. Mints a token if none; sets expiry/password when given
  *  (expiresAt/password === null clears that field). Idempotent on the token. */
-export function setShareToken(id: number, userId: string, opts: { expiresAt?: number | null; password?: string | null } = {}): ShareInfo | null {
-  if (!getOwnedLayout(id, userId)) return null;
-  const token = getShareToken(id, userId) ?? randomBytes(18).toString("base64url");
+export function setShareToken(id: number, orgId: string, opts: { expiresAt?: number | null; password?: string | null } = {}): ShareInfo | null {
+  if (!getOwnedLayout(id, orgId)) return null;
+  const token = getShareToken(id, orgId) ?? randomBytes(18).toString("base64url");
   const sets = ["share_token = ?"];
   const vals: unknown[] = [token];
   if (opts.expiresAt !== undefined) { sets.push("share_expires_at = ?"); vals.push(opts.expiresAt); }
   if (opts.password !== undefined) { sets.push("share_pw_hash = ?"); vals.push(opts.password ? hashPassword(opts.password) : null); }
-  db.prepare(`UPDATE layouts SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`).run(...vals, id, userId);
-  return getShareInfo(id, userId);
+  db.prepare(`UPDATE layouts SET ${sets.join(", ")} WHERE id = ? AND org_id = ?`).run(...vals, id, orgId);
+  return getShareInfo(id, orgId);
 }
 
-export function clearShareToken(id: number, userId: string): boolean {
-  return db.prepare("UPDATE layouts SET share_token = NULL, share_expires_at = NULL, share_pw_hash = NULL WHERE id = ? AND user_id = ?")
-    .run(id, userId).changes > 0;
+export function clearShareToken(id: number, orgId: string): boolean {
+  return db.prepare("UPDATE layouts SET share_token = NULL, share_expires_at = NULL, share_pw_hash = NULL WHERE id = ? AND org_id = ?")
+    .run(id, orgId).changes > 0;
 }
 
 export interface ShareResolve { record: LayoutRecord; ownerId: string | null; expiresAt: number | null; pwHash: string | null }
@@ -131,16 +136,16 @@ export function verifySharePassword(pwHash: string | null, candidate: string | u
   return typeof candidate === "string" && verifyHash(candidate, pwHash);
 }
 
-export function listSetups(userId: string): SetupSummary[] {
+export function listSetups(orgId: string): SetupSummary[] {
   const rows = db
     .prepare(
       `SELECT l.*, COUNT(d.id) AS used_by,
               COALESCE(GROUP_CONCAT(d.name, char(31)), '') AS device_names
        FROM layouts l LEFT JOIN devices d ON d.layout_id = l.id
-       WHERE l.user_id = ? AND l.is_template = 0
+       WHERE l.org_id = ? AND l.is_template = 0
        GROUP BY l.id ORDER BY l.id LIMIT 1000`, // safety cap against a pathological/abusive count
     )
-    .all(userId) as Array<LayoutRow & { used_by: number; device_names: string }>;
+    .all(orgId) as Array<LayoutRow & { used_by: number; device_names: string }>;
   return rows.map((row) => ({
     ...toRecord(row),
     usedBy: row.used_by,
@@ -160,18 +165,19 @@ export function blankDocument(name: string): LayoutT {
 export function createLayout(
   name: string,
   document: LayoutT,
-  opts: { userId: string | null; isTemplate?: boolean; published?: boolean; description?: string },
+  opts: { userId: string | null; orgId?: string | null; isTemplate?: boolean; published?: boolean; description?: string },
 ): LayoutRecord {
   const result = db
     .prepare(
-      `INSERT INTO layouts (name, version, document, is_template, user_id, published, description, import_count, created_at, review_status)
-       VALUES (?, 1, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO layouts (name, version, document, is_template, user_id, org_id, published, description, import_count, created_at, review_status)
+       VALUES (?, 1, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     )
     .run(
       name,
       JSON.stringify(document),
       opts.isTemplate ? 1 : 0,
       opts.userId,
+      opts.orgId ?? null, // global templates (seed) have no org
       opts.published ? 1 : 0,
       opts.description ?? "",
       Date.now(),
@@ -181,11 +187,11 @@ export function createLayout(
   return getLayout(Number(result.lastInsertRowid))!;
 }
 
-export function duplicateLayout(id: number, userId: string): LayoutRecord | undefined {
-  const source = getOwnedLayout(id, userId);
+export function duplicateLayout(id: number, orgId: string, userId: string): LayoutRecord | undefined {
+  const source = getOwnedLayout(id, orgId);
   if (!source) return undefined;
   const name = `${source.name} copy`;
-  return createLayout(name, { ...source.document, name }, { userId });
+  return createLayout(name, { ...source.document, name }, { userId, orgId });
 }
 
 // ---- board version history (archive prior states; restore later) ----
@@ -214,8 +220,8 @@ export function snapshotLayout(id: number, now = Date.now()): void {
 }
 
 /** Versions for an owned board, newest first. */
-export function listLayoutVersions(layoutId: number, userId: string, limit = 50): LayoutVersionMeta[] {
-  if (!getOwnedLayout(layoutId, userId)) return [];
+export function listLayoutVersions(layoutId: number, orgId: string, limit = 50): LayoutVersionMeta[] {
+  if (!getOwnedLayout(layoutId, orgId)) return [];
   const rows = db.prepare(
     "SELECT id, summary, created_at FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   ).all(layoutId, Math.min(Math.max(1, limit), 100)) as { id: number; summary: string; created_at: number }[];
@@ -223,8 +229,8 @@ export function listLayoutVersions(layoutId: number, userId: string, limit = 50)
 }
 
 /** The parsed document of one version of an owned board (for restore/preview). */
-export function getLayoutVersionDocument(layoutId: number, versionId: number, userId: string): LayoutT | undefined {
-  if (!getOwnedLayout(layoutId, userId)) return undefined;
+export function getLayoutVersionDocument(layoutId: number, versionId: number, orgId: string): LayoutT | undefined {
+  if (!getOwnedLayout(layoutId, orgId)) return undefined;
   const row = db.prepare("SELECT document FROM layout_versions WHERE id = ? AND layout_id = ?").get(versionId, layoutId) as { document: string } | undefined;
   return row ? parseDocument(JSON.parse(row.document)) : undefined;
 }
@@ -327,9 +333,9 @@ export function setReviewStatus(id: number, approved: boolean): LayoutRecord | u
   return getLayout(id);
 }
 
-export function importFromHub(hubId: number, userId: string): LayoutRecord | undefined {
+export function importFromHub(hubId: number, userId: string, orgId: string): LayoutRecord | undefined {
   const source = getLayout(hubId);
   if (!source || !source.published || source.reviewStatus !== "approved") return undefined;
   db.prepare("UPDATE layouts SET import_count = import_count + 1 WHERE id = ?").run(hubId);
-  return createLayout(source.name, { ...source.document, name: source.name }, { userId });
+  return createLayout(source.name, { ...source.document, name: source.name }, { userId, orgId });
 }

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { getUser, getUserByEmail } from "./auth";
 import { db } from "./db";
 import { getDevice, type DeviceRow } from "./devices";
-import { getLayout, getOwnedLayout, type LayoutRecord } from "./layouts";
+import { getLayout, type LayoutRecord } from "./layouts";
+import { accessForRole, memberRole } from "./orgs";
 
 // Lightweight user-to-user sharing (board OR screen → another account as
 // viewer|editor). The access helpers below are the ONLY way a non-owner gains
@@ -20,18 +21,22 @@ export interface ShareRow {
 const shareFor = (granteeId: string, kind: ShareKind, targetId: string): ShareRow | undefined =>
   db.prepare("SELECT * FROM shares WHERE grantee_id = ? AND kind = ? AND target_id = ?").get(granteeId, kind, targetId) as ShareRow | undefined;
 
-/** A user's effective access to a layout: owner, a shared editor/viewer, or none. */
+// Org membership is the PRIMARY ACL: any member of the resource's org gets access at
+// their role. A `shares` row remains the fallback for a cross-org / non-member guest.
+/** A user's effective access to a layout: via org membership, a guest share, or none. */
 export function layoutAccess(id: number, userId: string): Access | null {
   const layout = getLayout(id);
   if (!layout) return null;
-  if (layout.userId === userId) return "owner";
+  const role = layout.orgId ? memberRole(layout.orgId, userId) : null;
+  if (role) return accessForRole(role);
   return shareFor(userId, "layout", String(id))?.access ?? null;
 }
 
 export function deviceAccess(id: string, userId: string): Access | null {
   const device = getDevice(id);
   if (!device) return null;
-  if (device.user_id === userId) return "owner";
+  const role = device.org_id ? memberRole(device.org_id, userId) : null;
+  if (role) return accessForRole(role);
   return shareFor(userId, "device", id)?.access ?? null;
 }
 
@@ -58,9 +63,9 @@ export const layoutOwnerId = (id: number): string | null => getLayout(id)?.userI
 export type CreateResult = { ok: true; share: ShareRow } | { ok: false; error: "not_owner" | "no_user" | "self" };
 
 export function createShare(ownerId: string, kind: ShareKind, targetId: string, granteeEmail: string, access: "viewer" | "editor"): CreateResult {
-  const owns = kind === "layout"
-    ? !!getOwnedLayout(Number(targetId), ownerId)
-    : getDevice(targetId)?.user_id === ownerId;
+  // "Can share" = the actor is a member of the resource's org (org membership is the ACL).
+  const orgOf = kind === "layout" ? getLayout(Number(targetId))?.orgId : getDevice(targetId)?.org_id;
+  const owns = !!(orgOf && memberRole(orgOf, ownerId));
   if (!owns) return { ok: false, error: "not_owner" };
   const grantee = getUserByEmail(granteeEmail);
   if (!grantee) return { ok: false, error: "no_user" };

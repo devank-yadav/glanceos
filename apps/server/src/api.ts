@@ -496,12 +496,12 @@ export function buildApp(): Hono<Env> {
 
   // ---- screens (config plane) ----
 
-  app.get("/api/devices", (c) => c.json(listDevices(c.get("userId")).map(deviceSummary)));
+  app.get("/api/devices", (c) => c.json(listDevices(c.get("orgId")).map(deviceSummary)));
 
   app.post("/api/devices/claim", async (c) => {
     const body = ClaimRequest.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "claim code required" }, 400);
-    const device = claimDevice(body.data.code, body.data.name, c.get("userId"));
+    const device = claimDevice(body.data.code, body.data.name, c.get("userId"), c.get("orgId"));
     if (!device) return c.json({ error: "unknown or already-claimed code" }, 404);
     notifyClaimed(c.get("userId"), device.id, device.name);
     await pushDevice(device.id); // the physical screen flips to "pick a setup"
@@ -511,6 +511,7 @@ export function buildApp(): Hono<Env> {
   app.patch("/api/devices/:id", async (c) => {
     const id = c.req.param("id");
     const userId = c.get("userId");
+    const orgId = c.get("orgId");
     const prior = getDevice(id);
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; layoutId?: number | null; refreshSeconds?: number; renderOpts?: Record<string, unknown>;
@@ -519,41 +520,41 @@ export function buildApp(): Hono<Env> {
       timezone?: string | null;
       location?: { name: string; latitude: number; longitude: number } | null;
     };
-    if (body.timezone !== undefined && !setDeviceTimezone(id, body.timezone, userId)) {
+    if (body.timezone !== undefined && !setDeviceTimezone(id, body.timezone, orgId)) {
       return c.json({ error: "device not found or invalid timezone" }, 400);
     }
-    if (body.location !== undefined && !setDeviceLocation(id, body.location, userId)) {
+    if (body.location !== undefined && !setDeviceLocation(id, body.location, orgId)) {
       return c.json({ error: "device not found or invalid location" }, 400);
     }
     if (body.renderOpts !== undefined) {
       // validate/clamp via toDitherOpts so junk can't reach the render pipeline
-      if (!setRenderOpts(id, { ...toDitherOpts(body.renderOpts) }, userId)) return c.json({ error: "device not found" }, 404);
+      if (!setRenderOpts(id, { ...toDitherOpts(body.renderOpts) }, orgId)) return c.json({ error: "device not found" }, 404);
     }
     if (body.tv !== undefined) {
-      if (!setDeviceTvSettings(id, userId, body.tv)) return c.json({ error: "device not found" }, 404);
+      if (!setDeviceTvSettings(id, orgId, body.tv)) return c.json({ error: "device not found" }, 404);
     }
     if (body.groupId !== undefined) {
       if (!setDeviceGroup(id, body.groupId, userId)) return c.json({ error: "device or group not found" }, 404);
     }
-    if (body.refreshSeconds !== undefined && !setRefresh(id, body.refreshSeconds, userId)) {
+    if (body.refreshSeconds !== undefined && !setRefresh(id, body.refreshSeconds, orgId)) {
       return c.json({ error: "device not found" }, 404);
     }
     if (body.name !== undefined || body.layoutId !== undefined) {
-      const updated = updateDevice(id, body, userId);
+      const updated = updateDevice(id, body, orgId);
       if (!updated) return c.json({ error: "device or setup not found" }, 404);
     }
     const device = getDevice(id);
-    if (!device || device.user_id !== userId) return c.json({ error: "device not found" }, 404);
+    if (!device || device.org_id !== orgId) return c.json({ error: "device not found" }, 404);
     // Notify only on a genuine content change (assignment differs from before).
     if (body.layoutId !== undefined && body.layoutId !== null && body.layoutId !== prior?.layout_id) {
-      notifyContentChanged(userId, id, device.name, getOwnedLayout(body.layoutId, userId)?.name ?? "a board");
+      notifyContentChanged(userId, id, device.name, getOwnedLayout(body.layoutId, orgId)?.name ?? "a board");
     }
     await pushDevice(device.id);
     return c.json(deviceSummary(device));
   });
 
   app.delete("/api/devices/:id", (c) => {
-    if (!deleteDevice(c.req.param("id"), c.get("userId"))) {
+    if (!deleteDevice(c.req.param("id"), c.get("orgId"))) {
       return c.json({ error: "device not found" }, 404);
     }
     return c.json({ ok: true });
@@ -564,7 +565,7 @@ export function buildApp(): Hono<Env> {
   app.post("/api/devices/:id/command", async (c) => {
     const id = c.req.param("id");
     const device = getDevice(id);
-    if (!device || device.user_id !== c.get("userId")) return c.json({ error: "device not found" }, 404);
+    if (!device || device.org_id !== c.get("orgId")) return c.json({ error: "device not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { command?: string; params?: Record<string, unknown> };
     if (!body.command || !DEVICE_COMMANDS.has(body.command)) return c.json({ error: "unknown command" }, 400);
     const delivered = isConnected(id) ? 1 : 0;
@@ -576,17 +577,17 @@ export function buildApp(): Hono<Env> {
   app.get("/api/devices/:id/schedules", (c) => {
     const id = c.req.param("id");
     const device = getDevice(id);
-    if (!device || device.user_id !== c.get("userId")) return c.json({ error: "device not found" }, 404);
+    if (!device || device.org_id !== c.get("orgId")) return c.json({ error: "device not found" }, 404);
     return c.json({ timezone: device.timezone, schedules: listSchedules(id) });
   });
 
   app.put("/api/devices/:id/schedules", async (c) => {
     const id = c.req.param("id");
-    const userId = c.get("userId");
+    const orgId = c.get("orgId");
     const device = getDevice(id);
-    if (!device || device.user_id !== userId) return c.json({ error: "device not found" }, 404);
+    if (!device || device.org_id !== orgId) return c.json({ error: "device not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { timezone?: string | null; schedules?: Schedule[] };
-    if (body.timezone !== undefined) setDeviceTimezone(id, body.timezone, userId);
+    if (body.timezone !== undefined) setDeviceTimezone(id, body.timezone, orgId);
     if (Array.isArray(body.schedules)) setSchedules(id, body.schedules);
     await pushDevice(id);
     const updated = getDevice(id)!;
@@ -697,7 +698,7 @@ export function buildApp(): Hono<Env> {
 
   // ---- setups ----
 
-  app.get("/api/layouts", (c) => c.json(listSetups(c.get("userId")).map(setupSummary)));
+  app.get("/api/layouts", (c) => c.json(listSetups(c.get("orgId")).map(setupSummary)));
 
   app.post("/api/layouts", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { name?: string; document?: unknown };
@@ -710,7 +711,7 @@ export function buildApp(): Hono<Env> {
     } else {
       document = blankDocument(name);
     }
-    return c.json(createLayout(name, document, { userId: c.get("userId") }), 201);
+    return c.json(createLayout(name, document, { userId: c.get("userId"), orgId: c.get("orgId") }), 201);
   });
 
   app.post("/api/layouts/preview-state", async (c) => {
@@ -831,7 +832,7 @@ export function buildApp(): Hono<Env> {
 
   app.patch("/api/layouts/:id", async (c) => {
     const id = Number(c.req.param("id"));
-    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string; description?: string; published?: boolean;
     };
@@ -840,7 +841,7 @@ export function buildApp(): Hono<Env> {
   });
 
   app.post("/api/layouts/:id/duplicate", (c) => {
-    const copy = duplicateLayout(Number(c.req.param("id")), c.get("userId"));
+    const copy = duplicateLayout(Number(c.req.param("id")), c.get("orgId"), c.get("userId"));
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
   });
@@ -848,15 +849,15 @@ export function buildApp(): Hono<Env> {
   // ---- board version history (browse + restore past states) ----
   app.get("/api/layouts/:id/versions", (c) => {
     const id = Number(c.req.param("id"));
-    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
-    return c.json(listLayoutVersions(id, c.get("userId")));
+    if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
+    return c.json(listLayoutVersions(id, c.get("orgId")));
   });
 
   app.post("/api/layouts/:id/versions/:vid/restore", async (c) => {
     const id = Number(c.req.param("id"));
-    const userId = c.get("userId");
-    if (!getOwnedLayout(id, userId)) return c.json({ error: "not found" }, 404);
-    const doc = getLayoutVersionDocument(id, Number(c.req.param("vid")), userId);
+    const orgId = c.get("orgId");
+    if (!getOwnedLayout(id, orgId)) return c.json({ error: "not found" }, 404);
+    const doc = getLayoutVersionDocument(id, Number(c.req.param("vid")), orgId);
     if (!doc) return c.json({ error: "version not found" }, 404);
     const updated = updateLayout(id, doc)!; // archives the pre-restore state too → restore is undoable
     await pushDevicesUsingLayout(id);
@@ -865,7 +866,7 @@ export function buildApp(): Hono<Env> {
 
   app.delete("/api/layouts/:id", async (c) => {
     const id = Number(c.req.param("id"));
-    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const affected = deleteLayout(id);
     await pushDeviceIds(affected); // those screens fall back to "pick a setup"
     return c.json({ ok: true });
@@ -879,20 +880,20 @@ export function buildApp(): Hono<Env> {
   const shareResponse = (c: Context, info: ReturnType<typeof getShareInfo>) =>
     info ? { token: info.token, url: shareLink(c, info.token), expiresAt: info.expiresAt, hasPassword: info.hasPassword } : { token: null };
 
-  app.get("/api/layouts/:id/share", (c) => c.json(shareResponse(c, getShareInfo(Number(c.req.param("id")), c.get("userId")))));
+  app.get("/api/layouts/:id/share", (c) => c.json(shareResponse(c, getShareInfo(Number(c.req.param("id")), c.get("orgId")))));
 
   app.post("/api/layouts/:id/share", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { expiresInDays?: number | null; password?: string | null };
     const opts: { expiresAt?: number | null; password?: string | null } = {};
     if (body.expiresInDays !== undefined) opts.expiresAt = body.expiresInDays && body.expiresInDays > 0 ? Date.now() + body.expiresInDays * 86_400_000 : null;
     if (body.password !== undefined) opts.password = body.password ? body.password : null;
-    const info = setShareToken(Number(c.req.param("id")), c.get("userId"), opts);
+    const info = setShareToken(Number(c.req.param("id")), c.get("orgId"), opts);
     if (!info) return c.json({ error: "not found" }, 404);
     return c.json(shareResponse(c, info));
   });
 
   app.delete("/api/layouts/:id/share", (c) => {
-    clearShareToken(Number(c.req.param("id")), c.get("userId"));
+    clearShareToken(Number(c.req.param("id")), c.get("orgId"));
     return c.json({ ok: true });
   });
 
@@ -1028,7 +1029,7 @@ ${og}
   app.get("/api/hub", (c) => c.json(listPublished(c.req.query("q"))));
 
   app.post("/api/hub/:id/import", async (c) => {
-    const copy = importFromHub(Number(c.req.param("id")), c.get("userId"));
+    const copy = importFromHub(Number(c.req.param("id")), c.get("userId"), c.get("orgId"));
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
   });
@@ -1036,7 +1037,7 @@ ${og}
   // Submit one of your own boards to the template gallery — pending admin review.
   app.post("/api/layouts/:id/publish", async (c) => {
     const id = Number(c.req.param("id"));
-    if (!getOwnedLayout(id, c.get("userId"))) return c.json({ error: "not found" }, 404);
+    if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { description?: string };
     const rec = publishForReview(id, (body.description ?? "").slice(0, 280));
     return rec ? c.json(rec) : c.json({ error: "not found" }, 404);
@@ -1186,11 +1187,11 @@ ${og}
   };
   // Optional board scope on an automation request: a valid owned layout id, null for
   // a global rule, or false when the caller can't access the referenced board.
-  const boardScope = (body: unknown, userId: string): number | null | false => {
+  const boardScope = (body: unknown, orgId: string): number | null | false => {
     const raw = (body as { layoutId?: unknown } | null)?.layoutId;
     if (raw == null) return null;
     if (!Number.isInteger(raw)) return false;
-    return getOwnedLayout(raw as number, userId) ? (raw as number) : false;
+    return getOwnedLayout(raw as number, orgId) ? (raw as number) : false;
   };
   app.get("/api/automations", (c) => c.json(listAutomations(c.get("userId"))));
   app.post("/api/automations", async (c) => {
@@ -1198,7 +1199,7 @@ ${og}
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    const layoutId = boardScope(body, c.get("userId"));
+    const layoutId = boardScope(body, c.get("orgId"));
     if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
     if (countAutomations(c.get("userId")) >= MAX_AUTOMATIONS_PER_USER) return c.json({ error: `at most ${MAX_AUTOMATIONS_PER_USER} automations` }, 409);
     return c.json(createAutomation(c.get("userId"), parsed.data, layoutId), 201);
@@ -1208,7 +1209,7 @@ ${og}
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    const layoutId = boardScope(body, c.get("userId"));
+    const layoutId = boardScope(body, c.get("orgId"));
     if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
     return c.json(dryRunAutomation(parsed.data, c.get("userId"), layoutId)); // no side effects
   });
@@ -1228,7 +1229,7 @@ ${og}
     if (tooDeep(body)) return c.json({ error: "automation is nested too deeply" }, 400);
     const parsed = Automation.safeParse(body);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    const layoutId = boardScope(body, c.get("userId"));
+    const layoutId = boardScope(body, c.get("orgId"));
     if (layoutId === false) return c.json({ error: "no access to that board" }, 400);
     const updated = updateAutomation(c.req.param("id"), c.get("userId"), parsed.data, layoutId);
     return updated ? c.json(updated) : c.json({ error: "not found" }, 404);
@@ -1404,14 +1405,14 @@ ${og}
   });
   app.get("/api/account/export", (c) => {
     c.header("content-disposition", 'attachment; filename="glanceos-backup.json"');
-    return c.json(dumpUser(c.get("userId")));
+    return c.json(dumpUser(c.get("userId"), c.get("orgId")));
   });
   app.post("/api/account/import", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { dump?: unknown; mode?: string } | null;
     if (!body || typeof body.dump !== "object") return c.json({ error: "missing backup data" }, 400);
     const mode = body.mode === "replace" ? "replace" : "append";
     try {
-      return c.json({ ok: true, mode, ...importUser(c.get("userId"), body.dump, { mode }) });
+      return c.json({ ok: true, mode, ...importUser(c.get("userId"), c.get("orgId"), body.dump, { mode }) });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "import failed" }, 400);
     }

@@ -10,7 +10,8 @@ export interface DeviceRow {
   claim_code: string | null;
   claimed_at: number | null;
   layout_id: number | null;
-  user_id: string | null;
+  user_id: string | null; // claimer (created_by)
+  org_id: string | null; // owning org — the access boundary
   profile: string;
   created_at: number;
   refresh_seconds: number;
@@ -91,11 +92,11 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
 /** Merge TV settings into a device's stored profile JSON (config-plane writer). */
 export function setDeviceTvSettings(
   id: string,
-  userId: string,
+  orgId: string,
   patch: { tvMode?: boolean; safeArea?: DeviceProfile["safeArea"]; burnIn?: DeviceProfile["burnIn"]; wake?: DeviceProfile["wake"] | null; quietHours?: DeviceProfile["quietHours"] | null },
 ): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   let p: Record<string, unknown> = {};
   try { p = JSON.parse(device.profile) as Record<string, unknown>; } catch { /* defaults */ }
   if (patch.tvMode !== undefined) p.tvMode = patch.tvMode;
@@ -169,9 +170,9 @@ export function batteryForecast(d: DeviceRow): BatteryForecast | null {
   return { battery: d.battery, daysRemaining: Math.max(0, Math.round((msLeft / 86_400_000) * 10) / 10), basis: "ok" };
 }
 
-export function setRefresh(id: string, seconds: number, userId: string): DeviceRow | null {
+export function setRefresh(id: string, seconds: number, orgId: string): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   db.prepare("UPDATE devices SET refresh_seconds = ? WHERE id = ?").run(
     Math.max(5, Math.min(86_400, Math.round(seconds))),
     id,
@@ -193,9 +194,9 @@ export function isValidTimezone(tz: string): boolean {
 }
 
 /** Set a device's IANA timezone for schedule wall-clock (null/"" → server tz). */
-export function setDeviceTimezone(id: string, tz: string | null, userId: string): DeviceRow | null {
+export function setDeviceTimezone(id: string, tz: string | null, orgId: string): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   const trimmed = tz?.trim() || null;
   if (trimmed && !isValidTimezone(trimmed)) return null; // reject a bogus zone (caller → 400/404)
   db.prepare("UPDATE devices SET timezone = ? WHERE id = ?").run(trimmed, id);
@@ -207,10 +208,10 @@ export function setDeviceTimezone(id: string, tz: string | null, userId: string)
 export function setDeviceLocation(
   id: string,
   loc: { name: string; latitude: number; longitude: number } | null,
-  userId: string,
+  orgId: string,
 ): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   if (loc && (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude) ||
     Math.abs(loc.latitude) > 90 || Math.abs(loc.longitude) > 180)) return null;
   db.prepare("UPDATE devices SET location_name = ?, latitude = ?, longitude = ? WHERE id = ?")
@@ -219,9 +220,9 @@ export function setDeviceLocation(
 }
 
 /** Persist a device's e-ink render options (already-validated JSON object). */
-export function setRenderOpts(id: string, opts: Record<string, unknown>, userId: string): DeviceRow | null {
+export function setRenderOpts(id: string, opts: Record<string, unknown>, orgId: string): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   db.prepare("UPDATE devices SET render_opts = ? WHERE id = ?").run(JSON.stringify(opts), id);
   return getDevice(id) ?? null;
 }
@@ -273,34 +274,35 @@ export function findByClaimCode(code: string): DeviceRow | undefined {
  * layout — "claimed, pick a setup" is a first-class state, and the picker in
  * the config app decides what the screen shows.
  */
-export function claimDevice(code: string, name: string | undefined, userId: string): DeviceRow | null {
+export function claimDevice(code: string, name: string | undefined, userId: string, orgId: string): DeviceRow | null {
   const device = findByClaimCode(code);
   if (!device || device.claimed_at) return null;
-  db.prepare("UPDATE devices SET name = ?, claimed_at = ?, user_id = ? WHERE id = ?").run(
+  db.prepare("UPDATE devices SET name = ?, claimed_at = ?, user_id = ?, org_id = ? WHERE id = ?").run(
     name?.trim() || "New screen",
     Date.now(),
-    userId,
+    userId, // claimer (created_by)
+    orgId, // owning org
     device.id,
   );
   return getDevice(device.id) ?? null;
 }
 
-export function listDevices(userId: string): DeviceRow[] {
+export function listDevices(orgId: string): DeviceRow[] {
   return db
-    .prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at LIMIT 1000") // safety cap
-    .all(userId) as DeviceRow[];
+    .prepare("SELECT * FROM devices WHERE org_id = ? ORDER BY created_at LIMIT 1000") // safety cap
+    .all(orgId) as DeviceRow[];
 }
 
 export function updateDevice(
   id: string,
   patch: { name?: string; layoutId?: number | null },
-  userId: string,
+  orgId: string,
 ): DeviceRow | null {
   const device = getDevice(id);
-  if (!device || device.user_id !== userId) return null;
+  if (!device || device.org_id !== orgId) return null;
   if (patch.layoutId !== undefined && patch.layoutId !== null) {
     const layout = getLayout(patch.layoutId);
-    if (!layout || layout.userId !== userId) return null; // builtins must be imported, not assigned
+    if (!layout || layout.orgId !== orgId) return null; // builtins/other-org boards must be imported, not assigned
   }
   db.prepare(
     "UPDATE devices SET name = COALESCE(?, name), layout_id = CASE WHEN ? THEN ? ELSE layout_id END WHERE id = ?",
@@ -308,9 +310,9 @@ export function updateDevice(
   return getDevice(id) ?? null;
 }
 
-export function deleteDevice(id: string, userId: string): boolean {
+export function deleteDevice(id: string, orgId: string): boolean {
   // The setup (layout) survives on purpose — it can be re-attached to another screen.
-  const result = db.prepare("DELETE FROM devices WHERE id = ? AND user_id = ?").run(id, userId);
+  const result = db.prepare("DELETE FROM devices WHERE id = ? AND org_id = ?").run(id, orgId);
   return result.changes > 0;
 }
 

@@ -8,12 +8,14 @@ const { migrate } = await import("./db");
 migrate();
 const { createUser } = await import("./auth");
 const { blankDocument, createLayout } = await import("./layouts");
+const { ensurePersonalOrg } = await import("./orgs");
 const { createShare, revokeShare, updateShareAccess, layoutAccess, getReadableLayout, getWritableLayout, sharedLayouts } = await import("./shares");
 
 const owner = createUser("Owner", "owner@example.com", "password123")!;
 const grantee = createUser("Grantee", "grantee@example.com", "password123")!;
 const stranger = createUser("Stranger", "stranger@example.com", "password123")!;
-const board = createLayout("Lobby", blankDocument("Lobby"), { userId: owner.id });
+const ownerOrg = ensurePersonalOrg(owner.id); // board belongs to the owner's org; grantee/stranger are non-members
+const board = createLayout("Lobby", blankDocument("Lobby"), { userId: owner.id, orgId: ownerOrg });
 const tid = String(board.id);
 
 describe("board sharing authz", () => {

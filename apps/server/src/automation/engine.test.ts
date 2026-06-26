@@ -15,11 +15,13 @@ const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
+const { ensurePersonalOrg } = await import("../orgs");
 const { createConnection } = await import("../connections");
 const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
+const org = ensurePersonalOrg(user.id);
 
 const ctx = (over: Partial<{ data: Record<string, unknown>; webhook: unknown; device: Record<string, unknown> }> = {}) =>
   ({ data: { temp: 30, status: "open", tags: ["a", "b"] }, webhook: { value: 5 }, device: { online: true }, time: { hour: 9, minute: 0, minuteOfDay: 540, weekday: 1, ts: 1_700_000_000_000 }, objects: {}, ...over }) as Parameters<typeof evaluate>[1];
@@ -105,9 +107,9 @@ describe("v5.0 substrate — sun + weather in context", () => {
   });
   it("buildContext computes sun once a screen has a location", () => {
     const reg = registerDevice({ name: "Hall" });
-    claimDevice(reg.claimCode, "Hall", user.id);
+    claimDevice(reg.claimCode, "Hall", user.id, org);
     // London (~0° lon) so its sun events line up with the test user's UTC clock.
-    setDeviceLocation(reg.deviceId, { name: "London", latitude: 51.5074, longitude: -0.1278 }, user.id);
+    setDeviceLocation(reg.deviceId, { name: "London", latitude: 51.5074, longitude: -0.1278 }, org);
     const c = buildContext(user.id, { now: new Date("2026-06-22T12:00:00Z") });
     expect(c.sun).toBeDefined();
     expect(c.sun!.sunsetMin).toBeGreaterThan(c.sun!.sunriseMin); // London midsummer: sunrise ~04:43, sunset ~21:21 UTC
