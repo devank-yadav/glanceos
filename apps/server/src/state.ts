@@ -1,6 +1,6 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "./auth";
-import { connLookupFor } from "./connections";
+import { connLookupForOrg } from "./connections";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
@@ -109,7 +109,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
       data: await resolveWidgetData(
         layout.document,
         device.user_id ?? "",
-        connLookupFor(device.user_id ?? ""),
+        connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
         geo,
       ),
       deviceName: device.name ?? undefined,

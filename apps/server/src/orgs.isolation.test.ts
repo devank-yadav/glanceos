@@ -69,3 +69,20 @@ describe("team membership grants org boards, not the inviter's personal boards",
     expect(list.some((l) => l.id === aBoard)).toBe(false); // never Alice's personal board
   });
 });
+
+describe("connections are org-scoped (live-data isolation)", () => {
+  it("Bob can't see, edit, or delete Alice's personal connection", async () => {
+    // Alice switches back to her PERSONAL org (a prior test left her active in the team).
+    const aOrgs = await json<any[]>(await app.request("/api/orgs", { headers: { cookie: alice } }));
+    const aPersonal = aOrgs.find((o) => o.personal).id as string;
+    await app.request("/api/orgs/switch", { method: "POST", ...authed(alice, { orgId: aPersonal }) });
+    const conn = await json(await app.request("/api/connections", { method: "POST", ...authed(alice, { provider: "ical", label: "Alice cal", secret: "https://example.com/a.ics" }) }));
+    const cid = conn.id as string;
+    const bobList = await json<any[]>(await app.request("/api/connections", { headers: { cookie: bob } }));
+    expect(bobList.some((c) => c.id === cid)).toBe(false);
+    expect((await app.request(`/api/connections/${cid}`, { method: "PATCH", ...authed(bob, { label: "hijack" }) })).status).toBe(404);
+    expect((await app.request(`/api/connections/${cid}`, { method: "DELETE", ...authed(bob) })).status).toBe(404);
+    // Alice still sees her own.
+    expect((await json<any[]>(await app.request("/api/connections", { headers: { cookie: alice } }))).some((c) => c.id === cid)).toBe(true);
+  });
+});

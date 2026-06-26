@@ -11,7 +11,8 @@ import { pushDevice, pushUserDevices } from "../state";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
-import { connLookupFor, listConnections } from "../connections";
+import { connLookupForOrg, listConnections } from "../connections";
+import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
 import { weatherData } from "../fetchers/weather";
 import { precipData } from "../fetchers/openmeteo";
@@ -267,14 +268,15 @@ async function resolveUserWeather(userId: string): Promise<Ctx["weather"]> {
 // Resolve the user's agenda from their first calendar connection (iCal URL or
 // Google), only when an automation references `calendar.*`. Cached via resolveSource.
 async function resolveUserCalendar(userId: string): Promise<Ctx["calendar"]> {
-  const conn = listConnections(userId).find((c) => c.provider === "ical" || c.provider === "google");
+  const orgId = ensurePersonalOrg(userId); // a user's own calendar lives in their personal org
+  const conn = listConnections(orgId).find((c) => c.provider === "ical" || c.provider === "google");
   if (!conn) return undefined;
   const kind = conn.provider === "google" ? "google.calendar" : "ical.events";
   // NB: pass an explicit `query: {}` — this object skips the schema (cast), so the
   // `.prefault({})` default never runs and resolveSource's stableHash(src.query) would
   // throw on undefined (swallowed by .catch → calendar silently dead). The ical/google
   // providers tolerate an empty query (ical falls back to the connection's .ics URL).
-  const raw = await resolveSource({ kind, connectionId: conn.id, query: {}, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupFor(userId)).catch(() => null);
+  const raw = await resolveSource({ kind, connectionId: conn.id, query: {}, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupForOrg(orgId)).catch(() => null);
   const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { events?: unknown[] }).events) ? (raw as { events: unknown[] }).events : [];
   const now = Date.now();
   const evs = list

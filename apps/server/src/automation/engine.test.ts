@@ -288,7 +288,7 @@ describe("calendar context (v6.1.1)", () => {
     // resolveSource rejects → resolveUserCalendar returns an EMPTY agenda (isBusyNow false),
     // not undefined. With the v6.1.0 bug (missing query → stableHash threw → swallowed),
     // ctx.calendar was always undefined and `calendar.isBusyNow eq false` never matched.
-    createConnection(user.id, { provider: "ical", secret: "http://127.0.0.1/none.ics", name: "Cal" } as Parameters<typeof createConnection>[1]);
+    createConnection(user.id, org, { provider: "ical", secret: "http://127.0.0.1/none.ics", name: "Cal" } as Parameters<typeof createConnection>[2]);
     createAutomation(user.id, {
       name: "Free now", enabled: true, trigger: { kind: "tick" },
       conditions: { type: "all", conditions: [{ type: "field", field: "calendar.isBusyNow", op: "eq", value: false }] },

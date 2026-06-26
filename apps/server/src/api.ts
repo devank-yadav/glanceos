@@ -70,7 +70,7 @@ import {
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
-  connLookupFor, createConnection, deleteConnection, getConnectionSummary, listConnections, updateConnection,
+  connLookupForOrg, createConnection, deleteConnection, getConnectionSummary, listConnections, updateConnection,
 } from "./connections";
 import { buildAuthorizeUrl, completeOAuth, NoOAuthApp } from "./oauth";
 import { deleteOAuthApp, getOAuthAppSummary, setOAuthApp } from "./oauth-apps";
@@ -767,7 +767,7 @@ export function buildApp(): Hono<Env> {
     const parsed = safeParseDocument(body.document);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.issues }, 400);
     const userId = c.get("userId");
-    return c.json({ data: await resolveWidgetData(parsed.data, userId, connLookupFor(userId)) });
+    return c.json({ data: await resolveWidgetData(parsed.data, userId, connLookupForOrg(c.get("orgId"))) });
   });
 
   // Dry-run a binding so the Data tab can preview what a source returns. Works
@@ -777,11 +777,10 @@ export function buildApp(): Hono<Env> {
     const body = (await c.req.json().catch(() => ({}))) as { source?: unknown };
     const parsed = BlockSource.safeParse(body.source);
     if (!parsed.success) return c.json({ error: "validation" }, 400);
-    const userId = c.get("userId");
-    return c.json({ data: await resolveSource(parsed.data, connLookupFor(userId)) });
+    return c.json({ data: await resolveSource(parsed.data, connLookupForOrg(c.get("orgId"))) });
   });
 
-  // ---- integrations: provider catalog + per-user connections ----
+  // ---- integrations: provider catalog + the active org's connections ----
 
   app.get("/api/providers", (c) =>
     c.json([...PROVIDERS.values()].map((p) => ({
@@ -789,35 +788,34 @@ export function buildApp(): Hono<Env> {
       resources: p.resources.map((r) => ({ id: r.id, label: r.label, shape: r.shape })),
     }))));
 
-  app.get("/api/connections", (c) => c.json(listConnections(c.get("userId"))));
+  app.get("/api/connections", (c) => c.json(listConnections(c.get("orgId"))));
 
   app.post("/api/connections", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { provider?: string; label?: string; config?: Record<string, unknown>; secret?: string };
     if (!body.provider) return c.json({ error: "provider required" }, 400);
-    const created = createConnection(c.get("userId"), { provider: body.provider, label: body.label, config: body.config, secret: body.secret });
+    const created = createConnection(c.get("userId"), c.get("orgId"), { provider: body.provider, label: body.label, config: body.config, secret: body.secret });
     if (!created) return c.json({ error: "unknown provider" }, 400);
     return c.json(created, 201);
   });
 
   app.patch("/api/connections/:id", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { label?: string; config?: Record<string, unknown>; secret?: string };
-    const updated = updateConnection(c.req.param("id"), c.get("userId"), body);
+    const updated = updateConnection(c.req.param("id"), c.get("orgId"), body);
     if (!updated) return c.json({ error: "not found" }, 404);
     return c.json(updated);
   });
 
   app.delete("/api/connections/:id", (c) =>
-    deleteConnection(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+    deleteConnection(c.req.param("id"), c.get("orgId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
   // Preview a resource of a saved connection (secrets never returned).
   app.post("/api/connections/:id/sample", async (c) => {
     const id = c.req.param("id");
-    const userId = c.get("userId");
-    if (!getConnectionSummary(id, userId)) return c.json({ error: "not found" }, 404);
+    if (!getConnectionSummary(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { source?: unknown };
     const parsed = BlockSource.safeParse({ ...(body.source ?? {}), connectionId: id });
     if (!parsed.success) return c.json({ error: "validation" }, 400);
-    return c.json({ data: await resolveSource(parsed.data, connLookupFor(userId)) });
+    return c.json({ data: await resolveSource(parsed.data, connLookupForOrg(c.get("orgId"))) });
   });
 
   // ---- OAuth: the self-hoster's app credentials (secret sealed, never returned) ----
@@ -1008,7 +1006,7 @@ export function buildApp(): Hono<Env> {
       if (!cookie || !hmacVerify(`share-unlock:${token}`, cookie)) return c.json({ error: "password_required" }, 401);
     }
     const { record, ownerId } = found;
-    const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
+    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined);
     return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });
   });
 
@@ -1025,7 +1023,7 @@ export function buildApp(): Hono<Env> {
     }
     if (!(await renderAvailable())) return c.json({ error: "render support not installed" }, 503);
     const { record, ownerId } = found;
-    const data = await resolveWidgetData(record.document, ownerId ?? "", ownerId ? connLookupFor(ownerId) : undefined);
+    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined);
     const payload = { claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } } as unknown as Parameters<typeof renderImage>[1];
     try {
       const { buf, contentType } = await renderImage(baseUrl(), payload, 1200, 630, "png", `pub:${token}:${record.version}`);

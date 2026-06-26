@@ -12,7 +12,8 @@ import { currentKeyVersion, open, seal } from "./secrets";
 
 interface ConnRow {
   id: string;
-  user_id: string;
+  user_id: string; // creator (created_by) — used for OAuth token refresh
+  org_id: string | null; // owning org — the access boundary (team-shared)
   provider: string;
   label: string;
   auth_kind: string;
@@ -52,13 +53,13 @@ const safeJson = (s: string): Record<string, unknown> => {
   try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
 };
 
-export function listConnections(userId: string): ConnectionSummary[] {
-  const rows = db.prepare("SELECT * FROM connections WHERE user_id = ? ORDER BY created_at DESC").all(userId) as ConnRow[];
+export function listConnections(orgId: string): ConnectionSummary[] {
+  const rows = db.prepare("SELECT * FROM connections WHERE org_id = ? ORDER BY created_at DESC").all(orgId) as ConnRow[];
   return rows.map(summarize);
 }
 
-export function getConnectionSummary(id: string, userId: string): ConnectionSummary | null {
-  const row = db.prepare("SELECT * FROM connections WHERE id = ? AND user_id = ?").get(id, userId) as ConnRow | undefined;
+export function getConnectionSummary(id: string, orgId: string): ConnectionSummary | null {
+  const row = db.prepare("SELECT * FROM connections WHERE id = ? AND org_id = ?").get(id, orgId) as ConnRow | undefined;
   return row ? summarize(row) : null;
 }
 
@@ -69,7 +70,7 @@ export interface CreateInput {
   secret?: string; // token / apiKey / secret URL — sealed, never stored or returned in plaintext
 }
 
-export function createConnection(userId: string, input: CreateInput): ConnectionSummary | null {
+export function createConnection(userId: string, orgId: string, input: CreateInput): ConnectionSummary | null {
   const provider = PROVIDERS.get(input.provider);
   if (!provider) return null;
   const id = randomUUID();
@@ -77,10 +78,10 @@ export function createConnection(userId: string, input: CreateInput): Connection
   const needsSecret = provider.authKind === "token" || provider.authKind === "apiKey" || provider.authKind === "url";
   const status = needsSecret && !input.secret ? "needs_auth" : "ok";
   db.prepare(
-    "INSERT INTO connections (id, user_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)",
-  ).run(id, userId, input.provider, input.label?.trim() || provider.label, provider.authKind, JSON.stringify(input.config ?? {}), status, now, now);
+    "INSERT INTO connections (id, user_id, org_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)",
+  ).run(id, userId, orgId, input.provider, input.label?.trim() || provider.label, provider.authKind, JSON.stringify(input.config ?? {}), status, now, now);
   if (input.secret) putSecret(id, "secret", input.secret);
-  return getConnectionSummary(id, userId);
+  return getConnectionSummary(id, orgId);
 }
 
 export interface UpdateInput {
@@ -89,8 +90,8 @@ export interface UpdateInput {
   secret?: string;
 }
 
-export function updateConnection(id: string, userId: string, patch: UpdateInput): ConnectionSummary | null {
-  const row = db.prepare("SELECT * FROM connections WHERE id = ? AND user_id = ?").get(id, userId) as ConnRow | undefined;
+export function updateConnection(id: string, orgId: string, patch: UpdateInput): ConnectionSummary | null {
+  const row = db.prepare("SELECT * FROM connections WHERE id = ? AND org_id = ?").get(id, orgId) as ConnRow | undefined;
   if (!row) return null;
   const label = patch.label?.trim() ?? row.label;
   const config = patch.config ? JSON.stringify(patch.config) : row.config;
@@ -100,11 +101,11 @@ export function updateConnection(id: string, userId: string, patch: UpdateInput)
     status = "ok";
   }
   db.prepare("UPDATE connections SET label = ?, config = ?, status = ?, last_error = '', updated_at = ? WHERE id = ?").run(label, config, status, Date.now(), id);
-  return getConnectionSummary(id, userId);
+  return getConnectionSummary(id, orgId);
 }
 
-export function deleteConnection(id: string, userId: string): boolean {
-  const r = db.prepare("DELETE FROM connections WHERE id = ? AND user_id = ?").run(id, userId);
+export function deleteConnection(id: string, orgId: string): boolean {
+  const r = db.prepare("DELETE FROM connections WHERE id = ? AND org_id = ?").run(id, orgId);
   return r.changes > 0; // connection_secrets cascade via FK
 }
 
@@ -135,13 +136,14 @@ function readSecret(connectionId: string, kind: string): string | null {
 /** Internal resolver hook: decrypt a connection's secret + config for the data
  *  resolver. Never exposed over the API. Flips status to needs_auth if a secret
  *  was expected but can't be decrypted (lost/rotated key). */
-export function connLookupFor(userId: string): ConnLookup {
+export function connLookupForOrg(orgId: string): ConnLookup {
   return async (connectionId: string): Promise<ConnContext | null> => {
-    const row = db.prepare("SELECT * FROM connections WHERE id = ? AND user_id = ?").get(connectionId, userId) as ConnRow | undefined;
+    const row = db.prepare("SELECT * FROM connections WHERE id = ? AND org_id = ?").get(connectionId, orgId) as ConnRow | undefined;
     if (!row) return null;
     if (row.auth_kind === "oauth2") {
-      // access token, transparently refreshed if expired; null → needs reconnect
-      const access = await ensureFreshOAuthToken(connectionId, userId, row.provider);
+      // access token, transparently refreshed if expired; null → needs reconnect.
+      // OAuth apps/tokens are keyed by the connection's creator, so refresh under them.
+      const access = await ensureFreshOAuthToken(connectionId, row.user_id, row.provider);
       return { secret: access, config: safeJson(row.config) };
     }
     const secret = readSecret(connectionId, "secret");

@@ -50,8 +50,8 @@ export function importUser(userId: string, orgId: string, dump: unknown, opts: {
       const newId = randomUUID();
       const now = Date.now();
       db.prepare(
-        "INSERT INTO connections (id, user_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'needs_auth', '', ?, ?)",
-      ).run(newId, userId, c.provider, typeof c.label === "string" ? c.label : c.provider, typeof c.auth_kind === "string" ? c.auth_kind : "token", typeof c.config === "string" ? c.config : "{}", now, now);
+        "INSERT INTO connections (id, user_id, org_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'needs_auth', '', ?, ?)",
+      ).run(newId, userId, orgId, c.provider, typeof c.label === "string" ? c.label : c.provider, typeof c.auth_kind === "string" ? c.auth_kind : "token", typeof c.config === "string" ? c.config : "{}", now, now);
       connMap.set(c.id, newId);
       res.connections++; // never imports a secret
     }
