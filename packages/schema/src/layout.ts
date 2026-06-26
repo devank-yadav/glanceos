@@ -340,6 +340,10 @@ export const FocusNowProps = z.object({ label: line(40).default(""), items: line
 // v7.0 calm-glance — "leave by": next event minus your own travel time (no geocoding;
 // you state the minutes). Binds to a calendar source like the agenda blocks.
 export const LeaveByProps = z.object({ label: line(40).default("Leave by"), items: line(800).default("09:00 | Standup | Room 3\n12:30 | Lunch\n16:00 | Review | Zoom"), travelMinutes: z.number().int().min(0).max(240).default(15) });
+// "What changed since you last looked" — a calm digest of meaningful deltas across the
+// board's other blocks since the previous render (the server diffs and fills it in;
+// offline / on the first look it shows a placeholder). `title` heads the list; `max` caps rows.
+export const SinceYouLookedProps = z.object({ title: line(40).default("Since you looked"), max: z.number().int().min(1).max(12).default(5) });
 // v5.0 ambient / self / home fusion objects.
 export const MyDayProps = z.object({ name: line(40).default(""), subtitle: line(140).default("Have a calm, focused day."), showDate: z.boolean().default(true) });
 export const HealthRingProps = z.object({ label: line(40).default("Steps"), value: z.number().default(6200), goal: z.number().min(1).default(10000), unit: line(12).default("") });
@@ -614,6 +618,7 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("dayTimeline"), props: DayTimelineProps }),
   z.object({ ...b, type: z.literal("focusNow"), props: FocusNowProps }),
   z.object({ ...b, type: z.literal("leaveBy"), props: LeaveByProps }),
+  z.object({ ...b, type: z.literal("sinceYouLooked"), props: SinceYouLookedProps }),
   // v5.0 ambient / self / home objects
   z.object({ ...b, type: z.literal("myDay"), props: MyDayProps }),
   z.object({ ...b, type: z.literal("healthRing"), props: HealthRingProps }),

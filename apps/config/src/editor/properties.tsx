@@ -192,6 +192,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   dayTimeline: [S("label", "Label"), T("items", "Schedule (HH:MM | Title)"), N("max", "Max rows")],
   focusNow: [S("label", "Label"), T("items", "Schedule (HH:MM | Title | Location)")],
   leaveBy: [S("label", "Label"), T("items", "Schedule (HH:MM | Title | Location)"), N("travelMinutes", "Travel minutes")],
+  sinceYouLooked: [S("title", "Title"), N("max", "Max rows")],
   myDay: [S("name", "Your name"), T("subtitle", "Subtitle line"), B("showDate", "Show date")],
   healthRing: [S("label", "Label"), N("value", "Value"), N("goal", "Goal"), S("unit", "Unit")],
   homeTile: [S("label", "Label"), S("icon", "Icon"), S("value", "Value"), S("unit", "Unit")],

@@ -11,6 +11,7 @@ import { weatherData } from "./fetchers/weather";
 import { customDataWidget } from "./customdata";
 import { queueData } from "./queues";
 import { tasksData } from "./tasks";
+import { computeChanges } from "./whatchanged";
 
 /**
  * Turn a layout into the data its blocks need, keyed by block id, scoped to
@@ -44,7 +45,7 @@ export function allBlocks(layout: LayoutT): WidgetT[] {
   return out;
 }
 
-export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo): Promise<Record<string, unknown>> {
+export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
   const now = new Date();
   const blocks = allBlocks(layout);
@@ -92,5 +93,16 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
       }
     }),
   );
+  // "What changed since you last looked" — once the rest of the board is resolved, diff
+  // its scalars against this snapshotKey's previous render and feed each digest block.
+  // Only runs when a key is supplied (the device display) AND a digest block exists.
+  if (snapshotKey) {
+    const digests = blocks.filter((b) => b.type === "sinceYouLooked");
+    if (digests.length) {
+      const max = Math.max(...digests.map((b) => (b.props as { max?: number }).max ?? 5));
+      const changes = computeChanges(blocks, data, snapshotKey, max);
+      for (const b of digests) data[b.id] = { changes: changes.slice(0, (b.props as { max?: number }).max ?? 5) };
+    }
+  }
   return data;
 }

@@ -1244,3 +1244,14 @@ body.tv [data-focusable]:focus {
    NO colour change (the whole point: "nobody should know I'm editing"). Never on
    real screens. */
 .glance-editable { cursor: text; outline: none; caret-color: #2383e2; }
+
+/* "Since you looked" — the calm what-changed digest. Tabular figures so deltas align;
+   the new value carries the weight, the old one recedes. */
+.syl-list { display: flex; flex-direction: column; gap: 0.3em; }
+.syl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6em; }
+.syl-label { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.syl-delta { display: flex; align-items: baseline; gap: 0.35em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.syl-from { opacity: 0.5; }
+.syl-arrow { opacity: 0.5; }
+.syl-to { font-weight: 700; }
+.syl-empty { opacity: 0.5; }

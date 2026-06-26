@@ -111,6 +111,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
         device.user_id ?? "",
         connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
         geo,
+        `dev:${device.id}`, // per-device snapshot key for the "since you looked" digest
       ),
       deviceName: device.name ?? undefined,
       tv,

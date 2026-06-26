@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { ComparatorT, ConditionT } from "@glanceos/schema";
+import type { ComparatorT, ConditionT, LayoutT } from "@glanceos/schema";
 import { Condition } from "@glanceos/schema";
 
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-engine-"));
@@ -530,7 +530,7 @@ describe("evaluate — crossesAbove/crossesBelow edge comparators (F4)", () => {
 
 describe("buildContext — live blocks are sensable via objects.<id> (F1)", () => {
   const liveBlock = { id: "prs", name: "PRs", type: "stat", width: 1, h: 4, props: { value: "0", label: "PRs" }, style: {}, source: { kind: "github.search", connectionId: "c1", query: {}, map: { transform: "count" } } };
-  const layout = { schemaVersion: 3, name: "t", rows: [{ id: "r", h: 4, blocks: [liveBlock] }] } as Parameters<typeof buildContext>[1]["layout"];
+  const layout = { schemaVersion: 3, name: "t", rows: [{ id: "r", h: 4, blocks: [liveBlock] }] } as unknown as LayoutT;
   it("populates objects.<id>.value from the resolved live map (scalar)", () => {
     const c = buildContext(user.id, { layout, liveObjects: { prs: 7 } });
     expect(c.objects.prs!.value).toBe(7);

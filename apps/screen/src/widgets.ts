@@ -2439,6 +2439,29 @@ const leaveBy: Render = (el, w, data) => {
   });
 };
 
+// "What changed since you last looked" — a calm digest the server fills with the deltas
+// across the board's other blocks since this screen last refreshed. Pure render of
+// data.changes ([{label, from, to}]); a placeholder when nothing moved / on first look.
+const sinceYouLooked: Render = (el, w, data) => {
+  if (w.type !== "sinceYouLooked") return;
+  if (w.props.title) el.appendChild(div("widget-heading", w.props.title));
+  const changes = data && typeof data === "object" && Array.isArray((data as { changes?: unknown }).changes)
+    ? (data as { changes: Array<{ label?: unknown; from?: unknown; to?: unknown }> }).changes : [];
+  if (!changes.length) { el.appendChild(div("syl-empty", "Nothing new since you looked")); return; }
+  const list = div("syl-list");
+  for (const c of changes) {
+    const row = div("syl-row");
+    row.appendChild(div("syl-label", String(c.label ?? "")));
+    const delta = div("syl-delta");
+    delta.appendChild(div("syl-from", String(c.from ?? "")));
+    delta.appendChild(div("syl-arrow", "→"));
+    delta.appendChild(div("syl-to", String(c.to ?? "")));
+    row.appendChild(delta);
+    list.appendChild(row);
+  }
+  el.appendChild(list);
+};
+
 // ================= v5.0 — ambient / self / home fusion objects =================
 
 // The "smart home screen" header: time-of-day greeting + date + (bound) weather + a line.
@@ -2554,7 +2577,7 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   // v4.7 new auto objects
   onAir, sunArc, nextFullMoon,
   // v5.0 agenda objects
-  upNext, dayTimeline, focusNow, leaveBy,
+  upNext, dayTimeline, focusNow, leaveBy, sinceYouLooked,
   // v5.0 ambient / self / home
   myDay, healthRing, homeTile,
   // v8.0 rotation
