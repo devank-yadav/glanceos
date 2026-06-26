@@ -2,7 +2,7 @@ import type { BlockSourceT, WidgetT } from "@glanceos/schema";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { LIST_BLOCKS, PAIR_BLOCKS, PASSTHROUGH_BLOCKS, SERIES_BLOCKS } from "./blocks";
-import { arrayPaths, atPath, itemKeys, scalarPaths } from "./inspectShape";
+import { arrayPaths, atPath, itemKeys, scalarPaths, suggestBindings, type BindSuggestion } from "./inspectShape";
 import { compileNotionFilter, NOTION_OPERATORS, type NotionFilterRow, type NotionFilterType } from "./notionFilter";
 
 // The ⟿ Data tab: point a block at a live source. Two ways in:
@@ -138,6 +138,16 @@ export function DataPanel({
   const fieldSugg = isArr
     ? itemKeys(atPath(previewData, items) ?? (arrSugg[0] ? atPath(previewData, arrSugg[0].path) : previewData))
     : previewData != null ? scalarPaths(previewData).slice(0, 16) : [];
+  // One-click "Make it live": complete, ready-to-apply binding candidates for this sink.
+  const bindSugg: BindSuggestion[] = previewData != null && shaped
+    ? suggestBindings(previewData, isSeries ? "series" : isList ? "list" : isPair ? "pair" : "scalar")
+    : [];
+  const applySuggestion = (s: BindSuggestion) => {
+    if (s.items !== undefined) setItems(s.items);
+    if (s.labelField !== undefined) setLabelField(s.labelField);
+    if (s.field !== undefined) setField(s.field);
+    if (s.transform) setTransform(s.transform); // only consulted for scalar sinks; harmless otherwise
+  };
 
   return (
     <div class="data-panel">
@@ -260,9 +270,17 @@ export function DataPanel({
           <button disabled={!ready} onClick={() => { setSource(build()); onClose(); }}>Bind</button>
         </div>
       </div>
-      {previewData != null && shaped && (arrSugg.length > 0 || fieldSugg.length > 0) && (
+      {previewData != null && shaped && (bindSugg.length > 0 || arrSugg.length > 0 || fieldSugg.length > 0) && (
         <div class="data-inspect">
-          <span class="muted data-inspect-hint">Click a path to fill the mapping:</span>
+          {bindSugg.length > 0 && (
+            <div class="di-row">
+              <span class="di-label">Bind</span>
+              {bindSugg.map((s, i) => (
+                <button key={i} class="di-chip di-chip-suggest" title="Fill the whole mapping in one click" onClick={() => applySuggestion(s)}>{s.label}</button>
+              ))}
+            </div>
+          )}
+          <span class="muted data-inspect-hint">Or click a path to fill one field:</span>
           {isArr && arrSugg.length > 0 && (
             <div class="di-row">
               <span class="di-label">List</span>

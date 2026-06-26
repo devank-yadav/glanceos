@@ -2231,6 +2231,9 @@ ul.tasks li:last-child {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .di-chip:hover { border-color: var(--indigo); background: color-mix(in srgb, var(--indigo) 8%, transparent); }
+/* One-click "Make it live" suggestions — the primary affordance, so accent them. */
+.di-chip-suggest { font-family: inherit; border-color: var(--indigo); color: var(--indigo); background: color-mix(in srgb, var(--indigo) 6%, transparent); }
+.di-chip-suggest:hover { background: var(--indigo); color: #fff; }
 
 /* ---------- sidebar: palette + properties ---------- */
 
