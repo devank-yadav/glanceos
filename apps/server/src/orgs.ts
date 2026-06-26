@@ -16,7 +16,7 @@ export const isRole = (r: string): r is Role => ROLES.has(r as Role);
 
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 
-export interface OrgRow { id: string; name: string; slug: string; personal: number; created_by: string | null; plan: string; plan_ref: string | null; created_at: number }
+export interface OrgRow { id: string; name: string; slug: string; personal: number; created_by: string | null; plan: string; plan_ref: string | null; created_at: number; stripe_customer_id: string | null; stripe_subscription_id: string | null; plan_status: string; screens_paid: number; current_period_end: number | null }
 export interface OrgSummary { id: string; name: string; slug: string; personal: boolean; role: Role; plan: string }
 export interface MemberSummary { userId: string; name: string; email: string; role: Role; createdAt: number }
 export interface InviteSummary { token: string; email: string; role: Role; invitedBy: string | null; expiresAt: number; createdAt: number }

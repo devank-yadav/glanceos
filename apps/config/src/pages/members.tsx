@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, type AuthStatus, type OrgInvite, type OrgMember, type OrgRole, canManageTeam } from "../api";
+import { api, type AuthStatus, type BillingSummary, type OrgInvite, type OrgMember, type OrgRole, canManageTeam } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -68,18 +68,21 @@ export function MembersPage() {
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<OrgRole>("editor");
   const [teamName, setTeamName] = useState("");
+  const [billing, setBilling] = useState<(BillingSummary & { stripeConfigured?: boolean }) | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
   const org = status?.activeOrg ?? null;
   const myRole = status?.role ?? null;
   const manage = canManageTeam(myRole) && !org?.personal;
+  const isOwner = myRole === "owner";
 
   async function refresh() {
     setLoading(true);
     try {
       const s = await api.get<AuthStatus>("/api/auth/status");
       setStatus(s);
+      setBilling(await api.get<BillingSummary & { stripeConfigured?: boolean }>("/api/billing/summary").catch(() => null));
       if (s.activeOrg) {
         const body = await api.get<{ members: OrgMember[]; invites: OrgInvite[] }>(`/api/orgs/${s.activeOrg.id}/members`);
         setMembers(body.members);
@@ -89,6 +92,17 @@ export function MembersPage() {
     setLoading(false);
   }
   useEffect(() => { void refresh(); }, []);
+
+  async function upgrade() {
+    try {
+      const r = await api.post<{ url: string }>("/api/billing/checkout", { screens: Math.max(1, (billing?.screensUsed ?? 1) - (billing?.freeScreens ?? 1) + 1) });
+      location.href = r.url;
+    } catch (err) { toast.error(String(err instanceof Error ? err.message : err)); }
+  }
+  async function manageBilling() {
+    try { const r = await api.post<{ url: string }>("/api/billing/portal"); location.href = r.url; }
+    catch (err) { toast.error(String(err instanceof Error ? err.message : err)); }
+  }
 
   async function createTeam(e: Event) {
     e.preventDefault();
@@ -158,6 +172,27 @@ export function MembersPage() {
   return (
     <div class="page">
       <PageHeader title={org ? `${org.name} · Team` : "Team"} />
+
+      {billing && (
+        <div class="card billing-card">
+          <div class="billing-head">
+            <div>
+              <span class={`plan-pill plan-${billing.plan}`}>{billing.plan === "free" ? "Free" : "Team"}{billing.status !== "active" ? ` · ${billing.status}` : ""}</span>
+              <p class="billing-usage">{billing.screensUsed} of {billing.screenLimit} screen{billing.screenLimit === 1 ? "" : "s"} in use</p>
+            </div>
+            {isOwner && (
+              <div class="billing-actions">
+                {billing.managed
+                  ? <button class="ghost" onClick={manageBilling}>Manage billing</button>
+                  : <button class="primary" onClick={upgrade}>Add screens</button>}
+              </div>
+            )}
+          </div>
+          <div class="billing-bar"><div class="billing-fill" style={{ width: `${Math.min(100, Math.round((billing.screensUsed / Math.max(1, billing.screenLimit)) * 100))}%` }} /></div>
+          {!billing.canAddScreen && <p class="hint muted">You're at your screen limit. {isOwner ? "Add screens to connect more." : "Ask an owner to add screens."}</p>}
+          {isOwner && !billing.stripeConfigured && !billing.managed && <p class="hint muted">Billing isn't configured on this server yet — set Stripe keys to enable upgrades.</p>}
+        </div>
+      )}
 
       {manage && (
         <form class="card invite-row" onSubmit={invite}>

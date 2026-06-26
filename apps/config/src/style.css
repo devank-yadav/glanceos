@@ -3805,6 +3805,14 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .ghost.sm.danger:hover { color: var(--bad); }
 .ghost.sm svg { width: 14px; height: 14px; }
 
+.billing-card { display: flex; flex-direction: column; gap: 10px; }
+.billing-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.plan-pill { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 3px 9px; border-radius: 999px; background: var(--soft); color: var(--fg); }
+.plan-pill.plan-team { background: var(--indigo); color: var(--indigo-fg, #fff); }
+.billing-usage { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
+.billing-bar { height: 8px; background: var(--soft); border-radius: 999px; overflow: hidden; }
+.billing-fill { height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s var(--ease); }
+
 .invite-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .invite-card { max-width: 440px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 14px; padding: 32px; }
 .invite-title { margin: 0; font-size: 22px; }

@@ -54,6 +54,8 @@ import {
   ROLE_RANK, type Role, getOrg, isRole, setSessionActiveOrg,
 } from "./orgs";
 import { publicUrl } from "./email";
+import { billingSummary, canAddScreen } from "./billing";
+import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
@@ -542,6 +544,7 @@ export function buildApp(): Hono<Env> {
   app.post("/api/devices/claim", async (c) => {
     const body = ClaimRequest.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "claim code required" }, 400);
+    if (!canAddScreen(c.get("orgId"))) return c.json({ error: "This workspace has reached its screen limit. Upgrade to connect more screens.", upgrade: true }, 409);
     const device = claimDevice(body.data.code, body.data.name, c.get("userId"), c.get("orgId"));
     if (!device) return c.json({ error: "unknown or already-claimed code" }, 404);
     notifyClaimed(c.get("userId"), device.id, device.name);
@@ -1381,6 +1384,40 @@ ${og}
     setSessionActiveOrg(getCookie(c, SESSION_COOKIE), r.orgId); // drop the new member into the team
     track("invite_accepted", { userId: c.get("userId"), orgId: r.orgId });
     return c.json({ ok: true, orgId: r.orgId });
+  });
+
+  // ---- billing (per-screen; the active org is the billing entity) ----
+  app.get("/api/billing/summary", (c) => {
+    const s = billingSummary(c.get("orgId"));
+    return s ? c.json({ ...s, stripeConfigured: stripeConfigured() }) : c.json({ error: "no active workspace" }, 404);
+  });
+
+  // Start a per-screen subscription checkout (owner only). 503 when Stripe isn't set up.
+  app.post("/api/billing/checkout", async (c) => {
+    if (c.get("role") !== "owner") return c.json({ error: "only the workspace owner can manage billing" }, 403);
+    if (!stripeConfigured()) return c.json({ error: "billing is not configured on this server" }, 503);
+    const body = (await c.req.json().catch(() => ({}))) as { screens?: number };
+    const screens = Math.max(1, Math.floor(Number(body.screens) || 1));
+    const url = await createCheckout(c.get("orgId"), screens, {
+      email: getUser(c.get("userId"))?.email,
+      successUrl: publicUrl("/#/members?upgraded=1"),
+      cancelUrl: publicUrl("/#/members"),
+    });
+    return url ? c.json({ url }) : c.json({ error: "couldn't start checkout" }, 502);
+  });
+
+  // Open the Stripe customer portal (owner only) to change quantity / cancel.
+  app.post("/api/billing/portal", async (c) => {
+    if (c.get("role") !== "owner") return c.json({ error: "only the workspace owner can manage billing" }, 403);
+    const url = await createPortal(c.get("orgId"), publicUrl("/#/members"));
+    return url ? c.json({ url }) : c.json({ error: "no billing account yet" }, 400);
+  });
+
+  // Stripe webhook (under /api/hooks/* → bypasses session auth + CSRF). Verifies the
+  // signature over the RAW body, then syncs the subscription state onto the org.
+  app.post("/api/hooks/stripe", async (c) => {
+    const raw = await c.req.text();
+    return handleWebhook(raw, c.req.header("stripe-signature")) ? c.json({ received: true }) : c.json({ error: "bad signature" }, 400);
   });
 
   // ---- onboarding + founder metrics ----

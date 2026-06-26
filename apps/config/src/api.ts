@@ -41,6 +41,18 @@ export interface OrgInvite {
   createdAt: number;
 }
 
+export interface BillingSummary {
+  plan: string;
+  status: string;
+  screensUsed: number;
+  screenLimit: number;
+  freeScreens: number;
+  screensPaid: number;
+  canAddScreen: boolean;
+  periodEnd: number | null;
+  managed: boolean;
+}
+
 export interface AuthStatus {
   authed: boolean;
   user: UserInfo | null;
