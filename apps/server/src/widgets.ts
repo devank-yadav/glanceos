@@ -1,4 +1,4 @@
-import type { LayoutT } from "@glanceos/schema";
+import type { LayoutT, WidgetT } from "@glanceos/schema";
 import { resolveSource, type ConnLookup } from "./providers/resolve";
 import { calendarData } from "./fetchers/ics";
 import { jsonFeedData } from "./fetchers/jsonfeed";
@@ -32,10 +32,22 @@ function geoFor<T extends { latitude?: number; longitude?: number }>(props: T, d
   return props;
 }
 
+// Every block in the document, across the base `rows`, extra `pages` (v10
+// multi-page rotation, Row[][]), and `zones` (free-form signage rectangles, each
+// with its own rows). The screen renders any of these by data[block.id], so a
+// bound/live block on page 2 or inside a zone must be resolved too — otherwise it
+// silently shows its placeholder props. (Block ids are board-wide unique.)
+export function allBlocks(layout: LayoutT): WidgetT[] {
+  const out = layout.rows.flatMap((row) => row.blocks);
+  for (const page of layout.pages ?? []) for (const row of page) out.push(...row.blocks);
+  for (const zone of layout.zones ?? []) for (const row of zone.rows) out.push(...row.blocks);
+  return out;
+}
+
 export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
   const now = new Date();
-  const blocks = layout.rows.flatMap((row) => row.blocks);
+  const blocks = allBlocks(layout);
   const g = <T extends { latitude?: number; longitude?: number }>(p: T): T => geoFor(p, deviceGeo);
   await Promise.all(
     blocks.map(async (b) => {
