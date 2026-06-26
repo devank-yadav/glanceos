@@ -16,6 +16,7 @@ const VIBES: { category: Category; label: string; blurb: string }[] = [
   { category: "Weather & nature", label: "Weather & sky", blurb: "Forecast, sun, the day ahead" },
   { category: "Wellness & ambient", label: "Calm & ambient", blurb: "A quiet, restful screen" },
   { category: "Team & productivity", label: "Team & tasks", blurb: "Standups, to-dos, focus" },
+  { category: "Engineering & ops", label: "Engineering team", blurb: "Deploys, on-call, incidents, KPIs" },
   { category: "Stats & dashboard", label: "Stats dashboard", blurb: "Numbers, KPIs, status" },
   { category: "Smart home", label: "Smart home", blurb: "Rooms, sensors, presence" },
   { category: "Lobby & welcome", label: "Lobby welcome", blurb: "Greet people at the door" },
