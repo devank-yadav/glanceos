@@ -3,6 +3,7 @@ import { buildApp } from "./api";
 import { validateConfig } from "./config";
 import { snapshotDatabase, pruneSnapshots } from "./backup-db";
 import { checkpoint, migrate } from "./db";
+import { emailConfigured } from "./email";
 import { runAlertChecks } from "./notifications";
 import { runAutomationTick } from "./automation/engine";
 import { pruneAutomationRuns } from "./automations";
@@ -31,6 +32,8 @@ if (process.env.GLANCEOS_REDIS_URL) {
   await initRedis(process.env.GLANCEOS_REDIS_URL);
   console.log("[glanceos] Redis scale backend active (SSE fan-out + shared rate limits)");
 }
+
+if (!emailConfigured()) console.warn("[email] no mail backend configured (RESEND_API_KEY or SMTP_HOST) — verification, reset, and invite emails are no-ops");
 
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: buildApp().fetch, port }, (info) => {
