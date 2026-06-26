@@ -80,9 +80,10 @@ export function AuthPage({
           {register ? (
             <>Already have an account? <a href="#/login">Log in</a></>
           ) : (
-            registrationOpen && (
-              <>New here? <a href="#/register">Create an account</a></>
-            )
+            <>
+              <a href="#/forgot">Forgot password?</a>
+              {registrationOpen && <> · New here? <a href="#/register">Create an account</a></>}
+            </>
           )}
         </p>
       </div>

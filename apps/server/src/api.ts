@@ -11,10 +11,11 @@ import { compress } from "hono/compress";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
-  changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
-  isUserAdmin, markActivated, markOnboarded, registrationOpen, sessionUserId, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
+  changePassword, consumeAuthToken, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser, getUserByEmail,
+  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
+import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
 import { dumpUser, importUser } from "./backup";
 import { injectAbsoluteOg } from "./ogmeta";
 import {
@@ -307,6 +308,9 @@ export function buildApp(): Hono<Env> {
   const userKey = (c: Context) => c.get("userId") || "anon";
   app.use("/api/auth/login", limiter("auth", 10, 60_000));
   app.use("/api/auth/register", limiter("auth", 10, 60_000));
+  app.use("/api/auth/forgot", limiter("auth", 6, 60_000));
+  app.use("/api/auth/reset", limiter("auth", 10, 60_000));
+  app.use("/api/auth/verify/request", limiter("auth", 6, 60_000));
   app.use("/api/devices/register", limiter("register", 30, 60_000));
   app.use("/api/devices/claim", limiter("claim", 30, 60_000));
   app.use("/api/devices/me/display", limiter("display", 120, 60_000, deviceKey));
@@ -365,6 +369,8 @@ export function buildApp(): Hono<Env> {
     const personalOrg = ensurePersonalOrg(user.id); // give the new account its workspace up front
     issueSession(c, user.id);
     track("signup", { userId: user.id, orgId: personalOrg });
+    void sendWelcomeEmail(user.email, user.name); // fire-and-forget; inert without a mail backend
+    void sendVerifyEmail(user.email, user.name, mintAuthToken(user.id, "verify"));
     return c.json({ ok: true, user }, 201);
   });
 
@@ -381,6 +387,38 @@ export function buildApp(): Hono<Env> {
     destroySession(getCookie(c, SESSION_COOKIE));
     deleteCookie(c, SESSION_COOKIE, { path: "/" });
     deleteCookie(c, CSRF_COOKIE, { path: "/" });
+    return c.json({ ok: true });
+  });
+
+  // Password reset (request → emailed link → set new). Always returns ok so the form
+  // can't be used to probe which emails exist. Inert without a mail backend.
+  app.post("/api/auth/forgot", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { email?: string };
+    const u = body.email ? getUserByEmail(body.email) : null;
+    if (u) void sendResetEmail(u.email, u.name, mintAuthToken(u.id, "reset"));
+    return c.json({ ok: true });
+  });
+  app.post("/api/auth/reset", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { token?: string; password?: string };
+    if (!body.token || !body.password || body.password.length < 8) return c.json({ error: "a token and a password (8+ chars) are required" }, 400);
+    const userId = consumeAuthToken(body.token, "reset");
+    if (!userId) return c.json({ error: "this reset link is invalid or expired" }, 400);
+    setPassword(userId, body.password);
+    destroyAllSessions(userId); // a reset logs out every existing session
+    return c.json({ ok: true });
+  });
+
+  // Email verification (soft — never blocks login; just clears the "unverified" banner).
+  app.get("/api/auth/verify/:token", (c) => {
+    const userId = consumeAuthToken(c.req.param("token"), "verify");
+    if (userId) markEmailVerified(userId);
+    // Bounce to the app either way; the client shows a confirmation/expired note.
+    return c.redirect(`/#/verified${userId ? "" : "?expired=1"}`);
+  });
+  app.post("/api/auth/verify/request", (c) => {
+    const userId = sessionUserId(getCookie(c, SESSION_COOKIE));
+    const u = userId ? getUser(userId) : null;
+    if (u && !u.emailVerified) void sendVerifyEmail(u.email, u.name, mintAuthToken(u.id, "verify"));
     return c.json({ ok: true });
   });
 
@@ -1305,7 +1343,7 @@ ${og}
     const r = createInvite(id, email, role, c.get("userId"));
     if (!r.ok) return c.json({ error: r.error }, 409);
     track("member_invited", { userId: c.get("userId"), orgId: id, props: { role } });
-    // Phase 3 emails the link; for now return it so the inviter can share it manually.
+    void sendInviteEmail(email, getOrg(id)?.name ?? "a team", getUser(c.get("userId"))?.name ?? null, role, r.token);
     return c.json({ ok: true, token: r.token, link: publicUrl(`/#/invite/${r.token}`) }, 201);
   });
 

@@ -4,6 +4,7 @@ import { validateConfig } from "./config";
 import { snapshotDatabase, pruneSnapshots } from "./backup-db";
 import { checkpoint, migrate } from "./db";
 import { emailConfigured } from "./email";
+import { runLifecycleSweep } from "./lifecycle";
 import { runAlertChecks } from "./notifications";
 import { runAutomationTick } from "./automation/engine";
 import { pruneAutomationRuns } from "./automations";
@@ -55,6 +56,10 @@ setInterval(() => {
 setInterval(() => {
   try { runAlertChecks(); } catch { /* never let the sweep crash the loop */ }
 }, 60 * 1000);
+
+// Lifecycle email nudges (day-3 activation, weekly digest). Slow timer; no-op without
+// a mail backend. The 6h cadence comfortably covers the 48h day-3 window.
+setInterval(() => { runLifecycleSweep().catch(() => {}); }, 6 * 60 * 60 * 1000);
 
 // Run automations: data-threshold/"changed", time-of-day, and screen on/offline edges.
 setInterval(() => {

@@ -1,6 +1,8 @@
 import { db } from "./db";
 import { allClaimedDevices, type DeviceRow } from "./devices";
+import { sendOfflineEmail } from "./emails";
 import { isConnected } from "./hub";
+import { listMembers } from "./orgs";
 
 // In-app alerts: a background tick flags screens that fell offline or are low on
 // battery. Deduped to one per device per day (per kind) so it never spams; the
@@ -43,12 +45,13 @@ export function clearAll(userId: string): void {
 
 /** Create unless one already exists for this (user, dedupe_key) (read or unread).
  *  deviceId may be null for account-level alerts (e.g. a connection error). */
-export function createIfAbsent(userId: string, deviceId: string | null, kind: string, message: string, dedupeKey: string): void {
+export function createIfAbsent(userId: string, deviceId: string | null, kind: string, message: string, dedupeKey: string): boolean {
   const exists = db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND dedupe_key = ? LIMIT 1").get(userId, dedupeKey);
-  if (exists) return;
-  db.prepare(
+  if (exists) return false;
+  const r = db.prepare(
     "INSERT OR IGNORE INTO notifications (user_id, device_id, kind, message, dedupe_key, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(userId, deviceId, kind, message, dedupeKey, Date.now());
+  return r.changes > 0;
 }
 
 const dayOf = (now = Date.now()): number => Math.floor(now / 86_400_000);
@@ -104,6 +107,15 @@ export function runAlertChecks(now = Date.now()): void {
     }
     lastOnline.set(d.id, online);
     const alert = checkDeviceForAlerts(d, now, online, opts);
-    if (alert) createIfAbsent(d.user_id, d.id, alert.kind, alert.message, alert.dedupeKey);
+    if (alert) {
+      const created = createIfAbsent(d.user_id, d.id, alert.kind, alert.message, alert.dedupeKey);
+      // On a newly-flagged offline (once/day via the dedupe), email the team so it's seen
+      // off-app. Members with edit rights are the ones who can act on it.
+      if (created && alert.kind === "offline" && d.org_id) {
+        for (const m of listMembers(d.org_id)) {
+          if (m.role === "owner" || m.role === "admin" || m.role === "editor") void sendOfflineEmail(m.email, d.name ?? "A screen");
+        }
+      }
+    }
   }
 }

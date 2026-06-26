@@ -20,6 +20,7 @@ export interface PublicUser {
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
+  emailVerified: boolean;
 }
 
 interface UserRow {
@@ -35,6 +36,7 @@ interface UserRow {
   is_admin: number;
   onboarded_at: number | null;
   activated_at: number | null;
+  email_verified: number;
 }
 
 export function hashPassword(password: string): string {
@@ -56,7 +58,37 @@ function toPublic(row: UserRow): PublicUser {
     homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
     isAdmin: (row.is_admin ?? 0) === 1,
     onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
+    emailVerified: (row.email_verified ?? 0) === 1,
   };
+}
+
+const VERIFY_TTL_MS = 24 * 3600 * 1000;
+const RESET_TTL_MS = 60 * 60 * 1000;
+
+/** Mint a single-use token (email verification or password reset). */
+export function mintAuthToken(userId: string, kind: "verify" | "reset"): string {
+  const token = randomBytes(24).toString("hex");
+  const ttl = kind === "verify" ? VERIFY_TTL_MS : RESET_TTL_MS;
+  db.prepare("INSERT INTO auth_tokens (token, user_id, kind, expires_at) VALUES (?, ?, ?, ?)").run(token, userId, kind, Date.now() + ttl);
+  return token;
+}
+
+/** Redeem a token of the given kind → its user id, marking it used. null if invalid. */
+export function consumeAuthToken(token: string, kind: "verify" | "reset"): string | null {
+  const row = db.prepare("SELECT user_id FROM auth_tokens WHERE token = ? AND kind = ? AND used_at IS NULL AND expires_at > ?")
+    .get(token, kind, Date.now()) as { user_id: string } | undefined;
+  if (!row) return null;
+  db.prepare("UPDATE auth_tokens SET used_at = ? WHERE token = ?").run(Date.now(), token);
+  return row.user_id;
+}
+
+export function markEmailVerified(userId: string): void {
+  db.prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(userId);
+}
+
+/** Set a new password directly (used by the reset flow after a valid token). */
+export function setPassword(userId: string, next: string): void {
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(next), userId);
 }
 
 /** Stamp the first-run wizard as done (idempotent). */
@@ -112,6 +144,7 @@ export function createUser(name: string, email: string, password: string): Publi
     is_admin: firstUser ? 1 : 0,
     onboarded_at: null,
     activated_at: null,
+    email_verified: 0, // soft flag; verified via emailed link (never blocks login)
   };
   try {
     db.prepare(

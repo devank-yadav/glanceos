@@ -18,6 +18,7 @@ import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { AcceptInvite, MembersPage } from "./pages/members";
 import { MetricsPage } from "./pages/metrics";
+import { ForgotPage, ResetPage, VerifiedPage } from "./pages/recover";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
@@ -177,6 +178,11 @@ export function App() {
   ], [theme, boards]);
 
   if (!status) return <Splash />;
+
+  // Password recovery + email-verification landings work in any auth state.
+  if (route.name === "forgot") return <ForgotPage />;
+  if (route.name === "reset") return <ResetPage token={route.token} />;
+  if (route.name === "verified") return <VerifiedPage />;
 
   if (!status.authed) {
     // A logged-out visitor following an invite link logs in first; the #/invite/:token

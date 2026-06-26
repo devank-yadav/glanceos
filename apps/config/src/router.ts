@@ -19,6 +19,9 @@ export type Route =
   | { name: "members" }
   | { name: "metrics" }
   | { name: "invite"; token: string }
+  | { name: "forgot" }
+  | { name: "reset"; token: string }
+  | { name: "verified" }
   | { name: "edit"; layoutId: number };
 
 export function parseRoute(hash: string): Route {
@@ -38,6 +41,10 @@ export function parseRoute(hash: string): Route {
   if (path === "/account") return { name: "account" };
   if (path === "/members" || path === "/team") return { name: "members" };
   if (path === "/metrics") return { name: "metrics" };
+  if (path === "/forgot") return { name: "forgot" };
+  if (path === "/verified") return { name: "verified" };
+  const reset = /^\/reset\/([A-Za-z0-9]+)$/.exec(path);
+  if (reset) return { name: "reset", token: reset[1]! };
   const invite = /^\/invite\/([A-Za-z0-9]+)$/.exec(path);
   if (invite) return { name: "invite", token: invite[1]! };
   const edit = /^\/edit\/(\d+)$/.exec(path);
