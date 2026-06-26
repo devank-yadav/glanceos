@@ -20,6 +20,14 @@ describe("applyMap — source → block-data shaping", () => {
     const cal = { events: [{ title: "x" }] };
     expect(applyMap(cal, { path: "", transform: "none" })).toBe(cal);
   });
+  it("projects a ROOT array's fields even with transform none + blank items (pair chart)", () => {
+    // F6 pair binding to a root-level array with blank items must still project label/value.
+    expect(applyMap([{ name: "a", score: 3 }, { name: "b", score: 7 }], { path: "", transform: "none", fields: { label: "name", value: "score" } }))
+      .toEqual([{ label: "a", value: 3 }, { label: "b", value: 7 }]);
+    // …but a genuine passthrough (no fields) still returns the raw payload by identity.
+    const cal = { events: [] };
+    expect(applyMap(cal, { path: "", transform: "none" })).toBe(cal);
+  });
   it("wrong shape (object where an array is wanted) → null, never garbage", () => {
     expect(applyMap(raw, { path: "", items: "total", fields: { value: "count" }, transform: "series" })).toBeNull();
   });

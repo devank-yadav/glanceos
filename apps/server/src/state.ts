@@ -72,7 +72,11 @@ export function tvStateFor(device: DeviceRow, now = Date.now()): TvStateT | unde
   return { enabled: true, safeArea: p.safeArea, burnIn: p.burnIn, power };
 }
 
-export async function composeState(device: DeviceRow, now = Date.now()): Promise<StreamPayloadT> {
+// `commit` (default true) controls whether this compose advances the "since you looked"
+// snapshot baseline — true only when the result is actually delivered as a fresh render
+// (SSE push, e-ink render.bmp), false for inspection-only composes (the /display ETag
+// probe, owner previews) so they don't consume a pending delta before it's shown.
+export async function composeState(device: DeviceRow, now = Date.now(), opts: { commit?: boolean } = {}): Promise<StreamPayloadT> {
   if (!device.claimed_at) {
     return { claimed: false, claimCode: device.claim_code ?? "------" };
   }
@@ -112,6 +116,7 @@ export async function composeState(device: DeviceRow, now = Date.now()): Promise
         connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
         geo,
         `dev:${device.id}`, // per-device snapshot key for the "since you looked" digest
+        opts.commit ?? true,
       ),
       deviceName: device.name ?? undefined,
       tv,

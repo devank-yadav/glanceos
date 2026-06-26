@@ -33,17 +33,22 @@ function labelOf(block: WidgetT, props: Record<string, unknown>): string | undef
 /** Diff this render's meaningful scalars against the previous render for `key`, then
  *  store the new snapshot. Returns up to `max` changes; [] on the first look (baseline)
  *  or when nothing moved. Pure aside from the per-key snapshot store. */
-export function computeChanges(blocks: WidgetT[], data: Record<string, unknown>, key: string, max = 5): Change[] {
+export function computeChanges(blocks: WidgetT[], data: Record<string, unknown>, key: string, max = 5, commit = true): Change[] {
   const cur: Snap = {};
   for (const b of blocks) {
     if (b.type === "sinceYouLooked") continue; // never diff the digest against itself
+    if (b.hidden) continue; // honor hide-object: never surface what the wall is hiding
+    if (b.visibility === "whenData" && data[b.id] == null) continue; // matches the renderer's whenData gate (don't leak typed-in props)
     const props = b.props as Record<string, unknown>;
     const label = labelOf(b, props);
     const value = scalarOf(data[b.id], props);
     if (label && value != null) cur[b.id] = { label, value };
   }
   const prev = snapshots.get(key);
-  snapshots.set(key, cur);
+  // Advance the baseline ONLY when this render is actually delivered to the screen
+  // (commit). The e-ink wake resolves twice — /display for the ETag, then /render.bmp
+  // for the image — so a non-committing /display read must not consume the delta.
+  if (commit) snapshots.set(key, cur);
   if (!prev) return []; // first look → baseline; nothing has "changed" yet
   const changes: Change[] = [];
   for (const id of Object.keys(cur)) {

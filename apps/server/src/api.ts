@@ -476,7 +476,7 @@ export function buildApp(): Hono<Env> {
     // panel skip a wake's render+transfer when nothing changed, and we stretch its
     // sleep after several unchanged polls. Opt-in + backward-compatible: a firmware
     // that doesn't send If-None-Match gets the old always-200 + base refresh.
-    const payload = await composeState(device);
+    const payload = await composeState(device, undefined, { commit: false }); // ETag probe; render.bmp commits the "since you looked" baseline
     const dataJson = payload.claimed ? safeStableJson(payload.state.data) : "";
     const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).digest("hex").slice(0, 16)}"`;
     const ifNone = c.req.header("if-none-match");
@@ -665,7 +665,7 @@ export function buildApp(): Hono<Env> {
     if (!device || device.user_id !== c.get("userId")) return c.json({ error: "not found" }, 404);
     if (!(await renderAvailable())) return c.json({ error: "render support not installed" }, 503);
     const profile = deviceProfile(device);
-    const payload = await composeState(device);
+    const payload = await composeState(device, undefined, { commit: false }); // owner preview — never consumes the device's baseline
     const layoutId = currentLayoutId(device);
     const version = layoutId ? getLayout(layoutId)?.version ?? 0 : 0;
     try {

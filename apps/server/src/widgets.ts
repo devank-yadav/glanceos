@@ -45,7 +45,7 @@ export function allBlocks(layout: LayoutT): WidgetT[] {
   return out;
 }
 
-export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string): Promise<Record<string, unknown>> {
+export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string, commit = true): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
   const now = new Date();
   const blocks = allBlocks(layout);
@@ -100,8 +100,14 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
     const digests = blocks.filter((b) => b.type === "sinceYouLooked");
     if (digests.length) {
       const max = Math.max(...digests.map((b) => (b.props as { max?: number }).max ?? 5));
-      const changes = computeChanges(blocks, data, snapshotKey, max);
-      for (const b of digests) data[b.id] = { changes: changes.slice(0, (b.props as { max?: number }).max ?? 5) };
+      const changes = computeChanges(blocks, data, snapshotKey, max, commit);
+      // Only write when there's something to show, so a `whenData` digest hides until a
+      // delta appears (matching the renderer's gate); always-visible blocks still paint
+      // their "nothing new" placeholder from undefined data.
+      for (const b of digests) {
+        const slice = changes.slice(0, (b.props as { max?: number }).max ?? 5);
+        if (slice.length) data[b.id] = { changes: slice };
+      }
     }
   }
   return data;

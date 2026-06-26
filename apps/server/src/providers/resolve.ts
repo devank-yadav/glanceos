@@ -71,9 +71,10 @@ function reduce(v: unknown, transform: SourceMapT["transform"], arg?: string): u
 const NEEDS_ARRAY = new Set(["series", "sum", "count", "join"]);
 
 export function applyMap(raw: unknown, map: SourceMapT): unknown {
-  // No shaping requested → pass the provider payload straight to an
-  // already-typed live renderer (e.g. {events} for a calendar, the RSS shape).
-  if (map.transform === "none" && !map.items && !map.path) return raw;
+  // No shaping requested → pass the provider payload straight to an already-typed live
+  // renderer (e.g. {events} for a calendar, the RSS shape). A `fields` map IS shaping
+  // (a pair chart projecting a root array → [{label,value}]), so don't short-circuit it.
+  if (map.transform === "none" && !map.items && !map.path && !map.fields) return raw;
   // Working set: an explicit array path, else an explicit scalar path, else the
   // root payload itself (so a top-level JSON array works with no path).
   let val: unknown = map.items ? resolvePath(raw, map.items) : map.path ? resolvePath(raw, map.path) : raw;
