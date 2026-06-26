@@ -10,31 +10,35 @@ import { Icon } from "../editor/icons";
 // demo is the ACTUAL <30 KB screen runtime — no signup, the homepage IS the product.
 
 const FEATURES = [
-  { icon: Icon.target, title: "Claim in seconds", body: "A screen shows a short code. Type it once — the display is yours, forever paired." },
-  { icon: Icon.pencil, title: "Edit like a document", body: "The Studio works like Notion: type anywhere, drag blocks by their handle, drop beside for columns." },
-  { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Clocks, weather, lists, stats, gauges, countdowns, moon phase, menus — all in quiet black and white." },
-  { icon: Icon.link, title: "Connect 177 apps", body: "Point any block at a live source — GitHub, Reddit, Stripe, Strava, calendars, RSS and 171 more. Many need no login; tokens stay encrypted server-side." },
-  { icon: Icon.convert, title: "Live in under a second", body: "Every edit streams to connected screens over SSE. No refresh, no app, no waiting." },
-  { icon: Icon.layers, title: "Boards outlive screens", body: "Disconnect a screen and its board survives. Run one board on five screens — they stay in step." },
-  { icon: Icon.home, title: "Yours, entirely", body: "One container, one SQLite file, MIT licensed. No account with anyone, no subscription, no telemetry." },
+  { icon: Icon.convert, title: "A wall that knows what's going on", body: "Point a board at your live tools — deploys, pull requests, incidents, on-call, sprint, KPIs. It updates the second things change, not on a slideshow timer." },
+  { icon: Icon.target, title: "Live in two minutes", body: "Open any browser, TV or Raspberry Pi, enter the code on screen, pick a team template. Done — no app to install, no per-device setup." },
+  { icon: Icon.settings, title: "Built for teams", body: "Invite your team by email, with roles. Everyone shares the same boards and screens; admins manage people, viewers just watch." },
+  { icon: Icon.link, title: "Connect 177 apps", body: "GitHub, Sentry, Stripe, Linear, calendars, RSS and 170+ more. Many need no login; tokens are encrypted on our server, never on the screen." },
+  { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Stats, charts, lists, gauges, countdowns, clocks, menus — quiet black-and-white that reads from across the room." },
+  { icon: Icon.layers, title: "Boards outlive screens", body: "Run one board on every screen in the office and they stay in step. Swap a screen and its board carries over." },
 ];
 
 const STEPS = [
-  { n: "1", title: "Open a screen", body: "Point any browser — TV, monitor, tablet — at your server. It registers itself and shows a claim code." },
-  { n: "2", title: "Claim and compose", body: "Enter the code, then arrange blocks in the Studio. The preview is the exact renderer your screen runs." },
-  { n: "3", title: "Glance", body: "Look, understand, move on. Boards update live; screens survive Wi-Fi blips without going blank." },
+  { n: "1", title: "Open a screen", body: "Point any browser — TV, monitor, tablet, Pi — at GlanceOS. It shows a short pairing code." },
+  { n: "2", title: "Pick a team board", body: "Enter the code, then start from a team template or compose your own. The preview is the exact renderer your screen runs." },
+  { n: "3", title: "The room just knows", body: "Boards update live as your tools change. Invite the team and put a board on every wall." },
 ];
 
-// Honest positioning vs the usual rent-a-screen-in-our-cloud dashboard services
-// — framed generically (no specific competitor claims to get wrong/be unfair about).
+// Positioning vs legacy digital-signage (ScreenCloud/Yodeck-style) — framed generically.
 const COMPARE = [
-  { dim: "Price", us: "Free, forever — no subscription", them: "Usually a monthly or annual plan" },
-  { dim: "Where it runs", us: "Your own server — one small container", them: "The vendor's cloud" },
-  { dim: "Your data", us: "Stays on your machine; zero telemetry", them: "Held in the vendor's cloud" },
-  { dim: "Source", us: "Open source (MIT) — audit it, fork it", them: "Typically closed source" },
-  { dim: "Screens", us: "Any browser — TV, tablet or e-ink panel", them: "Often one specific device or app" },
+  { dim: "What it shows", us: "Live team data — deploys, on-call, sprint, KPIs", them: "Static slideshows of images & PDFs" },
+  { dim: "Setup", us: "Any screen, paired in minutes — no per-device app", them: "Install a player app on each device" },
   { dim: "Make it yours", us: `${BLOCKS.length} blocks + a Notion-style editor`, them: "Fixed templates, limited layout" },
-  { dim: "Live data", us: "177 sources, ~108 with no login at all", them: "Varies; often a paid add-on" },
+  { dim: "Updates", us: "The instant your data changes (live SSE)", them: "On a fixed slide rotation" },
+  { dim: "Screens", us: "Browser, TV, tablet, Raspberry Pi or e-ink", them: "Often one specific device" },
+  { dim: "Price", us: "1 screen free, then simple per-screen", them: "Per-screen subscription from day one" },
+];
+
+// Pricing slot — marketing only (no checkout yet). Numbers per the per-screen model.
+const PRICING = [
+  { name: "Free", price: "$0", unit: "1 screen", body: "For trying it out and personal walls.", cta: "Start free", features: ["1 connected screen", `All ${BLOCKS.length} blocks`, "Live integrations"] },
+  { name: "Team", price: "$3", unit: "per extra screen / mo", body: "For offices — capped at $20/mo for up to 10 screens.", cta: "Start free", features: ["Unlimited boards", "Invite your team + roles", "Fleet management", "Live team-data blocks"], featured: true },
+  { name: "Enterprise", price: "Let's talk", unit: "", body: "SSO, audit, proof-of-play, support.", cta: "Contact us", features: ["Everything in Team", "SSO / SCIM", "Audit log + proof-of-play", "Priority support"] },
 ];
 
 function BridgeMotif() {
@@ -114,8 +118,8 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         <span class="brand">glanceos</span>
         <nav class="landing-links">
           <a href="#features">Features</a>
-          <a href="#blocks">Blocks</a>
           <a href="#how">How it works</a>
+          <a href="#pricing">Pricing</a>
         </nav>
         <span class="spacer" />
         <a class="btn ghost-link" href={screenModeHref()}>
@@ -131,15 +135,15 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
 
       <section class="hero">
         <BridgeMotif />
-        <p class="hero-pill glass">Open source · Self-hosted · MIT</p>
+        <p class="hero-pill glass">For teams · Live data · Any screen</p>
         <h1 class="hero-title">
-          Any screen.
+          The office wall that
           <br />
-          One calm glance.
+          knows what's going on.
         </h1>
         <p class="hero-lede">
-          GlanceOS turns spare monitors, TVs and tablets into quiet dashboards you compose like a
-          document — and update live from anywhere in the house.
+          GlanceOS turns any screen into a live team wall — deploys, on-call, sprint, KPIs, room status —
+          composed like a document and updated the second things change. Set up in minutes.
         </p>
         <div class="hero-ctas">
           <a class="btn solid lg" href={cta}>
@@ -148,20 +152,16 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           <a class="btn glass-btn lg" href={screenModeHref()}>
             Open screen mode →
           </a>
-          <a class="btn glass-btn lg" href="https://github.com/devank-yadav/glanceos" target="_blank" rel="noopener">
-            View on GitHub ↗
-          </a>
         </div>
         <a class="hero-howlink" href="#how">or see how it works ↓</a>
         <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
         <DemoBoard />
         <p class="hero-caption">This is the live runtime — the exact pixels your screens render. No signup to look.</p>
         <ul class="trust-strip" aria-label="What you get">
-          <li>No subscription</li>
-          <li>No telemetry</li>
-          <li>Own your data</li>
-          <li>One container · SQLite</li>
-          <li>MIT licensed</li>
+          <li>Set up in minutes</li>
+          <li>Works on any screen</li>
+          <li>Live team data</li>
+          <li>1 screen free</li>
         </ul>
       </section>
 
@@ -208,14 +208,14 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
 
       <section id="compare" class="section">
         <h2 class="section-title">How it's different</h2>
-        <p class="section-lede">Most dashboard services rent you a screen in their cloud. GlanceOS is the opposite — free, open, and entirely yours.</p>
+        <p class="section-lede">Legacy signage loops slideshows of images and PDFs. GlanceOS shows what's actually happening — live.</p>
         <div class="compare-wrap">
           <table class="compare-table">
             <thead>
               <tr>
                 <th scope="col"><span class="sr-only">Dimension</span></th>
                 <th scope="col" class="cmp-head-us">GlanceOS</th>
-                <th scope="col" class="cmp-head-them">Typical hosted dashboard</th>
+                <th scope="col" class="cmp-head-them">Legacy signage</th>
               </tr>
             </thead>
             <tbody>
@@ -231,20 +231,39 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         </div>
       </section>
 
+      <section id="pricing" class="section">
+        <h2 class="section-title">Simple, per-screen pricing</h2>
+        <p class="section-lede">Start free with one screen. Add screens as your walls grow — you only pay for what's on the wall.</p>
+        <div class="pricing-grid">
+          {PRICING.map((p) => (
+            <div key={p.name} class={`price-card glass${p.featured ? " price-featured" : ""}`}>
+              {p.featured && <span class="price-badge">Most popular</span>}
+              <h3 class="price-name">{p.name}</h3>
+              <p class="price-amount"><span class="price-num">{p.price}</span>{p.unit && <span class="price-unit"> {p.unit}</span>}</p>
+              <p class="price-body muted">{p.body}</p>
+              <ul class="price-features">
+                {p.features.map((f) => <li key={f}><Icon.check /> {f}</li>)}
+              </ul>
+              <a class={`btn lg ${p.featured ? "solid" : "glass-btn"}`} href={p.name === "Enterprise" ? "mailto:hello@glanceos.app" : cta}>{p.cta}</a>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section class="section">
         <div class="cta-final glass-strong">
-          <h2>Put your first screen to work.</h2>
-          <p class="muted">Self-hosted in one container. Your data never leaves your server.</p>
+          <h2>Put your team on the wall.</h2>
+          <p class="muted">Set up your first screen in minutes. One screen is free, forever.</p>
           <a class="btn solid lg" href={cta}>
             {ctaLabel} →
           </a>
-          {!registrationOpen && <p class="muted cta-closed-note">Sign-ups are closed on this server — ask whoever runs it for an account.</p>}
+          {!registrationOpen && <p class="muted cta-closed-note">Sign-ups are closed on this server — ask your admin for an account.</p>}
         </div>
       </section>
 
       <footer class="landing-foot">
         <span class="brand">glanceos</span>
-        <span class="muted">MIT licensed · self-hosted · made for quiet rooms · <a href="https://github.com/devank-yadav/glanceos" target="_blank" rel="noopener">GitHub</a></span>
+        <span class="muted">The office wall that knows what's going on · made for teams</span>
       </footer>
     </div>
   );

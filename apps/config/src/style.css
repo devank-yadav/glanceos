@@ -3822,3 +3822,18 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .stat-num { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .stat-cap { font-size: 12px; line-height: 1.4; }
 @media (max-width: 640px) { .funnel-row { grid-template-columns: 130px 1fr 70px; gap: 8px; } }
+
+/* Landing pricing cards */
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; max-width: 980px; margin: 0 auto; }
+.price-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 26px 22px; border-radius: 16px; }
+.price-featured { outline: 2px solid var(--indigo); }
+.price-badge { position: absolute; top: -11px; left: 22px; background: var(--indigo); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .02em; }
+.price-name { margin: 0; font-size: 16px; font-weight: 700; }
+.price-amount { margin: 0; display: flex; align-items: baseline; gap: 4px; }
+.price-num { font-size: 34px; font-weight: 800; line-height: 1; }
+.price-unit { font-size: 13px; color: var(--muted); }
+.price-body { margin: 0; font-size: 13px; min-height: 34px; }
+.price-features { list-style: none; margin: 6px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.price-features li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.price-features svg { width: 15px; height: 15px; flex: none; color: var(--indigo); }
+.price-card .btn { width: 100%; justify-content: center; text-align: center; }
