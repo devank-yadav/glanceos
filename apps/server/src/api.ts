@@ -46,6 +46,12 @@ import {
   createShare, getReadableLayout, getWritableLayout, listSharesByOwner, revokeShare, sharedLayouts, updateShareAccess,
 } from "./shares";
 import { isScope, listKeys, mintKey, resolveKey, revokeKey, SCOPES, type Scope } from "./apikeys";
+import {
+  acceptInvite, changeRole, createInvite, createOrg, deleteOrg, ensurePersonalOrg, getInvite,
+  listInvites, listMembers, listOrgsForUser, memberRole, removeMember, renameOrg, resolveOrgForRequest, revokeInvite,
+  ROLE_RANK, type Role, getOrg, isRole, setSessionActiveOrg,
+} from "./orgs";
+import { publicUrl } from "./email";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
@@ -114,7 +120,7 @@ const DEVICE_PLANE = new Set([
   "/api/devices/me/play-log",
 ]);
 
-type Env = { Variables: { userId: string; principal: "session" | "apikey"; scopes: string[] } };
+type Env = { Variables: { userId: string; orgId: string; role: Role; principal: "session" | "apikey"; scopes: string[] } };
 
 // Secrets stay server-side; this is what the config app sees.
 function deviceSummary(d: DeviceRow) {
@@ -274,6 +280,8 @@ export function buildApp(): Hono<Env> {
       if (!rule) return c.json({ error: "this endpoint isn't available to API keys" }, 403);
       if (!resolved.scopes.includes(rule.scope)) return c.json({ error: `API key is missing the "${rule.scope}" scope` }, 403);
       c.set("userId", resolved.userId);
+      c.set("orgId", resolved.orgId ?? ensurePersonalOrg(resolved.userId)); // key's data scope (self-heal if unset)
+      c.set("role", "editor"); // API keys can act on content, never manage members
       c.set("scopes", resolved.scopes);
       c.set("principal", "apikey");
       return next();
@@ -285,7 +293,10 @@ export function buildApp(): Hono<Env> {
     if (MUTATING.has(c.req.method) && !hmacVerify(`csrf:${sessionToken}`, c.req.header("x-csrf-token") ?? "")) {
       return c.json({ error: "bad or missing CSRF token" }, 403);
     }
+    const { orgId, role } = resolveOrgForRequest(userId, sessionToken); // active workspace + role (self-healing)
     c.set("userId", userId);
+    c.set("orgId", orgId);
+    c.set("role", role);
     c.set("principal", "session");
     return next();
   });
@@ -328,9 +339,20 @@ export function buildApp(): Hono<Env> {
   // ---- auth ----
 
   app.get("/api/auth/status", (c) => {
-    const userId = sessionUserId(getCookie(c, SESSION_COOKIE));
+    const token = getCookie(c, SESSION_COOKIE);
+    const userId = sessionUserId(token);
     const user = userId ? getUser(userId) : null;
-    return c.json({ authed: !!user, user, registrationOpen: registrationOpen(), castAppId: CAST_APP_ID || null });
+    let activeOrg: { id: string; name: string; slug: string; personal: boolean; plan: string } | null = null;
+    let role: Role | null = null;
+    let orgs: ReturnType<typeof listOrgsForUser> = [];
+    if (userId) {
+      const r = resolveOrgForRequest(userId, token);
+      role = r.role;
+      orgs = listOrgsForUser(userId);
+      const o = getOrg(r.orgId);
+      if (o) activeOrg = { id: o.id, name: o.name, slug: o.slug, personal: o.personal === 1, plan: o.plan };
+    }
+    return c.json({ authed: !!user, user, activeOrg, role, orgs, registrationOpen: registrationOpen(), castAppId: CAST_APP_ID || null });
   });
 
   app.post("/api/auth/register", async (c) => {
@@ -1214,6 +1236,103 @@ ${og}
   app.delete("/api/automations/:id", (c) =>
     deleteAutomation(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
+  // ---- organizations (teams) ----
+  // Authorize an org-management action against the org named in the PATH (not the active
+  // org): returns the actor's role in that org if it meets `min`, else null (→ caller 403).
+  const orgRole = (c: Context<Env>, orgId: string, min: Role): Role | null => {
+    const role = memberRole(orgId, c.get("userId"));
+    return role && ROLE_RANK[role] >= ROLE_RANK[min] ? role : null;
+  };
+
+  app.get("/api/orgs", (c) => c.json(listOrgsForUser(c.get("userId"))));
+
+  app.post("/api/orgs", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    const name = (body.name ?? "").toString().trim();
+    if (!name) return c.json({ error: "name required" }, 400);
+    const org = createOrg(name, c.get("userId"));
+    setSessionActiveOrg(getCookie(c, SESSION_COOKIE), org.id); // switch into the new team
+    return c.json({ id: org.id, name: org.name, slug: org.slug, personal: false, role: "owner", plan: org.plan }, 201);
+  });
+
+  app.post("/api/orgs/switch", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { orgId?: string };
+    const orgId = (body.orgId ?? "").toString();
+    if (!memberRole(orgId, c.get("userId"))) return c.json({ error: "no access to that workspace" }, 403);
+    setSessionActiveOrg(getCookie(c, SESSION_COOKIE), orgId);
+    return c.json({ ok: true, orgId });
+  });
+
+  app.patch("/api/orgs/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!orgRole(c, id, "admin")) return c.json({ error: "forbidden" }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    return renameOrg(id, (body.name ?? "").toString()) ? c.json({ ok: true }) : c.json({ error: "can't rename" }, 400);
+  });
+
+  app.delete("/api/orgs/:id", (c) => {
+    const id = c.req.param("id");
+    if (!orgRole(c, id, "owner")) return c.json({ error: "forbidden" }, 403);
+    return deleteOrg(id) ? c.json({ ok: true }) : c.json({ error: "can't delete (personal org?)" }, 400);
+  });
+
+  app.get("/api/orgs/:id/members", (c) => {
+    const id = c.req.param("id");
+    if (!memberRole(id, c.get("userId"))) return c.json({ error: "forbidden" }, 403);
+    return c.json({ members: listMembers(id), invites: orgRole(c, id, "admin") ? listInvites(id) : [] });
+  });
+
+  app.post("/api/orgs/:id/invites", async (c) => {
+    const id = c.req.param("id");
+    if (!orgRole(c, id, "admin")) return c.json({ error: "forbidden" }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { email?: string; role?: string };
+    const email = (body.email ?? "").toString().trim();
+    const role = (body.role ?? "editor").toString();
+    if (!email || !email.includes("@")) return c.json({ error: "a valid email is required" }, 400);
+    if (!isRole(role)) return c.json({ error: "bad role" }, 400);
+    const r = createInvite(id, email, role, c.get("userId"));
+    if (!r.ok) return c.json({ error: r.error }, 409);
+    // Phase 3 emails the link; for now return it so the inviter can share it manually.
+    return c.json({ ok: true, token: r.token, link: publicUrl(`/#/invite/${r.token}`) }, 201);
+  });
+
+  app.delete("/api/orgs/:id/invites/:token", (c) => {
+    const id = c.req.param("id");
+    if (!orgRole(c, id, "admin")) return c.json({ error: "forbidden" }, 403);
+    return revokeInvite(id, c.req.param("token")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+  });
+
+  app.patch("/api/orgs/:id/members/:userId", async (c) => {
+    const id = c.req.param("id");
+    if (!orgRole(c, id, "admin")) return c.json({ error: "forbidden" }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { role?: string };
+    const role = (body.role ?? "").toString();
+    if (!isRole(role)) return c.json({ error: "bad role" }, 400);
+    const r = changeRole(id, c.req.param("userId"), role);
+    return r === "ok" ? c.json({ ok: true }) : c.json({ error: r }, r === "last_owner" ? 409 : 404);
+  });
+
+  app.delete("/api/orgs/:id/members/:userId", (c) => {
+    const id = c.req.param("id");
+    const target = c.req.param("userId");
+    // A member can always remove THEMSELVES (leave); removing others needs admin.
+    if (target !== c.get("userId") && !orgRole(c, id, "admin")) return c.json({ error: "forbidden" }, 403);
+    const r = removeMember(id, target);
+    return r === "ok" ? c.json({ ok: true }) : c.json({ error: r }, r === "last_owner" ? 409 : 404);
+  });
+
+  // Invite acceptance (the actor is whoever is logged in; the token is the bearer secret).
+  app.get("/api/invites/:token", (c) => {
+    const preview = getInvite(c.req.param("token"));
+    return preview ? c.json(preview) : c.json({ error: "invite is invalid or expired" }, 404);
+  });
+  app.post("/api/invites/:token/accept", (c) => {
+    const r = acceptInvite(c.req.param("token"), c.get("userId"));
+    if (!r.ok) return c.json({ error: "invite is invalid or expired" }, 404);
+    setSessionActiveOrg(getCookie(c, SESSION_COOKIE), r.orgId); // drop the new member into the team
+    return c.json({ ok: true, orgId: r.orgId });
+  });
+
   // ---- account management ----
   app.patch("/api/account", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null };
@@ -1272,7 +1391,7 @@ ${og}
     const scopes = Array.isArray(body.scopes) ? body.scopes.filter((s): s is string => typeof s === "string").filter(isScope) : [];
     if (!name.trim()) return c.json({ error: "name is required" }, 400);
     if (scopes.length === 0) return c.json({ error: "pick at least one scope", validScopes: SCOPES }, 400);
-    const { token, key } = mintKey(c.get("userId"), name, scopes as Scope[]);
+    const { token, key } = mintKey(c.get("userId"), c.get("orgId"), name, scopes as Scope[]);
     return c.json({ token, key }, 201); // token is shown ONCE — never recoverable
   });
   app.delete("/api/account/api-keys/:id", (c) =>

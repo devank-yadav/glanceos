@@ -10,6 +10,7 @@ const { migrate } = await import("./db");
 const { buildApp } = await import("./api");
 const { createUser } = await import("./auth");
 const { mintKey } = await import("./apikeys");
+const { ensurePersonalOrg } = await import("./orgs");
 const {
   setCustomData, getCustomData, listCustomData, deleteCustomData, customDataWidget, MAX_VALUE_BYTES, MAX_KEYS_PER_USER,
 } = await import("./customdata");
@@ -17,6 +18,7 @@ const {
 migrate();
 const app = buildApp();
 const user = createUser("Dataowner", "data@example.com", "password123")!;
+const org = ensurePersonalOrg(user.id);
 
 describe("customdata module", () => {
   it("round-trips JSON values and lists them newest-first", () => {
@@ -70,26 +72,26 @@ describe("/api/data routes", () => {
   });
 
   it("a data:write key POSTs a value with NO CSRF, and it renders via the block", async () => {
-    const { token } = mintKey(user.id, "writer", ["data:write"]);
+    const { token } = mintKey(user.id, org, "writer", ["data:write"]);
     const res = await app.request("/api/data/sensor", { method: "POST", ...bearer(token, { value: 42 }) });
     expect(res.status).toBe(201);
     expect(customDataWidget({ key: "sensor" }, user.id)).toEqual({ value: 42 });
   });
 
   it("POST requires a value field", async () => {
-    const { token } = mintKey(user.id, "writer2", ["data:write"]);
+    const { token } = mintKey(user.id, org, "writer2", ["data:write"]);
     const res = await app.request("/api/data/x", { method: "POST", ...bearer(token, { notvalue: 1 }) });
     expect(res.status).toBe(400);
   });
 
   it("GET /api/data is NOT reachable with a key (deny-by-default), only POST is", async () => {
-    const { token } = mintKey(user.id, "writer3", ["data:write"]);
+    const { token } = mintKey(user.id, org, "writer3", ["data:write"]);
     const res = await app.request("/api/data", { ...bearer(token) });
     expect(res.status).toBe(403);
   });
 
   it("a key without data:write is refused", async () => {
-    const { token } = mintKey(user.id, "noscope", ["tasks:read"]);
+    const { token } = mintKey(user.id, org, "noscope", ["tasks:read"]);
     const res = await app.request("/api/data/y", { method: "POST", ...bearer(token, { value: 1 }) });
     expect(res.status).toBe(403);
   });

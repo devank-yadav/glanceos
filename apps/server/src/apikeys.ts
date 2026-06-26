@@ -11,7 +11,7 @@ export const isScope = (s: string): s is Scope => (SCOPES as readonly string[]).
 
 const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-interface KeyRow { id: string; user_id: string; name: string; token_hash: string; prefix: string; scopes: string; created_at: number; last_used: number | null }
+interface KeyRow { id: string; user_id: string; org_id: string | null; name: string; token_hash: string; prefix: string; scopes: string; created_at: number; last_used: number | null }
 
 export interface KeySummary { id: string; name: string; prefix: string; scopes: Scope[]; createdAt: number; lastUsed: number | null }
 
@@ -19,13 +19,14 @@ const toSummary = (r: KeyRow): KeySummary => ({
   id: r.id, name: r.name, prefix: r.prefix, scopes: JSON.parse(r.scopes) as Scope[], createdAt: r.created_at, lastUsed: r.last_used,
 });
 
-/** Mint a key. Returns the plaintext token ONCE (never recoverable) + a summary. */
-export function mintKey(userId: string, name: string, scopes: Scope[]): { token: string; key: KeySummary } {
+/** Mint a key bound to (userId as creator, orgId for data scope). Returns the plaintext
+ *  token ONCE (never recoverable) + a summary. */
+export function mintKey(userId: string, orgId: string, name: string, scopes: Scope[]): { token: string; key: KeySummary } {
   const token = `gos_${randomBytes(32).toString("base64url")}`;
   const id = randomUUID();
   const prefix = token.slice(0, 12);
-  db.prepare("INSERT INTO api_keys (id, user_id, name, token_hash, prefix, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(id, userId, name.trim().slice(0, 80) || "API key", sha256(token), prefix, JSON.stringify([...new Set(scopes)]), Date.now());
+  db.prepare("INSERT INTO api_keys (id, user_id, org_id, name, token_hash, prefix, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, userId, orgId, name.trim().slice(0, 80) || "API key", sha256(token), prefix, JSON.stringify([...new Set(scopes)]), Date.now());
   return { token, key: toSummary(db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as KeyRow) };
 }
 
@@ -40,8 +41,8 @@ export function revokeKey(id: string, userId: string): boolean {
 // last_used is bumped at most once a minute to avoid a write per request.
 const lastBump = new Map<string, number>();
 
-/** Authenticate a Bearer token → its owner + scopes, or null. */
-export function resolveKey(token: string, now = Date.now()): { userId: string; scopes: Scope[] } | null {
+/** Authenticate a Bearer token → its owner + org + scopes, or null. */
+export function resolveKey(token: string, now = Date.now()): { userId: string; orgId: string | null; scopes: Scope[] } | null {
   if (!token.startsWith("gos_")) return null;
   const row = db.prepare("SELECT * FROM api_keys WHERE token_hash = ?").get(sha256(token)) as KeyRow | undefined;
   if (!row) return null;
@@ -49,5 +50,5 @@ export function resolveKey(token: string, now = Date.now()): { userId: string; s
     lastBump.set(row.id, now);
     db.prepare("UPDATE api_keys SET last_used = ? WHERE id = ?").run(now, row.id);
   }
-  return { userId: row.user_id, scopes: JSON.parse(row.scopes) as Scope[] };
+  return { userId: row.user_id, orgId: row.org_id, scopes: JSON.parse(row.scopes) as Scope[] };
 }
