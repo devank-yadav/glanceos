@@ -17,6 +17,7 @@ import { InletsPage } from "./pages/inlets";
 import { IntegrationsPage } from "./pages/integrations";
 import { Landing } from "./pages/landing";
 import { AcceptInvite, MembersPage } from "./pages/members";
+import { MetricsPage } from "./pages/metrics";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
@@ -88,8 +89,8 @@ export function App() {
     let booted = false;
     try { booted = sessionStorage.getItem(BOOTSTRAP_KEY) === "1"; } catch { /* ignore */ }
     if (booted) return;
-    let dismissed = false;
-    try { dismissed = localStorage.getItem(DISMISS_KEY) === "1"; } catch { /* ignore */ }
+    let dismissed = status?.user?.onboardedAt != null; // server is the source of truth across devices
+    try { dismissed = dismissed || localStorage.getItem(DISMISS_KEY) === "1"; } catch { /* ignore */ }
     Promise.all([api.get<unknown[]>("/api/layouts"), api.get<unknown[]>("/api/devices")])
       .then(([l, d]) => {
         try { sessionStorage.setItem(BOOTSTRAP_KEY, "1"); } catch { /* ignore */ }
@@ -196,7 +197,7 @@ export function App() {
   if (page.name === "edit") return <StudioRoute layoutId={page.layoutId} />;
 
   // First-run wizard takes over until a board/screen exists or it's dismissed.
-  if (onboard) return <Onboarding onDone={() => setOnboard(false)} />;
+  if (onboard) return <Onboarding onDone={() => { setOnboard(false); api.post("/api/account/onboarded").catch(() => {}); }} />;
 
   return (
     <ShellCtx.Provider value={{ openDrawer: () => setDrawer(true) }}>
@@ -207,6 +208,7 @@ export function App() {
           collapsed={collapsed}
           onToggle={toggleCollapse}
           userName={status.user!.name}
+          isAdmin={status.user!.isAdmin}
           orgs={status.orgs}
           activeOrgId={status.activeOrg?.id ?? null}
           onLogout={logout}
@@ -239,6 +241,7 @@ export function App() {
           {page.name === "automations" && <AutomationsPage />}
           {page.name === "shared" && <SharedPage />}
           {page.name === "members" && <MembersPage />}
+          {page.name === "metrics" && <MetricsPage />}
           {page.name === "account" && <AccountPage />}
         </main>
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />

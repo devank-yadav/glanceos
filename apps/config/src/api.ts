@@ -9,6 +9,8 @@ export interface UserInfo {
   homeLatitude: number | null;
   homeLongitude: number | null;
   isAdmin: boolean;
+  onboardedAt: number | null;
+  activatedAt: number | null;
 }
 
 export type OrgRole = "owner" | "admin" | "editor" | "viewer";

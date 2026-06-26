@@ -3809,3 +3809,16 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .invite-card { max-width: 440px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 14px; padding: 32px; }
 .invite-title { margin: 0; font-size: 22px; }
 .invite-actions { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+
+/* Founder metrics: activation funnel + active users + retention */
+.funnel { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
+.funnel-row { display: grid; grid-template-columns: 200px 1fr 110px; align-items: center; gap: 12px; }
+.funnel-label { font-size: 13px; color: var(--fg); }
+.funnel-bar { height: 22px; background: var(--soft); border-radius: var(--r-sm); overflow: hidden; }
+.funnel-fill { height: 100%; background: var(--indigo); border-radius: var(--r-sm); min-width: 2px; transition: width .3s var(--ease); }
+.funnel-count { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 14px; }
+.stat-card { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.stat-num { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat-cap { font-size: 12px; line-height: 1.4; }
+@media (max-width: 640px) { .funnel-row { grid-template-columns: 130px 1fr 70px; gap: 8px; } }

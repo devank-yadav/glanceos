@@ -24,6 +24,7 @@ export function Sidebar({
   collapsed,
   onToggle,
   userName,
+  isAdmin,
   orgs,
   activeOrgId,
   onLogout,
@@ -36,6 +37,7 @@ export function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
   userName: string;
+  isAdmin: boolean;
   orgs: OrgSummary[];
   activeOrgId: string | null;
   onLogout: () => void;
@@ -84,6 +86,7 @@ export function Sidebar({
             trigger={<><span class="avatar" aria-hidden="true">{(userName || "?").slice(0, 1).toUpperCase()}</span><span class="sidebar-label">{userName}</span></>}
             items={[
               { label: "Settings", icon: <Icon.settings />, onClick: () => { location.hash = "#/account"; onNavigate?.(); } },
+              ...(isAdmin ? [{ label: "Founder metrics", icon: <Icon.grid />, onClick: () => { location.hash = "#/metrics"; onNavigate?.(); } }] : []),
               { label: themeLabel(theme), icon: theme === "dark" ? <Icon.moon /> : <Icon.sun />, onClick: onCycleTheme },
               { label: "Log out", icon: <Icon.x />, danger: true, onClick: onLogout },
             ]}

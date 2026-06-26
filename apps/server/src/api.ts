@@ -12,8 +12,9 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser,
-  isUserAdmin, registrationOpen, sessionUserId, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, markActivated, markOnboarded, registrationOpen, sessionUserId, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
+import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { dumpUser, importUser } from "./backup";
 import { injectAbsoluteOg } from "./ogmeta";
 import {
@@ -361,7 +362,9 @@ export function buildApp(): Hono<Env> {
     if (!body.success) return c.json({ error: "validation", issues: body.error.issues }, 400);
     const user = createUser(body.data.name, body.data.email, body.data.password);
     if (!user) return c.json({ error: "that email is already registered" }, 409);
+    const personalOrg = ensurePersonalOrg(user.id); // give the new account its workspace up front
     issueSession(c, user.id);
+    track("signup", { userId: user.id, orgId: personalOrg });
     return c.json({ ok: true, user }, 201);
   });
 
@@ -504,6 +507,7 @@ export function buildApp(): Hono<Env> {
     const device = claimDevice(body.data.code, body.data.name, c.get("userId"), c.get("orgId"));
     if (!device) return c.json({ error: "unknown or already-claimed code" }, 404);
     notifyClaimed(c.get("userId"), device.id, device.name);
+    track("screen_claimed", { userId: c.get("userId"), orgId: c.get("orgId") });
     await pushDevice(device.id); // the physical screen flips to "pick a setup"
     return c.json(deviceSummary(device));
   });
@@ -548,6 +552,8 @@ export function buildApp(): Hono<Env> {
     // Notify only on a genuine content change (assignment differs from before).
     if (body.layoutId !== undefined && body.layoutId !== null && body.layoutId !== prior?.layout_id) {
       notifyContentChanged(userId, id, device.name, getOwnedLayout(body.layoutId, orgId)?.name ?? "a board");
+      track("board_assigned_to_screen", { userId, orgId });
+      if (markActivated(userId)) track("activated", { userId, orgId }); // first board → a real screen = the aha moment
     }
     await pushDevice(device.id);
     return c.json(deviceSummary(device));
@@ -711,7 +717,11 @@ export function buildApp(): Hono<Env> {
     } else {
       document = blankDocument(name);
     }
-    return c.json(createLayout(name, document, { userId: c.get("userId"), orgId: c.get("orgId") }), 201);
+    const orgId = c.get("orgId");
+    const firstBoard = listSetups(orgId).length === 0;
+    const created = createLayout(name, document, { userId: c.get("userId"), orgId });
+    track(firstBoard ? "first_board_created" : "board_created", { userId: c.get("userId"), orgId });
+    return c.json(created, 201);
   });
 
   app.post("/api/layouts/preview-state", async (c) => {
@@ -1253,6 +1263,7 @@ ${og}
     if (!name) return c.json({ error: "name required" }, 400);
     const org = createOrg(name, c.get("userId"));
     setSessionActiveOrg(getCookie(c, SESSION_COOKIE), org.id); // switch into the new team
+    track("org_created", { userId: c.get("userId"), orgId: org.id });
     return c.json({ id: org.id, name: org.name, slug: org.slug, personal: false, role: "owner", plan: org.plan }, 201);
   });
 
@@ -1293,6 +1304,7 @@ ${og}
     if (!isRole(role)) return c.json({ error: "bad role" }, 400);
     const r = createInvite(id, email, role, c.get("userId"));
     if (!r.ok) return c.json({ error: r.error }, 409);
+    track("member_invited", { userId: c.get("userId"), orgId: id, props: { role } });
     // Phase 3 emails the link; for now return it so the inviter can share it manually.
     return c.json({ ok: true, token: r.token, link: publicUrl(`/#/invite/${r.token}`) }, 201);
   });
@@ -1331,7 +1343,22 @@ ${og}
     const r = acceptInvite(c.req.param("token"), c.get("userId"));
     if (!r.ok) return c.json({ error: "invite is invalid or expired" }, 404);
     setSessionActiveOrg(getCookie(c, SESSION_COOKIE), r.orgId); // drop the new member into the team
+    track("invite_accepted", { userId: c.get("userId"), orgId: r.orgId });
     return c.json({ ok: true, orgId: r.orgId });
+  });
+
+  // ---- onboarding + founder metrics ----
+  app.post("/api/account/onboarded", (c) => { markOnboarded(c.get("userId")); return c.json({ ok: true }); });
+
+  // Activation funnel + active users + cohort retention, for the instance owner only.
+  app.get("/api/admin/metrics", (c) => {
+    if (!isUserAdmin(c.get("userId"))) return c.json({ error: "forbidden" }, 403);
+    const DAY = 86_400_000;
+    const since = Number(c.req.query("sinceDays")) > 0 ? Date.now() - Number(c.req.query("sinceDays")) * DAY : 0;
+    const funnel = funnelCounts(["signup", "first_board_created", "screen_claimed", "activated"], since);
+    // D1/D7 retention for the cohort that signed up ~8 days ago (a fully-observable window).
+    const cohortDay = Math.floor((Date.now() - 8 * DAY) / DAY) * DAY;
+    return c.json({ funnel, active: dauWau(), retention: retentionD1D7(cohortDay) });
   });
 
   // ---- account management ----

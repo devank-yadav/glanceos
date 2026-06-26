@@ -18,6 +18,8 @@ export interface PublicUser {
   homeLatitude: number | null;
   homeLongitude: number | null;
   isAdmin: boolean;
+  onboardedAt: number | null;
+  activatedAt: number | null;
 }
 
 interface UserRow {
@@ -31,6 +33,8 @@ interface UserRow {
   home_latitude: number | null;
   home_longitude: number | null;
   is_admin: number;
+  onboarded_at: number | null;
+  activated_at: number | null;
 }
 
 export function hashPassword(password: string): string {
@@ -51,7 +55,20 @@ function toPublic(row: UserRow): PublicUser {
     id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null,
     homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
     isAdmin: (row.is_admin ?? 0) === 1,
+    onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
   };
+}
+
+/** Stamp the first-run wizard as done (idempotent). */
+export function markOnboarded(userId: string): void {
+  db.prepare("UPDATE users SET onboarded_at = COALESCE(onboarded_at, ?) WHERE id = ?").run(Date.now(), userId);
+}
+
+/** Stamp activation the first time it happens; returns true only on that first stamp
+ *  (so the caller emits the "activated" funnel event exactly once). */
+export function markActivated(userId: string): boolean {
+  const changed = db.prepare("UPDATE users SET activated_at = ? WHERE id = ? AND activated_at IS NULL").run(Date.now(), userId).changes;
+  return changed > 0;
 }
 
 /** The account's home coordinates, or null if unset — the geo fallback after a
@@ -93,6 +110,8 @@ export function createUser(name: string, email: string, password: string): Publi
     home_latitude: null,
     home_longitude: null,
     is_admin: firstUser ? 1 : 0,
+    onboarded_at: null,
+    activated_at: null,
   };
   try {
     db.prepare(
