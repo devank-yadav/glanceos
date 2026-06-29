@@ -58,6 +58,7 @@ import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
+import { createMaster, deleteMaster, listMasters, updateMaster } from "./masters";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
@@ -69,7 +70,7 @@ import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
-  pushGroupDevices, pushUserDevices,
+  pushGroupDevices, pushInstancesOfMaster, pushUserDevices,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
@@ -1220,6 +1221,26 @@ ${og}
   });
   app.delete("/api/scenes/:id", (c) =>
     deleteScene(Number(c.req.param("id")), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // ---- #84 reusable/master blocks (org-scoped; instances expand at compose time) ----
+  app.get("/api/masters", (c) => c.json(listMasters(c.get("orgId"))));
+  app.post("/api/masters", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: string; type?: string; props?: unknown; style?: unknown };
+    if (!b.type) return c.json({ error: "type required" }, 400);
+    const m = createMaster(c.get("userId"), c.get("orgId"), { name: b.name ?? "", type: b.type, props: b.props, style: b.style });
+    return m ? c.json(m, 201) : c.json({ error: "name + type required" }, 400);
+  });
+  app.patch("/api/masters/:id", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: string; props?: unknown; style?: unknown };
+    if (!updateMaster(c.req.param("id"), c.get("orgId"), b)) return c.json({ error: "not found" }, 404);
+    await pushInstancesOfMaster(c.get("orgId"), c.req.param("id")); // every instance updates live
+    return c.json({ ok: true });
+  });
+  app.delete("/api/masters/:id", async (c) => {
+    if (!deleteMaster(c.req.param("id"), c.get("orgId"))) return c.json({ error: "not found" }, 404);
+    await pushInstancesOfMaster(c.get("orgId"), c.req.param("id")); // orphaned instances fall back to their own props
+    return c.json({ ok: true });
+  });
 
   // ---- webhook inlets (management is session-only) ----
   app.get("/api/inlets", (c) => c.json(listInlets(c.get("userId"))));
