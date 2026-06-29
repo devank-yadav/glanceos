@@ -156,21 +156,37 @@ export function IntegrationsPage() {
             <h2>Connected</h2>
             {conns.length === 0 ? (
               <EmptyState icon={<Icon.link />} title="No connections yet" body="Pick an app below to connect it." />
-            ) : (
-              <div class="cards">
-                {conns.map((c) => (
-                  <div class="card conn-card" key={c.id}>
-                    <div class="row spread">
-                      <h3 class="card-title">{c.label}</h3>
-                      <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
-                    </div>
-                    <p class="muted">{c.provider} · {CAT_LABEL[c.category] ?? c.category}</p>
-                    {c.lastError && <p class="conn-error-line">{c.lastError}</p>}
-                    <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
+            ) : (() => {
+              // #31 — connection-health summary: one glance at how many are working vs.
+              // need attention; at-risk connections sort to the front so problems surface.
+              const attention = conns.filter((c) => c.status !== "ok");
+              const ok = conns.length - attention.length;
+              const sorted = [...conns].sort((a, b) => (a.status === "ok" ? 1 : 0) - (b.status === "ok" ? 1 : 0));
+              return (
+                <>
+                  <div class={`conn-health ${attention.length ? "warn" : "ok"}`}>
+                    {attention.length ? <Icon.x /> : <Icon.check />}
+                    <span>
+                      {ok} working
+                      {attention.length > 0 && ` · ${attention.length} need${attention.length === 1 ? "s" : ""} attention — reconnect below`}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div class="cards">
+                    {sorted.map((c) => (
+                      <div class={`card conn-card ${c.status !== "ok" ? "conn-attention" : ""}`} key={c.id}>
+                        <div class="row spread">
+                          <h3 class="card-title">{c.label}</h3>
+                          <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
+                        </div>
+                        <p class="muted">{c.provider} · {CAT_LABEL[c.category] ?? c.category}</p>
+                        {c.lastError && <p class="conn-error-line">{c.lastError}</p>}
+                        <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
             <div class="row spread integ-head">
               <h2>Add a connection</h2>

@@ -3853,3 +3853,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .board-folder { margin-bottom: 18px; }
 .folder-heading { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--fg); margin: 10px 0 8px; }
 .folder-heading svg { width: 15px; height: 15px; opacity: 0.7; }
+
+/* #31 — connection-health summary banner + at-risk emphasis. */
+.conn-health { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin: 4px 0 12px; border: 1px solid var(--rule); }
+.conn-health svg { width: 16px; height: 16px; flex: none; }
+.conn-health.ok { color: var(--fg); background: color-mix(in srgb, var(--good, #16a34a) 8%, transparent); }
+.conn-health.warn { color: var(--fg); background: color-mix(in srgb, var(--bad, #dc2626) 10%, transparent); border-color: color-mix(in srgb, var(--bad, #dc2626) 35%, transparent); }
+.conn-card.conn-attention { border-color: color-mix(in srgb, var(--bad, #dc2626) 40%, transparent); }
