@@ -10,7 +10,8 @@ import { airQualityData, forecastData, precipData, uvData, windData } from "./fe
 import { weatherData } from "./fetchers/weather";
 import { customDataWidget } from "./customdata";
 import { queueData } from "./queues";
-import { tasksData } from "./tasks";
+import { listTasks, tasksData } from "./tasks";
+import { composeContextualGreeting, composeDailyBrief, dayContext } from "./daycontext";
 import { computeChanges } from "./whatchanged";
 
 /**
@@ -50,6 +51,11 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
   const now = new Date();
   const blocks = allBlocks(layout);
   const g = <T extends { latitude?: number; longitude?: number }>(p: T): T => geoFor(p, deviceGeo);
+  // #148/#154 — compose the per-user "day context" (calendar + weather) at most ONCE, and
+  // only when the board actually has a block that needs it, so ordinary boards pay nothing.
+  const needsDay = blocks.some((b) => b.type === "dailyBrief" || (b.type === "greeting" && (b.props as { showContext?: boolean }).showContext === true));
+  const dctx = needsDay ? await dayContext(userId, now.getTime()) : null;
+  const briefTasks = dctx ? listTasks(userId, "default").map((t) => ({ text: t.text, done: t.done })) : [];
   await Promise.all(
     blocks.map(async (b) => {
       // A bound block draws from a live source instead of its props. Resolves to
@@ -63,6 +69,13 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
         case "weather": data[b.id] = await weatherData(g(b.props)); break;
         case "calendar": data[b.id] = await calendarData(b.props); break;
         case "tasks": data[b.id] = tasksData(b.props, userId); break;
+        // #148 daily brief + #154 contextual greeting — composed from the shared dayContext.
+        case "dailyBrief":
+          if (dctx) data[b.id] = composeDailyBrief(dctx, briefTasks, { maxEvents: b.props.maxEvents, maxTasks: b.props.maxTasks, showWeather: b.props.showWeather, showDate: b.props.showDate }, now.getTime());
+          break;
+        case "greeting":
+          if (dctx && b.props.showContext) data[b.id] = { contextualGreeting: composeContextualGreeting(dctx.calendar, dctx.weather, dctx.tz, b.props.maxContextLength, now.getTime()) };
+          break;
         case "queue": data[b.id] = queueData(b.props, userId); break;
         case "customData": { const cd = customDataWidget(b.props, userId); if (cd) data[b.id] = cd; break; }
         // location-aware: screens inherit their device location for untouched blocks

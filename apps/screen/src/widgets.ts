@@ -901,10 +901,14 @@ const weekProgress: Render = (el, w) => {
   });
 };
 
-const greeting: Render = (el, w) => {
+const greeting: Render = (el, w, data) => {
   if (w.type !== "greeting") return;
   const g = div("greeting");
   el.appendChild(g);
+  // #154 — when showContext is on and the server composed a contextual line, show it (it
+  // refreshes with each data resolve). Otherwise fall back to the live time-of-day greeting.
+  const ctx = (data as { contextualGreeting?: string } | null)?.contextualGreeting;
+  if (w.props.showContext && ctx) { g.textContent = ctx; return; }
   return every(60_000, () => {
     const h = new Date().getHours();
     const part = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night";
@@ -2485,6 +2489,43 @@ const myDay: Render = (el, w, data) => {
   });
 };
 
+// #148 — Daily brief: the calm morning summary. The server composes greeting + date +
+// weather + today's next events + a couple of undone tasks; this renders that data. With no
+// data yet it still shows a live time-of-day greeting so the block is never blank.
+const dailyBrief: Render = (el, w, data) => {
+  if (w.type !== "dailyBrief") return;
+  const d = data as { greeting?: string; dateLabel?: string; weatherLine?: string | null; events?: { time: string; title: string; location?: string }[]; tasks?: string[] } | null;
+  if (w.props.title) el.appendChild(div("brief-title", w.props.title));
+  const h = new Date().getHours();
+  el.appendChild(div("brief-greet", d?.greeting || (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening")));
+  if (w.props.showDate && d?.dateLabel) el.appendChild(div("brief-date", d.dateLabel));
+  if (w.props.showWeather && d?.weatherLine) el.appendChild(div("brief-wx", d.weatherLine));
+  const events = d?.events ?? [];
+  if (events.length) {
+    const list = div("brief-events");
+    for (const ev of events) {
+      const row = div("brief-event");
+      row.appendChild(div("brief-event-time", ev.time));
+      row.appendChild(div("brief-event-title", ev.location ? `${ev.title} · ${ev.location}` : ev.title));
+      list.appendChild(row);
+    }
+    el.appendChild(list);
+  } else if (d && w.props.maxEvents > 0) {
+    el.appendChild(div("brief-empty", "No more events today"));
+  }
+  const tasks = d?.tasks ?? [];
+  if (tasks.length) {
+    const tl = div("brief-tasks");
+    for (const t of tasks) {
+      const row = div("brief-task");
+      row.appendChild(div("brief-task-dot", "○"));
+      row.appendChild(div("brief-task-text", t));
+      tl.appendChild(row);
+    }
+    el.appendChild(tl);
+  }
+};
+
 // A goal ring for steps / sleep / any number-vs-goal (binds to fitbit/oura, or typed).
 const healthRing: Render = (el, w, data) => {
   if (w.type !== "healthRing") return;
@@ -2579,7 +2620,7 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   // v5.0 agenda objects
   upNext, dayTimeline, focusNow, leaveBy, sinceYouLooked,
   // v5.0 ambient / self / home
-  myDay, healthRing, homeTile,
+  myDay, dailyBrief, healthRing, homeTile,
   // v8.0 rotation
   deck,
 };

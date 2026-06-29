@@ -966,6 +966,20 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
 .myday-date { font-size: calc(2.8vmin * var(--font-scale, 1)); opacity: 0.7; margin-top: 0.4vmin; }
 .myday-wx { font-size: calc(3vmin * var(--font-scale, 1)); margin-top: 0.8vmin; }
 .myday-sub { font-size: calc(2.6vmin * var(--font-scale, 1)); opacity: 0.6; margin-top: 0.8vmin; }
+/* #148 daily brief — calm morning summary (greeting, date, weather, events, tasks). */
+.brief-title { font-size: calc(2.4vmin * var(--font-scale, 1)); text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.55; margin-bottom: 0.6vmin; }
+.brief-greet { font-size: calc(4.4vmin * var(--font-scale, 1)); font-weight: 700; line-height: 1.05; }
+.brief-date { font-size: calc(2.6vmin * var(--font-scale, 1)); opacity: 0.7; margin-top: 0.3vmin; }
+.brief-wx { font-size: calc(2.8vmin * var(--font-scale, 1)); margin-top: 0.6vmin; opacity: 0.85; }
+.brief-events { margin-top: 1.2vmin; display: flex; flex-direction: column; gap: 0.6vmin; }
+.brief-event { display: flex; gap: 1.4vmin; align-items: baseline; font-size: calc(2.6vmin * var(--font-scale, 1)); }
+.brief-event-time { min-width: 6.5em; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.brief-event-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brief-empty { margin-top: 1vmin; font-size: calc(2.6vmin * var(--font-scale, 1)); opacity: 0.5; }
+.brief-tasks { margin-top: 1.2vmin; display: flex; flex-direction: column; gap: 0.4vmin; }
+.brief-task { display: flex; gap: 1vmin; align-items: baseline; font-size: calc(2.5vmin * var(--font-scale, 1)); }
+.brief-task-dot { opacity: 0.5; }
+.brief-task-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hometile { display: flex; align-items: center; gap: 2vmin; }
 .hometile-icon { font-size: calc(7vmin * var(--font-scale, 1)); line-height: 1; opacity: 0.85; }
 .hometile-value { font-size: calc(6vmin * var(--font-scale, 1)); font-weight: 700; font-variant-numeric: tabular-nums; }

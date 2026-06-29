@@ -12,13 +12,15 @@ import { wallClock } from "../schedules";
 import { emit, isConnected } from "../hub";
 import { postJSON } from "../fetchers/cache";
 import { resolvePath } from "../fetchers/jsonfeed";
-import { connLookupForOrg, listConnections } from "../connections";
+import { connLookupForOrg } from "../connections";
 import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
 import { allBlocks } from "../widgets";
 import { db } from "../db";
-import { weatherData } from "../fetchers/weather";
-import { precipData } from "../fetchers/openmeteo";
+import { calendarContext, resolveUserCalendar, resolveUserWeather, type DayCalendar, type DayWeather } from "../daycontext";
+// Re-export the day-context helpers from their new leaf home so existing call sites
+// (the tick below, engine.test) keep importing them from "./engine".
+export { calendarContext, resolveUserCalendar, resolveUserWeather };
 import { sunTimes, tzMinuteOfDay } from "../astro";
 import { allUserIds, enabledByTrigger, getAutomation, recordRun } from "../automations";
 
@@ -44,7 +46,7 @@ export interface Ctx {
   // v5.0 substrate — current weather at the user's location (undefined if no
   // location / offline). Lets boards react: `weather.isRaining`, `weather.tempC`,
   // `weather.precipProbPct`. Resolved only when an automation references `weather.*`.
-  weather?: { tempC: number; summary: string; high?: number; low?: number; precipProbPct: number; isRaining: boolean };
+  weather?: DayWeather;
   // v5.0 substrate — are you home? Derived from the `presence` custom-data key
   // (a phone geofence webhook or a bound Home Assistant person entity). v7.0 adds
   // per-person lanes from `presence.<name>` keys (`presence.people.alex` in conditions),
@@ -54,10 +56,7 @@ export interface Ctx {
   // when a rule references `calendar.*`. Lets boards react to meetings. v11 deepens it:
   // eventsToday (how busy is the day), and the next event's location / video-call link /
   // all-day flag — so rules like "video call starting in 5 min" or ">6 meetings today" work.
-  calendar?: {
-    isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string;
-    eventsToday: number; nextLocation?: string; nextIsOnline: boolean; nextJoinUrl?: string; nextIsAllDay: boolean;
-  };
+  calendar?: DayCalendar;
   objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
 }
 export interface LiveCtx { weather?: Ctx["weather"]; calendar?: Ctx["calendar"] }
@@ -283,79 +282,9 @@ function presenceFromData(data: Record<string, unknown>): Ctx["presence"] {
   return { home: isHomeState(state), state, people };
 }
 
-// Resolve the user's current weather (cached, keyless) for automation context —
-// only called when an automation actually references `weather.*`.
-async function resolveUserWeather(userId: string): Promise<Ctx["weather"]> {
-  const geo = userGeo(userId);
-  if (!geo) return undefined;
-  const p = { latitude: geo.lat, longitude: geo.lon };
-  const [w, pr] = await Promise.all([weatherData(p), precipData(p).catch(() => null)]);
-  if (!w) return undefined;
-  return {
-    tempC: w.temperatureC, summary: w.summary, high: w.high, low: w.low,
-    precipProbPct: pr?.probability ?? 0,
-    isRaining: /rain|drizzle|shower|thunder/i.test(w.summary),
-  };
-}
-
-// Resolve the user's agenda from their first calendar connection (iCal URL or
-// Google), only when an automation references `calendar.*`. Cached via resolveSource.
-async function resolveUserCalendar(userId: string): Promise<Ctx["calendar"]> {
-  const orgId = ensurePersonalOrg(userId); // a user's own calendar lives in their personal org
-  const conn = listConnections(orgId).find((c) => c.provider === "ical" || c.provider === "google");
-  if (!conn) return undefined;
-  const kind = conn.provider === "google" ? "google.calendar" : "ical.events";
-  // NB: pass an explicit `query: {}` — this object skips the schema (cast), so the
-  // `.prefault({})` default never runs and resolveSource's stableHash(src.query) would
-  // throw on undefined (swallowed by .catch → calendar silently dead). The ical/google
-  // providers tolerate an empty query (ical falls back to the connection's .ics URL).
-  const raw = await resolveSource({ kind, connectionId: conn.id, query: {}, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupForOrg(orgId)).catch(() => null);
-  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { events?: unknown[] }).events) ? (raw as { events: unknown[] }).events : [];
-  return calendarContext(list, Date.now(), getUser(userId)?.defaultTimezone || "UTC");
-}
-
-// A YYYY-MM-DD day key in a timezone, for "is this event today?" (Intl, never throws).
-function dayKeyInTz(ts: number, tz: string): string {
-  try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts)); }
-  catch { return new Date(ts).toISOString().slice(0, 10); }
-}
-const MEET_HOSTS = /(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|meet\.jit\.si|bluejeans\.com|gotomeeting\.com|chime\.aws|around\.co)/i;
-// A video-call link for an event: an explicit url field, else a known host found in the location.
-function joinLinkOf(o: Record<string, unknown>): string | undefined {
-  const url = String(o.url ?? "");
-  if (url && MEET_HOSTS.test(url)) return url;
-  const loc = String(o.location ?? "");
-  const m = loc.match(/https?:\/\/[^\s"<>)\]]+/g)?.find((u) => MEET_HOSTS.test(u));
-  return m || (url && /^https?:\/\//.test(url) ? url : undefined);
-}
-
-/** Pure: build the calendar context from a resolved event list (start/end/title/allDay/
- *  location/url). Exported for unit testing — no fetch, no clock, no throw. */
-export function calendarContext(list: unknown[], now: number, tz: string): Ctx["calendar"] {
-  const evs = list
-    .map((e) => {
-      const o = (e ?? {}) as Record<string, unknown>;
-      const s = Date.parse(String(o.start));
-      return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? ""), location: o.location ? String(o.location) : undefined, allDay: o.allDay === true, join: joinLinkOf(o) };
-    })
-    .filter((e) => Number.isFinite(e.start))
-    .sort((a, b) => a.start - b.start);
-  const busy = evs.find((e) => e.start <= now && e.end > now);
-  const next = evs.find((e) => e.start > now);
-  const today = dayKeyInTz(now, tz);
-  return {
-    isBusyNow: !!busy,
-    minutesUntilNext: next ? Math.max(0, Math.round((next.start - now) / 60_000)) : undefined,
-    nextTitle: next?.title || undefined,
-    nextStart: next ? new Date(next.start).toISOString() : undefined,
-    freeUntil: busy ? new Date(busy.end).toISOString() : undefined,
-    eventsToday: evs.filter((e) => dayKeyInTz(e.start, tz) === today).length,
-    nextLocation: next?.location,
-    nextIsOnline: !!next?.join,
-    nextJoinUrl: next?.join,
-    nextIsAllDay: next?.allDay ?? false,
-  };
-}
+// resolveUserWeather / resolveUserCalendar / calendarContext now live in ../daycontext (a
+// leaf module shared with resolveWidgetData) and are imported + re-exported at the top of
+// this file, so the tick and the engine tests keep their existing call sites.
 
 // Does any of these automations read `<prefix>.*` in its conditions? (cheap guard so
 // the tick only fetches weather/calendar when a rule actually needs it).

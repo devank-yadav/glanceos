@@ -151,7 +151,10 @@ export const KpiSparkProps = z.object({ value: line(20).default("92"), unit: lin
 export const DayProgressProps = z.object({ label: line(60).default("Day") });
 export const YearProgressProps = z.object({ label: line(60).default("Year") });
 export const WeekProgressProps = z.object({ label: line(60).default("Week") });
-export const GreetingProps = z.object({ name: line(60).default("") });
+// #154 — when showContext is on, the server composes a one-line contextual greeting from
+// the user's calendar + weather ("Good morning · 3 meetings today · 18°, light rain"); the
+// screen falls back to the plain time-of-day greeting when there's no context/connection.
+export const GreetingProps = z.object({ name: line(60).default(""), showContext: z.boolean().default(false), maxContextLength: z.number().int().min(20).max(300).default(200) });
 export const RomanClockProps = z.object({ label: line(40).default("") });
 export const BinaryClockProps = z.object({ label: line(40).default("") });
 export const SeasonClockProps = z.object({ hemisphere: z.enum(["north", "south"]).default("north"), label: line(40).default("") });
@@ -346,6 +349,15 @@ export const LeaveByProps = z.object({ label: line(40).default("Leave by"), item
 export const SinceYouLookedProps = z.object({ title: line(40).default("Since you looked"), max: z.number().int().min(1).max(12).default(5) });
 // v5.0 ambient / self / home fusion objects.
 export const MyDayProps = z.object({ name: line(40).default(""), subtitle: line(140).default("Have a calm, focused day."), showDate: z.boolean().default(true) });
+// #148 — Daily brief: the server composes today's greeting + date + weather + the next few
+// calendar events + a couple of undone tasks into one calm morning summary (rule-based, no AI).
+export const DailyBriefProps = z.object({
+  title: line(40).default("Today"),
+  showDate: z.boolean().default(true),
+  showWeather: z.boolean().default(true),
+  maxEvents: z.number().int().min(0).max(5).default(3),
+  maxTasks: z.number().int().min(0).max(5).default(2),
+});
 export const HealthRingProps = z.object({ label: line(40).default("Steps"), value: z.number().default(6200), goal: z.number().min(1).default(10000), unit: line(12).default("") });
 export const HomeTileProps = z.object({ label: line(40).default("Living room"), icon: line(8).default("⌂"), value: line(40).default("21"), unit: line(12).default("°C") });
 export const SunArcProps = z.object({ latitude: z.number().default(28.6139), longitude: z.number().default(77.209), label: line(40).default("") });
@@ -628,6 +640,7 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("sinceYouLooked"), props: SinceYouLookedProps }),
   // v5.0 ambient / self / home objects
   z.object({ ...b, type: z.literal("myDay"), props: MyDayProps }),
+  z.object({ ...b, type: z.literal("dailyBrief"), props: DailyBriefProps }),
   z.object({ ...b, type: z.literal("healthRing"), props: HealthRingProps }),
   z.object({ ...b, type: z.literal("homeTile"), props: HomeTileProps }),
   // v8.0 rotation

@@ -377,6 +377,27 @@ describe("authored fallback (#22)", () => {
   });
 });
 
+describe("daily brief + contextual greeting (#148/#154)", () => {
+  it("renders the server-composed brief: greeting, weather, events, tasks", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, data: {
+      brf: { greeting: "Good morning", dateLabel: "Monday, June 29", weatherLine: "18°, sunny", events: [{ time: "9:00 AM", title: "Standup", location: "Room 3" }], tasks: ["Ship it"] },
+    }, layout: { ...baseLayout, rows: [{ id: "r", h: 9, blocks: [
+      { id: "brf", type: "dailyBrief", width: 1, props: { title: "Today", showDate: true, showWeather: true, maxEvents: 3, maxTasks: 2 } },
+    ] }] } } } as unknown as StreamPayloadT);
+    expect((document.querySelector(".brief-greet") as HTMLElement).textContent).toBe("Good morning");
+    expect((document.querySelector(".brief-wx") as HTMLElement).textContent).toContain("sunny");
+    expect((document.querySelector(".brief-event-title") as HTMLElement).textContent).toContain("Standup");
+    expect((document.querySelector(".brief-task-text") as HTMLElement).textContent).toBe("Ship it");
+  });
+
+  it("greeting shows the server contextual line when showContext is on", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, data: { g: { contextualGreeting: "Good morning  ·  3 meetings today" } }, layout: { ...baseLayout, rows: [{ id: "r", h: 4, blocks: [
+      { id: "g", type: "greeting", width: 1, props: { name: "", showContext: true, maxContextLength: 200 } },
+    ] }] } } } as unknown as StreamPayloadT);
+    expect((document.querySelector(".greeting") as HTMLElement).textContent).toContain("3 meetings today");
+  });
+});
+
 describe("pomodoro is a live, self-running timer", () => {
   const pomo = (props: object) =>
     renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
