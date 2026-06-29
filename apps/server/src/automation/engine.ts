@@ -50,8 +50,13 @@ export interface Ctx {
   // so a household can react to each member without a schema change.
   presence?: { home: boolean; state: string; people: Record<string, boolean> };
   // v6.1 substrate — the user's agenda (first calendar connection), resolved only
-  // when a rule references `calendar.*`. Lets boards react to meetings.
-  calendar?: { isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string };
+  // when a rule references `calendar.*`. Lets boards react to meetings. v11 deepens it:
+  // eventsToday (how busy is the day), and the next event's location / video-call link /
+  // all-day flag — so rules like "video call starting in 5 min" or ">6 meetings today" work.
+  calendar?: {
+    isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string;
+    eventsToday: number; nextLocation?: string; nextIsOnline: boolean; nextJoinUrl?: string; nextIsAllDay: boolean;
+  };
   objects: Record<string, ObjEntry>; // a board's named objects (empty for global automations)
 }
 export interface LiveCtx { weather?: Ctx["weather"]; calendar?: Ctx["calendar"] }
@@ -305,19 +310,49 @@ async function resolveUserCalendar(userId: string): Promise<Ctx["calendar"]> {
   // providers tolerate an empty query (ical falls back to the connection's .ics URL).
   const raw = await resolveSource({ kind, connectionId: conn.id, query: {}, map: { transform: "none" } } as unknown as Parameters<typeof resolveSource>[0], connLookupForOrg(orgId)).catch(() => null);
   const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { events?: unknown[] }).events) ? (raw as { events: unknown[] }).events : [];
-  const now = Date.now();
+  return calendarContext(list, Date.now(), getUser(userId)?.defaultTimezone || "UTC");
+}
+
+// A YYYY-MM-DD day key in a timezone, for "is this event today?" (Intl, never throws).
+function dayKeyInTz(ts: number, tz: string): string {
+  try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts)); }
+  catch { return new Date(ts).toISOString().slice(0, 10); }
+}
+const MEET_HOSTS = /(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|meet\.jit\.si|bluejeans\.com|gotomeeting\.com|chime\.aws|around\.co)/i;
+// A video-call link for an event: an explicit url field, else a known host found in the location.
+function joinLinkOf(o: Record<string, unknown>): string | undefined {
+  const url = String(o.url ?? "");
+  if (url && MEET_HOSTS.test(url)) return url;
+  const loc = String(o.location ?? "");
+  const m = loc.match(/https?:\/\/[^\s"<>)\]]+/g)?.find((u) => MEET_HOSTS.test(u));
+  return m || (url && /^https?:\/\//.test(url) ? url : undefined);
+}
+
+/** Pure: build the calendar context from a resolved event list (start/end/title/allDay/
+ *  location/url). Exported for unit testing — no fetch, no clock, no throw. */
+export function calendarContext(list: unknown[], now: number, tz: string): Ctx["calendar"] {
   const evs = list
-    .map((e) => { const o = (e ?? {}) as Record<string, unknown>; const s = Date.parse(String(o.start)); return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? "") }; })
+    .map((e) => {
+      const o = (e ?? {}) as Record<string, unknown>;
+      const s = Date.parse(String(o.start));
+      return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? ""), location: o.location ? String(o.location) : undefined, allDay: o.allDay === true, join: joinLinkOf(o) };
+    })
     .filter((e) => Number.isFinite(e.start))
     .sort((a, b) => a.start - b.start);
   const busy = evs.find((e) => e.start <= now && e.end > now);
   const next = evs.find((e) => e.start > now);
+  const today = dayKeyInTz(now, tz);
   return {
     isBusyNow: !!busy,
     minutesUntilNext: next ? Math.max(0, Math.round((next.start - now) / 60_000)) : undefined,
     nextTitle: next?.title || undefined,
     nextStart: next ? new Date(next.start).toISOString() : undefined,
     freeUntil: busy ? new Date(busy.end).toISOString() : undefined,
+    eventsToday: evs.filter((e) => dayKeyInTz(e.start, tz) === today).length,
+    nextLocation: next?.location,
+    nextIsOnline: !!next?.join,
+    nextJoinUrl: next?.join,
+    nextIsAllDay: next?.allDay ?? false,
   };
 }
 

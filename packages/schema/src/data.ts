@@ -16,6 +16,7 @@ export const CalendarEvent = z.object({
   title: z.string(),
   allDay: z.boolean().default(false),
   location: z.string().optional(), // v5.0 — for "Up Next" + "Leave By"
+  url: z.string().optional(), // v11 — a join/conference link (Zoom/Meet/Teams) → "video call" sense
 });
 
 export const CalendarData = z.object({

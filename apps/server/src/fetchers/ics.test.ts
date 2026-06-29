@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseIcs } from "./ics";
+import { conferenceLink, parseIcs } from "./ics";
 
 const NOW = new Date(2026, 0, 15, 12, 0, 0); // local time, like un-zoned ICS values
 
@@ -78,5 +78,25 @@ describe("parseIcs", () => {
   it("ignores events without DTSTART or SUMMARY", () => {
     const text = vevent(["SUMMARY:No date"]);
     expect(parseIcs(text, NOW.getTime())).toHaveLength(0);
+  });
+
+  it("keeps LOCATION on a non-recurring event (was dropped) + captures a URL join link", () => {
+    const text = vevent([`DTSTART:${ics(daysFromNow(1))}`, "SUMMARY:Standup", "LOCATION:Room 3", "URL:https://zoom.us/j/123"]);
+    const [e] = parseIcs(text, NOW.getTime());
+    expect(e!.location).toBe("Room 3");
+    expect(e!.url).toBe("https://zoom.us/j/123");
+  });
+
+  it("pulls a Meet link out of the DESCRIPTION when there's no URL line", () => {
+    const text = vevent([`DTSTART:${ics(daysFromNow(1))}`, "SUMMARY:Sync", "DESCRIPTION:Join here https://meet.google.com/abc-defg-hij or dial in"]);
+    expect(parseIcs(text, NOW.getTime())[0]!.url).toBe("https://meet.google.com/abc-defg-hij");
+  });
+});
+
+describe("conferenceLink", () => {
+  it("finds a known video-conference host, ignores plain links", () => {
+    expect(conferenceLink("see https://teams.microsoft.com/l/meetup-join/x now")).toBe("https://teams.microsoft.com/l/meetup-join/x");
+    expect(conferenceLink("agenda at https://example.com/doc")).toBeUndefined();
+    expect(conferenceLink("no links here")).toBeUndefined();
   });
 });

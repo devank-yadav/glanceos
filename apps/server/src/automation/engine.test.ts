@@ -17,7 +17,7 @@ const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
 const { ensurePersonalOrg } = await import("../orgs");
 const { createConnection } = await import("../connections");
-const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred } = await import("./engine");
+const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred, calendarContext } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
@@ -547,5 +547,30 @@ describe("buildContext — live blocks are sensable via objects.<id> (F1)", () =
     const c = buildContext(user.id, { layout });
     expect(c.objects.prs!.value).toBeUndefined();
     expect(c.objects.prs!.kind).toBe("live");
+  });
+});
+
+describe("calendarContext — deepened calendar substrate (F5)", () => {
+  const NOW = Date.UTC(2026, 0, 15, 12, 0, 0); // 2026-01-15 12:00 UTC
+  const iso = (offsetMin: number) => new Date(NOW + offsetMin * 60_000).toISOString();
+  it("computes next-event facts, a video-call link, and meetings-today", () => {
+    const list = [
+      { start: iso(-30), end: iso(30), title: "Now mtg" }, // running now
+      { start: iso(60), title: "Design review", location: "Join https://zoom.us/j/9", allDay: false },
+      { start: iso(180), title: "Later today", allDay: false },
+    ];
+    const c = calendarContext(list, NOW, "UTC")!;
+    expect(c.isBusyNow).toBe(true);
+    expect(c.nextTitle).toBe("Design review");
+    expect(c.minutesUntilNext).toBe(60);
+    expect(c.nextIsOnline).toBe(true);
+    expect(c.nextJoinUrl).toContain("zoom.us");
+    expect(c.eventsToday).toBe(3); // all three fall on the 15th UTC
+  });
+  it("flags an all-day next event and no online link", () => {
+    const c = calendarContext([{ start: iso(120), title: "Company holiday", allDay: true }], NOW, "UTC")!;
+    expect(c.nextIsAllDay).toBe(true);
+    expect(c.nextIsOnline).toBe(false);
+    expect(c.isBusyNow).toBe(false);
   });
 });

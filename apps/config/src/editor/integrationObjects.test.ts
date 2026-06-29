@@ -1,6 +1,6 @@
 import { Widget } from "@glanceos/schema";
 import { describe, expect, it } from "vitest";
-import { BINDABLE, BLOCKS, type WidgetType } from "./blocks";
+import { BINDABLE, BLOCKS, PASSTHROUGH_BLOCKS, type WidgetType } from "./blocks";
 import { buildPresetBlock, INTEGRATION_OBJECTS, objectsForProvider, PROVIDERS_WITH_OBJECTS } from "./integrationObjects";
 
 const BLOCK_TYPES = new Set<WidgetType>(BLOCKS.map((b) => b.type));
@@ -44,23 +44,27 @@ describe("integration preset objects (B8)", () => {
     }
   });
 
-  it("scalar presets map a path; list presets map an items array", () => {
+  it("scalar presets map a path; list presets map an items array (passthrough needs neither)", () => {
     for (const o of INTEGRATION_OBJECTS) {
+      if (PASSTHROUGH_BLOCKS.has(o.blockType)) continue; // already-typed shape (calendar events) — bound whole
       const hasPath = !!o.map.path;
       const hasItems = o.map.items !== undefined;
       expect(hasPath || hasItems, `${o.providerId}.${o.id} → map needs a path or items`).toBe(true);
     }
   });
 
-  it("the map.transform matches the block's binding contract (list→join, scalar→a scalar transform)", () => {
-    // Mirror databind.tsx: list blocks bind with transform 'join'; scalar blocks
-    // use a value transform. The wrong transform renders an array instead of text.
+  it("the map.transform matches the block's binding contract (list→join, scalar→a scalar transform, passthrough→none)", () => {
+    // Mirror databind.tsx: list blocks bind with transform 'join'; scalar blocks use a
+    // value transform; passthrough blocks (calendar/upNext) bind the whole shape with
+    // 'none'. The wrong transform renders an array instead of text.
     const LIST_BLOCKS = new Set(["bulletList", "numberedList", "checklist"]);
     const SCALAR_TRANSFORMS = new Set(["first", "last", "count", "sum", "round", "currency", "duration", "percent", "rangeToWords"]);
     for (const o of INTEGRATION_OBJECTS) {
       if (LIST_BLOCKS.has(o.blockType)) {
         expect(o.map.transform, `${o.providerId}.${o.id} → list preset must use transform:"join"`).toBe("join");
         expect(o.map.items, `${o.providerId}.${o.id} → list preset must set an items path`).toBeDefined();
+      } else if (PASSTHROUGH_BLOCKS.has(o.blockType)) {
+        expect(o.map.transform, `${o.providerId}.${o.id} → passthrough preset must use transform:"none"`).toBe("none");
       } else {
         expect(SCALAR_TRANSFORMS.has(o.map.transform ?? ""), `${o.providerId}.${o.id} → scalar preset needs a value transform, got ${o.map.transform}`).toBe(true);
       }

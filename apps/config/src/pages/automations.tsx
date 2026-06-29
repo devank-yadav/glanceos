@@ -70,6 +70,10 @@ const FIELD_CATALOG: FieldDef[] = [
   { field: "calendar.minutesUntilNext", label: "Minutes until next event", group: "Calendar", control: "number" },
   { field: "calendar.nextTitle", label: "Next event title", group: "Calendar", control: "text" },
   { field: "calendar.freeUntil", label: "Free until (time)", group: "Calendar", control: "text" },
+  { field: "calendar.eventsToday", label: "Meetings today (count)", group: "Calendar", control: "number" },
+  { field: "calendar.nextIsOnline", label: "Next is a video call", group: "Calendar", control: "bool" },
+  { field: "calendar.nextLocation", label: "Next event location", group: "Calendar", control: "text" },
+  { field: "calendar.nextIsAllDay", label: "Next event is all-day", group: "Calendar", control: "bool" },
   // Screen / device
   { field: "device.online", label: "Screen is online", group: "Screen", control: "bool" },
   // Webhook
@@ -125,6 +129,8 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   // Calendar (from your first calendar connection) — the context-aware bits
   { id: "meeting-soon", group: "Calendar", label: "My next meeting is within 15 min", trigger: { kind: "tick" }, conditions: fcond("calendar.minutesUntilNext", "lte", 15) },
   { id: "in-meeting", group: "Calendar", label: "While I'm in a meeting", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", true) },
+  { id: "video-soon", group: "Calendar", label: "Video call starting within 5 min", trigger: { kind: "tick" }, conditions: { type: "all", conditions: [{ type: "field", field: "calendar.nextIsOnline", op: "eq", value: true }, { type: "field", field: "calendar.minutesUntilNext", op: "lte", value: 5 }] } },
+  { id: "busy-day", group: "Calendar", label: "Heavy day (more than 5 meetings)", trigger: { kind: "tick" }, conditions: fcond("calendar.eventsToday", "gt", 5) },
   { id: "free-now", group: "Calendar", label: "When I'm free (no event now)", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", false) },
   // Trend — react to a direction, not just a level (uses the trend ring-buffer)
   { id: "rising", group: "Trend", label: "When a value has been rising", trigger: { kind: "tick" }, conditions: fcond("data.value", "rising", "") },

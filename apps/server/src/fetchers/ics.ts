@@ -21,6 +21,15 @@ function unescapeText(s: string): string {
   return s.replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1");
 }
 
+// The first video-conference URL in a block of text (Google/Teams drop the join link
+// only in the DESCRIPTION). Used to surface "this meeting is a video call".
+const MEET_HOSTS = /(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|meet\.jit\.si|bluejeans\.com|gotomeeting\.com|chime\.aws|around\.co)/i;
+export function conferenceLink(text: string): string | undefined {
+  const urls = text.match(/https?:\/\/[^\s"<>)\]]+/g);
+  const hit = urls?.find((u) => MEET_HOSTS.test(u));
+  return hit ? hit.slice(0, 300) : undefined;
+}
+
 function parseIcsDate(value: string): { date: Date; allDay: boolean } | null {
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(value);
   if (!m) return null;
@@ -39,6 +48,7 @@ interface PendingEvent {
   allDay?: boolean;
   rrule?: string;
   location?: string;
+  url?: string;
 }
 
 function emitEvent(events: CalendarEventT[], e: PendingEvent, windowStart: number, windowEnd: number): void {
@@ -55,6 +65,7 @@ function emitEvent(events: CalendarEventT[], e: PendingEvent, windowStart: numbe
           title: e.title,
           allDay: e.allDay ?? false,
           location: e.location,
+          url: e.url,
         });
       }
       return;
@@ -67,6 +78,8 @@ function emitEvent(events: CalendarEventT[], e: PendingEvent, windowStart: numbe
     end: e.end?.toISOString(),
     title: e.title,
     allDay: e.allDay ?? false,
+    location: e.location, // was dropped on non-recurring events — carry it (and the join link) through
+    url: e.url,
   });
 }
 
@@ -107,6 +120,12 @@ export function parseIcs(text: string, now = Date.now()): CalendarEventT[] {
       current.location = unescapeText(value).slice(0, 120) || undefined;
     } else if (key === "RRULE") {
       current.rrule = value;
+    } else if (key === "URL" || key === "X-GOOGLE-CONFERENCE") {
+      if (!current.url) current.url = unescapeText(value).slice(0, 300) || undefined;
+    } else if (key === "DESCRIPTION" && !current.url) {
+      // Many providers (Google, Teams) drop the join link only in the description.
+      const m = conferenceLink(unescapeText(value));
+      if (m) current.url = m;
     }
   }
 

@@ -169,6 +169,15 @@ export const INTEGRATION_OBJECTS: IntegrationObject[] = [
   { providerId: "inaturalist", id: "observations", label: "Nature spotted", description: "Recent iNaturalist observations", blockType: "bulletList", sourceKind: "inaturalist.observations", query: { max: "10" }, map: LIST({ text: "title", value: "label" }, "items"), defaultH: 8 },
   { providerId: "disney", id: "characters", label: "Disney characters", description: "Characters, optionally by name", blockType: "bulletList", sourceKind: "disney.characters", query: { name: "", max: "10" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 8 },
   { providerId: "superhero", id: "stats", label: "Superhero stats", description: "Heroes & their power score", blockType: "bulletList", sourceKind: "superhero.all", query: { q: "", max: "12" }, map: LIST({ text: "title", value: "value" }, "items"), defaultH: 9 },
+  // ---- daily-glance set: the blocks people actually want every morning (OAuth/token —
+  // light up once connected). The most-wanted providers were missing presets entirely. ----
+  { providerId: "gmail", id: "unread", label: "Unread email", description: "Your inbox unread count", blockType: "stat", sourceKind: "gmail.unread", query: { label: "INBOX" }, map: VALUE(), props: { label: "Unread email" }, defaultH: 4 },
+  { providerId: "outlookmail", id: "unread", label: "Unread email (Outlook)", description: "Your Outlook unread count", blockType: "stat", sourceKind: "outlookmail.unread", query: { folder: "inbox" }, map: VALUE(), props: { label: "Unread email" }, defaultH: 4 },
+  { providerId: "google", id: "agenda", label: "Today's agenda", description: "Next events from Google Calendar", blockType: "upNext", sourceKind: "google.calendar", map: { transform: "none" }, props: { label: "Up next" }, defaultH: 6 },
+  { providerId: "microsoft", id: "agenda", label: "Today's agenda (Outlook)", description: "Next events from Outlook Calendar", blockType: "upNext", sourceKind: "microsoft.calendar", map: { transform: "none" }, props: { label: "Up next" }, defaultH: 6 },
+  { providerId: "jira", id: "mine", label: "My open Jira issues", description: "Issues assigned to you, not done", blockType: "bulletList", sourceKind: "jira.search", query: { jql: "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC", max: "8" }, map: LIST({ text: "title" }), defaultH: 8 },
+  { providerId: "slack", id: "channel", label: "Slack channel", description: "Latest messages in a channel", blockType: "bulletList", sourceKind: "slack.messages", query: { channel: "", max: "8" }, map: LIST({ text: "text" }), defaultH: 8 },
+  { providerId: "notion", id: "tasks", label: "Notion database", description: "Rows from a Notion database", blockType: "bulletList", sourceKind: "notion.database", query: { database_id: "" }, map: LIST({ text: "title" }), defaultH: 8 },
 ];
 
 /** Presets for a given provider id (drives the Integrations page "objects" section). */
