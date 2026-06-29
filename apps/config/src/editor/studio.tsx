@@ -22,6 +22,7 @@ import { LAYOUTS, applyLayout, type LayoutPreset } from "./layouts";
 import { AutomationsPage, type ObjOption } from "../pages/automations";
 import { BlockFields, BoardSettings, ObjectsPanel } from "./properties";
 import { PagesPanel } from "./pagesPanel";
+import { SnippetsPanel, type SnippetMeta } from "./snippetsPanel";
 import { DraggablePanel } from "./DraggablePanel";
 import { Shortcuts } from "./shortcuts";
 import { SlashMenu } from "./slash-menu";
@@ -85,6 +86,9 @@ const SIZES_LEGACY: Record<string, string> = { "1920×1080": "tv-1080p", "1280×
 const SIZE_KEY = "glanceos.previewSize";
 const SIDEBAR_PIN_KEY = "glanceos.sidebarPinned";
 const CLIP_KEY = "glanceos.clipboard";
+const SNIP_KEY = "glanceos.snippets"; // #85 — saved snippets, reusable across boards
+type Snippet = { id: string; name: string; blocks: WidgetT[] };
+const loadSnippets = (): Snippet[] => { try { const a = JSON.parse(localStorage.getItem(SNIP_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
 const ZOOMS: Array<{ label: string; value: number | null }> = [
   { label: "Fit", value: null },
   { label: "50%", value: 0.5 },
@@ -190,6 +194,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   activePageRef.current = activePage;
   const [pagesOpen, setPagesOpen] = useState(true); // Pages section in the right sidebar (open by default)
   const [objectsOpen, setObjectsOpen] = useState(false);
+  const [snippetsOpen, setSnippetsOpen] = useState(false); // #85 — Snippets section
+  const [snippets, setSnippets] = useState<Snippet[]>(loadSnippets);
   const [paneSize, setPaneSize] = useState({ w: 960, h: 560 });
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -447,6 +453,26 @@ export function Studio({ layoutId }: { layoutId: number }) {
       /* invalid clipboard — ignore */
     }
   };
+  // #85 — snippets: save the current selection as a named, reusable block/group (localStorage,
+  // so it's available on every board). Insert clones with fresh ids; rename/delete manage them.
+  const persistSnippets = (next: Snippet[]) => { setSnippets(next); localStorage.setItem(SNIP_KEY, JSON.stringify(next)); };
+  const saveSnippet = () => {
+    const blocks = selectedBlocks();
+    if (!blocks.length) return;
+    const name = blocks.length === 1 ? blockFor(blocks[0]!.type).label : `${blocks.length} blocks`;
+    persistSnippets([{ id: Math.random().toString(36).slice(2), name, blocks: structuredClone(blocks) }, ...snippets].slice(0, 60));
+    toast.success(`Saved snippet “${name}”`);
+  };
+  const insertSnippet = (id: string) => {
+    const s = snippets.find((x) => x.id === id);
+    if (s) insertBlocksAfter(s.blocks.map(clone));
+  };
+  const renameSnippet = (id: string, name: string) => {
+    const clean = name.trim().slice(0, 60);
+    if (clean) persistSnippets(snippets.map((s) => (s.id === id ? { ...s, name: clean } : s)));
+  };
+  const deleteSnippet = (id: string) => persistSnippets(snippets.filter((s) => s.id !== id));
+
   // v9.0 paint-format: copy the primary block's style, paste it onto every selected block.
   const copyStyle = () => {
     const id = primaryRef.current;
@@ -1241,6 +1267,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
               <Icon.chevron class={`chevron${objectsOpen ? " open" : ""}`} />
             </button>
             {objectsOpen && <ObjectsPanel doc={state.present} stageEdit={stageEdit} selectedIds={state.selectedIds} onSelect={(id) => dispatch({ type: "select", id })} />}
+            <button class="settings-toggle" onClick={() => setSnippetsOpen((v) => !v)}>
+              <Icon.copy /> <span>Snippets{snippets.length ? ` (${snippets.length})` : ""}</span>
+              <Icon.chevron class={`chevron${snippetsOpen ? " open" : ""}`} />
+            </button>
+            {snippetsOpen && <SnippetsPanel snippets={snippets.map((s) => ({ id: s.id, name: s.name, count: s.blocks.length }) satisfies SnippetMeta)} canSave={state.selectedIds.length > 0} onSave={saveSnippet} onInsert={insertSnippet} onRename={renameSnippet} onDelete={deleteSnippet} />}
             <button class="settings-toggle" onClick={() => setBoardSettingsOpen((v) => !v)}>
               <Icon.settings /> <span>Board settings</span>
               <Icon.chevron class={`chevron${boardSettingsOpen ? " open" : ""}`} />

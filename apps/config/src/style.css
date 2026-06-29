@@ -3878,3 +3878,13 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 /* #3 — scenes list on the account page. */
 .scene-list { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .scene-row { font-size: 14px; }
+
+/* #85 — snippets panel in the studio sidebar. */
+.snippets-panel { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.snippet-save { width: 100%; text-align: left; }
+.snippet-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.snippet-row { gap: 6px; }
+.snippet-name { flex: 1; text-align: left; background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 6px; font: inherit; color: inherit; }
+.snippet-name:hover { background: var(--soft, rgba(127,127,127,0.1)); }
+.snippet-name-input { flex: 1; padding: 2px 6px; font-size: 13px; }
+.side-empty { padding: 6px 2px; font-size: 12px; }
