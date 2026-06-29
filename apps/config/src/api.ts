@@ -123,6 +123,13 @@ export interface SetupSummary {
   folder: string | null;
 }
 
+export interface SceneSummary {
+  id: number;
+  name: string;
+  keyCount: number;
+  createdAt: number;
+}
+
 export interface LayoutRecord {
   id: number;
   name: string;

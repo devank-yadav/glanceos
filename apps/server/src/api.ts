@@ -57,6 +57,7 @@ import { publicUrl } from "./email";
 import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
+import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
@@ -1198,6 +1199,27 @@ ${og}
   });
   app.delete("/api/data/:key", (c) =>
     deleteCustomData(c.get("userId"), c.req.param("key")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // ---- #3 scenes: named snapshots of your custom-data, applied in one tap ----
+  app.get("/api/scenes", (c) => c.json(listScenes(c.get("userId"))));
+  app.post("/api/scenes", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    const s = captureScene(c.get("userId"), c.get("orgId"), body.name ?? "");
+    return s ? c.json(s, 201) : c.json({ error: "name required" }, 400);
+  });
+  app.post("/api/scenes/:id/apply", async (c) => {
+    const n = applyScene(Number(c.req.param("id")), c.get("userId"));
+    if (n < 0) return c.json({ error: "not found" }, 404);
+    await pushUserDevices(c.get("userId")); // flip every screen of theirs to the scene's values
+    return c.json({ ok: true, applied: n });
+  });
+  app.patch("/api/scenes/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    return renameScene(Number(c.req.param("id")), c.get("userId"), body.name ?? "")
+      ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+  });
+  app.delete("/api/scenes/:id", (c) =>
+    deleteScene(Number(c.req.param("id")), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
   // ---- webhook inlets (management is session-only) ----
   app.get("/api/inlets", (c) => c.json(listInlets(c.get("userId"))));

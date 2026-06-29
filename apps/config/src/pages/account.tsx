@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type SetupSummary, type UserInfo } from "../api";
+import { api, type SceneSummary, type SetupSummary, type UserInfo } from "../api";
 import { AVAILABLE, getLocale, setLocale, t } from "../i18n";
 import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
@@ -29,6 +29,9 @@ export function AccountPage() {
   // #147 — Home board: the user's boards, to pick a personal "home" shown on any of their
   // screens with no board of its own.
   const [boards, setBoards] = useState<SetupSummary[]>([]);
+  // #3 — Scenes: named snapshots of your data values, applied in one tap.
+  const [scenes, setScenes] = useState<SceneSummary[]>([]);
+  const [sceneName, setSceneName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -40,7 +43,23 @@ export function AccountPage() {
     api.get<NonNullable<typeof data>>("/api/account/data-summary").then(setData).catch(() => {});
     api.get<{ value?: unknown }>("/api/data/focusMode").then((r) => setFocus(r.value === true || r.value === "true" || r.value === "on")).catch(() => {});
     api.get<SetupSummary[]>("/api/layouts").then(setBoards).catch(() => {});
+    api.get<SceneSummary[]>("/api/scenes").then(setScenes).catch(() => {});
   }, []);
+
+  const captureScene = async () => {
+    const name = sceneName.trim();
+    if (!name) return;
+    try { const s = await api.post<SceneSummary>("/api/scenes", { name }); setScenes([s, ...scenes]); setSceneName(""); toast.success(`Saved "${s.name}" (${s.keyCount} value${s.keyCount === 1 ? "" : "s"})`); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const applyScene = async (id: number, name: string) => {
+    try { const r = await api.post<{ applied: number }>(`/api/scenes/${id}/apply`); toast.success(`Applied "${name}" — ${r.applied} value${r.applied === 1 ? "" : "s"} set`); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const deleteScene = async (id: number) => {
+    try { await api.del(`/api/scenes/${id}`); setScenes(scenes.filter((s) => s.id !== id)); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   const saveHomeBoard = async (id: number | null) => {
     try { const u = await api.patch<UserInfo>("/api/account", { homeLayoutId: id }); setUser(u); toast.success(id ? "Home board set" : "Home board cleared"); }
@@ -174,6 +193,28 @@ export function AccountPage() {
               {focus ? "Focus is on — turn off" : "Turn Focus on"}
             </button>
           </div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Scenes</h2>
+          <p class="muted">Save your wall's current data values as a named scene ("Focus", "Meeting", "Away"), then re-apply it in one tap — every screen of yours updates at once.</p>
+          <div class="row wrap" style={{ gap: "8px" }}>
+            <input placeholder="Scene name" value={sceneName} onInput={(e) => setSceneName((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") captureScene(); }} />
+            <button class="ghost" disabled={!sceneName.trim()} onClick={captureScene}>Save current as scene</button>
+          </div>
+          {scenes.length > 0 && (
+            <ul class="scene-list">
+              {scenes.map((s) => (
+                <li key={s.id} class="row spread scene-row">
+                  <span><b>{s.name}</b> <span class="muted">· {s.keyCount} value{s.keyCount === 1 ? "" : "s"}</span></span>
+                  <span class="row" style={{ gap: "4px" }}>
+                    <button class="ghost" onClick={() => applyScene(s.id, s.name)}>Apply</button>
+                    <button class="ghost danger" onClick={() => deleteScene(s.id)}>Delete</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {data && (
