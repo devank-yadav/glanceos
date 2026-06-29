@@ -153,6 +153,7 @@ const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "addTask", label: "Add a task" },
   { id: "advanceQueue", label: "Advance a queue" },
   { id: "switchBoard", label: "Switch a screen's board" },
+  { id: "applyScene", label: "Apply a scene" },
   { id: "notify", label: "Send a notification" },
   { id: "alert", label: "Show an on-screen alert" },
   { id: "webhook", label: "Call a webhook (outbound)" },
@@ -178,6 +179,7 @@ const defaultAction = (kind: string, objects?: ObjOption[]): Action => {
     case "addTask": return { kind, listId: "default", text: "" };
     case "advanceQueue": return { kind, queueId: "", delta: 1 };
     case "switchBoard": return { kind, deviceId: "", layoutId: 0 };
+    case "applyScene": return { kind, sceneId: 0 };
     case "notify": return { kind, message: "" };
     case "alert": return { kind, severity: "info", title: "", target: "all" };
     case "delay": return { kind, ms: 1000 };
@@ -232,6 +234,10 @@ const TEMPLATES: Recipe[] = [
   { id: "midnight-reset", category: "Daily routine", label: "Reset a counter at midnight", desc: "Zero a daily counter at 00:00.", show: () => true, build: (c) => tmpl(c, "Daily reset", { kind: "time", atMinute: 0, daysMask: 127 }, undefined, [{ kind: "setData", key: "count", value: 0 }]) },
   { id: "morning-count", category: "Daily routine", label: "Tick a streak every morning", desc: "Add 1 to a streak counter at 6am.", show: () => true, build: (c) => tmpl(c, "Streak +1", { kind: "time", atMinute: 360, daysMask: 127 }, undefined, [{ kind: "incrementData", key: "streak", delta: 1 }]) },
   { id: "focus-board", category: "Daily routine", label: "Focus board (weekday 9am)", desc: "Switch a screen to a focus board.", show: () => true, build: (c) => tmpl(c, "Focus board", { kind: "time", atMinute: 540, daysMask: WEEKDAYS_MASK }, undefined, [aSwitch()]) },
+  // #150 Routines — sequenced scenes on a schedule. Save scenes on the Account page first, then
+  // pick them in each step; "+N m later" staggers the sequence.
+  { id: "morning-routine", category: "Daily routine", label: "Morning routine (apply a scene at 7am)", desc: "Apply a saved scene, then another a few minutes later — a morning sequence.", show: () => true, build: (c) => tmpl(c, "Morning routine", { kind: "time", atMinute: 420, daysMask: 127 }, undefined, [{ kind: "applyScene", sceneId: 0 }, { kind: "applyScene", sceneId: 0, afterMinutes: 15 }]) },
+  { id: "evening-routine", category: "Daily routine", label: "Evening wind-down (apply a scene at 9pm)", desc: "Flip your wall to a calm evening scene.", show: () => true, build: (c) => tmpl(c, "Evening wind-down", { kind: "time", atMinute: 1260, daysMask: 127 }, undefined, [{ kind: "applyScene", sceneId: 0 }]) },
 
   // ---- On a cadence ----
   { id: "hourly-chime", category: "On a cadence", label: "Hourly chime", desc: "An on-screen note every hour.", show: () => true, build: (c) => tmpl(c, "Hourly chime", { kind: "interval", everyMinutes: 60 }, undefined, [aAlert("Top of the hour", undefined)]) },
@@ -457,11 +463,13 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   // "Loading…" then "No screens yet" instead of ever falling back to a raw id box.
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
   const [boards, setBoards] = useState<{ id: number; name: string }[]>([]);
+  const [scenes, setScenes] = useState<{ id: number; name: string }[]>([]); // #150 — for the applyScene action
   const [picksLoaded, setPicksLoaded] = useState(false);
   useEffect(() => {
     Promise.all([
       api.get<{ id: string; name: string | null }[]>("/api/devices").then((d) => setDevices(d.map((x) => ({ id: x.id, name: x.name || x.id })))).catch(() => {}),
       api.get<{ id: number; name: string }[]>("/api/layouts").then((l) => setBoards(l.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}),
+      api.get<{ id: number; name: string }[]>("/api/scenes").then((s) => setScenes(s.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}),
     ]).finally(() => setPicksLoaded(true));
   }, []);
   // Object actions appear when the board has any named object (show/hide work on any;
@@ -473,6 +481,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     if (act.kind === "setObjectProp") return !!act.objectId && !!String(act.prop ?? "").trim();
     if (act.kind === "setObjectText" || act.kind === "showObject" || act.kind === "hideObject") return !!act.objectId;
     if (act.kind === "switchBoard") return !!String(act.deviceId ?? "").trim() && Number(act.layoutId) > 0; // recipe seeds blanks → must pick a screen + board
+    if (act.kind === "applyScene") return Number(act.sceneId) > 0; // must pick a scene
     if (act.kind === "advanceQueue") return !!String(act.queueId ?? "").trim();
     if (act.kind === "addTask") return !!String(act.text ?? "").trim();
     return true;
@@ -495,6 +504,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     const conditions = root && (root.type === "all" || root.type === "any") && root.conditions.length === 0 ? undefined : root ? norm(root) : undefined;
     const actions = a.actions.map((act) =>
       act.kind === "switchBoard" ? { ...act, layoutId: Number(act.layoutId) || 0 }
+        : act.kind === "applyScene" ? { ...act, sceneId: Number(act.sceneId) || 0 }
         : act.kind === "advanceQueue" ? { ...act, delta: Number(act.delta) || 1 }
           : act.kind === "incrementData" ? { ...act, delta: Number(act.delta) || 1 }
             : act.kind === "delay" ? { ...act, ms: Math.max(50, Math.min(5000, Number(act.ms) || 1000)) }
@@ -637,7 +647,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
             <select value={act.kind} onChange={(e) => setAction(i, defaultAction((e.currentTarget as HTMLSelectElement).value, objects))}>
               {actionKinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
-            <ActionFields action={act} objects={objects} devices={devices} boards={boards} loaded={picksLoaded} onChange={(p) => setAction(i, p)} />
+            <ActionFields action={act} objects={objects} devices={devices} boards={boards} scenes={scenes} loaded={picksLoaded} onChange={(p) => setAction(i, p)} />
             <label class="action-after" title="Run this step this many minutes later (0 = right away)">+<input type="number" min="0" max="1440" step="1" value={Number(act.afterMinutes ?? 0)} onInput={(e) => {
               const n = Math.round(Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0)));
               const { afterMinutes: _drop, ...rest } = act as Action & { afterMinutes?: number };
@@ -861,7 +871,7 @@ function valueControl(c: ObjControl, value: unknown, onValue: (v: unknown) => vo
   return <input class="grow" value={value == null ? "" : String(value)} placeholder="value" onInput={(e) => onValue((e.currentTarget as HTMLInputElement).value)} />;
 }
 
-function ActionFields({ action, objects, devices, boards, loaded, onChange }: { action: Action; objects?: ObjOption[]; devices?: { id: string; name: string }[]; boards?: { id: number; name: string }[]; loaded?: boolean; onChange: (a: Action) => void }) {
+function ActionFields({ action, objects, devices, boards, scenes, loaded, onChange }: { action: Action; objects?: ObjOption[]; devices?: { id: string; name: string }[]; boards?: { id: number; name: string }[]; scenes?: { id: number; name: string }[]; loaded?: boolean; onChange: (a: Action) => void }) {
   const f = (k: string, v: unknown) => onChange({ ...action, [k]: v });
   const txt = (k: string, ph: string, cls = "") => <input class={cls} value={String(action[k] ?? "")} placeholder={ph} onInput={(e) => f(k, (e.currentTarget as HTMLInputElement).value)} />;
   // Object picker for the object-targeting actions — settable objects only, and we
@@ -915,6 +925,19 @@ function ActionFields({ action, objects, devices, boards, loaded, onChange }: { 
             {boardList.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </>
+      );
+    }
+    case "applyScene": {
+      const sid = action.sceneId != null ? Number(action.sceneId) : 0;
+      const sceneList = scenes ?? [];
+      const sceneMissing = !!sid && !sceneList.some((s) => s.id === sid);
+      const emptyLabel = !loaded ? "Loading scenes…" : "No scenes yet — save one on the Account page";
+      return (
+        <select class="grow" value={sid ? String(sid) : ""} disabled={sceneList.length === 0} onChange={(e) => f("sceneId", Number((e.currentTarget as HTMLSelectElement).value) || 0)}>
+          <option value="" disabled>{sceneList.length ? "Pick a scene…" : emptyLabel}</option>
+          {sceneMissing && <option value={String(sid)}>{`⚠ scene #${sid} (missing)`}</option>}
+          {sceneList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       );
     }
     case "notify": return txt("message", "message", "grow");

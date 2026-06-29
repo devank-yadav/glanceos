@@ -1,6 +1,7 @@
 import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT, WidgetT } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "../auth";
 import { getCustomData, listCustomData, setCustomData } from "../customdata";
+import { applyScene } from "../scenes";
 import { getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
 import { advanceQueue } from "../queues";
@@ -416,6 +417,7 @@ async function execAction(a: ActionT, userId: string, ctx: Ctx, board?: { id: nu
   let touched = false;
   switch (a.kind) {
     case "setData": setCustomData(userId, a.key, a.value); touched = true; break;
+    case "applyScene": applyScene(a.sceneId, userId); touched = true; break; // #150 — a routine step
     case "addTask": addTask(userId, a.listId || "default", a.text); touched = true; break;
     case "advanceQueue": advanceQueue(userId, a.queueId, a.delta ?? 1); touched = true; break;
     case "switchBoard": {
@@ -767,6 +769,7 @@ const describeAction = (a: ActionT): string => {
   if (a.afterMinutes && a.afterMinutes > 0) return `after ${a.afterMinutes} min: ${describeAction({ ...a, afterMinutes: undefined } as ActionT)}`;
   switch (a.kind) {
     case "setData": return `set data "${a.key}"`;
+    case "applyScene": return `apply scene #${a.sceneId}`;
     case "addTask": return `add task "${a.text}"`;
     case "advanceQueue": return `advance queue "${a.queueId}" by ${a.delta ?? 1}`;
     case "switchBoard": return `switch a screen to board #${a.layoutId}`;

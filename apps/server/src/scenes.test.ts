@@ -10,6 +10,8 @@ const { createUser } = await import("./auth");
 const { ensurePersonalOrg } = await import("./orgs");
 const { getCustomData, setCustomData } = await import("./customdata");
 const { listScenes, captureScene, applyScene, deleteScene, renameScene } = await import("./scenes");
+const { runActions, buildContext } = await import("./automation/engine");
+type ActionT = import("@glanceos/schema").ActionT;
 
 const user = createUser("Scene", `scene-${Date.now()}@example.com`, "calm-glass-2")!;
 const org = ensurePersonalOrg(user.id);
@@ -32,6 +34,15 @@ describe("#3 scenes", () => {
     setCustomData(user.id, "newkey", "later");
     applyScene(s.id, user.id);
     expect(getCustomData(user.id, "newkey")).toBe("later");
+  });
+
+  it("#150 — an applyScene automation action applies the scene (a routine step)", async () => {
+    setCustomData(user.id, "mode", "calm");
+    const s = captureScene(user.id, org, "Calm")!;
+    setCustomData(user.id, "mode", "loud");
+    const r = await runActions([{ kind: "applyScene", sceneId: s.id }] as ActionT[], user.id, buildContext(user.id));
+    expect(r.errors).toEqual([]);
+    expect(getCustomData(user.id, "mode")).toBe("calm");
   });
 
   it("rejects a blank name, isolates by user, renames and deletes", () => {
