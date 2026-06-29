@@ -46,8 +46,31 @@ export function allBlocks(layout: LayoutT): WidgetT[] {
   return out;
 }
 
+// #21 — last-known cache. A bound block's last successfully-resolved value, keyed by block id.
+// When a fetch blips (resolveSource → null), we serve this instead of dropping to the block's
+// props, so the wall never goes blank on a network hiccup — and we stamp it stale (the reserved
+// `__stale` data key) so a future "as of 5m ago" badge can show it isn't fresh. Memory-bounded
+// (insertion-ordered eviction). Identical for everyone resolving that block, so it's safe to
+// share across devices/requests (the value is the source's output, not user-specific).
+const LAST_GOOD_CAP = 2000;
+const lastGood = new Map<string, { value: unknown; at: number }>();
+/** Record a block's freshly-resolved value (exported for tests). */
+export function rememberResolved(blockId: string, value: unknown, at: number): void {
+  lastGood.delete(blockId); // re-insert so it becomes the newest (eviction order)
+  lastGood.set(blockId, { value, at });
+  if (lastGood.size > LAST_GOOD_CAP) {
+    const oldest = lastGood.keys().next().value;
+    if (oldest !== undefined) lastGood.delete(oldest);
+  }
+}
+/** The last good value for a block, or undefined if never resolved (exported for tests). */
+export function lastResolved(blockId: string): { value: unknown; at: number } | undefined {
+  return lastGood.get(blockId);
+}
+
 export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string, commit = true): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
+  const staleAt: Record<string, number> = {}; // #21 — block ids served from the last-known cache
   const now = new Date();
   const blocks = allBlocks(layout);
   const g = <T extends { latitude?: number; longitude?: number }>(p: T): T => geoFor(p, deviceGeo);
@@ -62,7 +85,14 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
       // null on any failure → the screen falls back to the block's props.
       if (b.source) {
         const out = await resolveSource(b.source, connLookup);
-        if (out !== null) data[b.id] = out;
+        if (out !== null) {
+          data[b.id] = out;
+          rememberResolved(b.id, out, now.getTime());
+        } else {
+          // #21 — a transient failure serves the last good value (stamped stale) instead of blanking.
+          const cached = lastResolved(b.id);
+          if (cached) { data[b.id] = cached.value; staleAt[b.id] = cached.at; }
+        }
         return;
       }
       switch (b.type) {
@@ -123,5 +153,8 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
       }
     }
   }
+  // #21 — set AFTER the digest diff (a reserved metadata key, not block data) so a stale-served
+  // value never registers as a "change since you looked". The screen reads it for a freshness hint.
+  if (Object.keys(staleAt).length) data["__stale"] = staleAt;
   return data;
 }
