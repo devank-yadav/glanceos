@@ -17,6 +17,9 @@ export interface PublicUser {
   homeLocationName: string | null;
   homeLatitude: number | null;
   homeLongitude: number | null;
+  // #147 — the user's personal "home board": shows on any of their screens with no board of
+  // its own (and only when that board belongs to the screen's org). null = no home board.
+  homeLayoutId: number | null;
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
@@ -33,6 +36,7 @@ interface UserRow {
   home_location_name: string | null;
   home_latitude: number | null;
   home_longitude: number | null;
+  home_layout_id: number | null;
   is_admin: number;
   onboarded_at: number | null;
   activated_at: number | null;
@@ -56,6 +60,7 @@ function toPublic(row: UserRow): PublicUser {
   return {
     id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null,
     homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
+    homeLayoutId: row.home_layout_id ?? null,
     isAdmin: (row.is_admin ?? 0) === 1,
     onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
     emailVerified: (row.email_verified ?? 0) === 1,
@@ -141,6 +146,7 @@ export function createUser(name: string, email: string, password: string): Publi
     home_location_name: null,
     home_latitude: null,
     home_longitude: null,
+    home_layout_id: null,
     is_admin: firstUser ? 1 : 0,
     onboarded_at: null,
     activated_at: null,
@@ -229,6 +235,14 @@ export function setUserHome(userId: string, home: { name: string; latitude: numb
   const { name, latitude, longitude } = home;
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
   db.prepare("UPDATE users SET home_location_name = ?, home_latitude = ?, home_longitude = ? WHERE id = ?").run(String(name).slice(0, 120), latitude, longitude, userId);
+  return getUser(userId);
+}
+
+/** Set (or clear with null) the account's home board. The CALLER must validate that the
+ *  layout belongs to the user's org first — this is a plain setter (auth.ts stays free of a
+ *  layouts dependency). currentLayoutId re-checks org ownership at resolve time too. */
+export function setUserHomeLayout(userId: string, layoutId: number | null): PublicUser | null {
+  db.prepare("UPDATE users SET home_layout_id = ? WHERE id = ?").run(layoutId, userId);
   return getUser(userId);
 }
 

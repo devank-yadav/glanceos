@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type UserInfo } from "../api";
+import { api, type SetupSummary, type UserInfo } from "../api";
 import { AVAILABLE, getLocale, setLocale, t } from "../i18n";
 import { useConfirm } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
@@ -26,6 +26,9 @@ export function AccountPage() {
   // #149 — Focus mode: a personal toggle (stored as the `focusMode` data key) that hides
   // every block marked "Hide in Focus mode" across the user's screens.
   const [focus, setFocus] = useState(false);
+  // #147 — Home board: the user's boards, to pick a personal "home" shown on any of their
+  // screens with no board of its own.
+  const [boards, setBoards] = useState<SetupSummary[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -36,7 +39,13 @@ export function AccountPage() {
       .catch(() => {});
     api.get<NonNullable<typeof data>>("/api/account/data-summary").then(setData).catch(() => {});
     api.get<{ value?: unknown }>("/api/data/focusMode").then((r) => setFocus(r.value === true || r.value === "true" || r.value === "on")).catch(() => {});
+    api.get<SetupSummary[]>("/api/layouts").then(setBoards).catch(() => {});
   }, []);
+
+  const saveHomeBoard = async (id: number | null) => {
+    try { const u = await api.patch<UserInfo>("/api/account", { homeLayoutId: id }); setUser(u); toast.success(id ? "Home board set" : "Home board cleared"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   const toggleFocus = async () => {
     const nextOn = !focus;
@@ -143,6 +152,18 @@ export function AccountPage() {
           <label class="field grow"><span>Current password</span><input type="password" autoComplete="current-password" value={cur} onInput={(e) => setCur((e.currentTarget as HTMLInputElement).value)} /></label>
           <label class="field grow"><span>New password <em>(min 8 characters)</em></span><input type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.currentTarget as HTMLInputElement).value)} /></label>
           <div class="row"><button class="primary" disabled={!cur || next.length < 8} onClick={savePassword}>Change password</button></div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Home board</h2>
+          <p class="muted">Your personal "my glance". Any of your screens that has no board of its own (and isn't driven by a group) shows this one — so your board follows you to whatever screen you sit at.</p>
+          <label class="field" style={{ maxWidth: "320px" }}>
+            <span>Show this board on my unassigned screens</span>
+            <select value={user?.homeLayoutId ?? ""} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; saveHomeBoard(v ? Number(v) : null); }}>
+              <option value="">None</option>
+              {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
         </section>
 
         <section class="card account-section">

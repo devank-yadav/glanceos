@@ -5,7 +5,7 @@ import { getCustomData } from "./customdata";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
-import { getLayout } from "./layouts";
+import { getLayout, getOwnedLayout } from "./layouts";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
 import { resolveWidgetData } from "./widgets";
 import { sunTimes } from "./astro";
@@ -30,6 +30,15 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
   const scheduled = activeScheduledLayout(device.id, now, deviceTz);
   if (scheduled) return scheduled;
   if (device.layout_id) return device.layout_id;
+
+  // #147 — a user's personal "home board" shows on any of their own screens that has no board
+  // of its own, before the display-group fallback. Re-check org ownership here so the board is
+  // only shown when it belongs to THIS screen's org (no cross-org exposure if the owner later
+  // moved orgs or the board was deleted).
+  if (device.user_id) {
+    const homeId = getUser(device.user_id)?.homeLayoutId ?? null;
+    if (homeId && getOwnedLayout(homeId, device.org_id ?? "")) return homeId;
+  }
 
   if (device.group_id) {
     const group = getGroupRow(device.group_id);

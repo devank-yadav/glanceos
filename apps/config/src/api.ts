@@ -8,6 +8,7 @@ export interface UserInfo {
   homeLocationName: string | null;
   homeLatitude: number | null;
   homeLongitude: number | null;
+  homeLayoutId: number | null;
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;

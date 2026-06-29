@@ -12,7 +12,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, consumeAuthToken, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser, getUserByEmail,
-  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserHome, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
@@ -1436,7 +1436,7 @@ ${og}
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null };
     const userId = c.get("userId");
     let u = getUser(userId);
     if (typeof body.name === "string") {
@@ -1452,6 +1452,15 @@ ${og}
       const home = body.home === null ? null : { name: String(body.home.name ?? ""), latitude: Number(body.home.latitude), longitude: Number(body.home.longitude) };
       u = setUserHome(userId, home);
       if (!u) return c.json({ error: "invalid location" }, 400);
+    }
+    if (body.homeLayoutId !== undefined) {
+      // #147 — null clears the home board; a number must be a board in THIS org (no cross-org
+      // exposure). currentLayoutId re-checks org ownership at resolve time as a second guard.
+      if (body.homeLayoutId !== null && !getOwnedLayout(body.homeLayoutId, c.get("orgId"))) {
+        return c.json({ error: "board not found" }, 400);
+      }
+      u = setUserHomeLayout(userId, body.homeLayoutId);
+      await pushUserDevices(userId); // unassigned screens pick up the new (or cleared) home live
     }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });
