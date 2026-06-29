@@ -148,12 +148,50 @@ function el(className: string, text?: string): HTMLDivElement {
   return d;
 }
 
+// #50 — a block's effective scalar for value-conditional visibility: its resolved data
+// (number/string passthrough, object .value/.count, array length), else a primary prop.
+const SCALAR_PROPS = ["value", "amount", "count", "number", "percent", "content", "text", "title", "label"];
+function blockScalar(b: RowT["blocks"][number], data: Record<string, unknown>): unknown {
+  const d = data[b.id];
+  if (d != null) {
+    if (typeof d !== "object") return d;
+    if (Array.isArray(d)) return d.length;
+    const o = d as Record<string, unknown>;
+    if (o.value != null) return o.value;
+    if (o.count != null) return o.count;
+  }
+  const p = b.props as Record<string, unknown>;
+  for (const k of SCALAR_PROPS) { const v = p[k]; if (v != null && v !== "") return v; }
+  return undefined;
+}
+// True when a block should be hidden now: an automation hide, a "whenData" block with no
+// data, or a visibleWhen value test that fails (#50). Shared by structuralSig + render.
+function blockHidden(b: RowT["blocks"][number], data: Record<string, unknown>): boolean {
+  if (b.hidden) return true;
+  if (b.visibility === "whenData" && data[b.id] == null) return true;
+  const vw = b.visibleWhen;
+  if (!vw) return false;
+  const s = blockScalar(b, data);
+  if (vw.op === "empty") return !(s == null || s === "");
+  if (vw.op === "nonempty") return s == null || s === "";
+  if (s == null) return true; // need a value to compare
+  const a = Number(s), c = Number(vw.value), num = Number.isFinite(a) && Number.isFinite(c);
+  let pass = true;
+  if (vw.op === "gt") pass = num && a > c;
+  else if (vw.op === "gte") pass = num && a >= c;
+  else if (vw.op === "lt") pass = num && a < c;
+  else if (vw.op === "lte") pass = num && a <= c;
+  else if (vw.op === "eq") pass = num ? a === c : String(s) === String(vw.value);
+  else if (vw.op === "ne") pass = num ? a !== c : String(s) !== String(vw.value);
+  return !pass;
+}
+
 // What makes the DOM skeleton: gap/align, zones rects, and the visible blocks (id +
 // type) per row. If this is unchanged between ticks we keep the DOM and only refresh
 // changed cells; if it differs (layout edited, a block shown/hidden) we full-rebuild.
 function structuralSig(layout: LayoutT, data: Record<string, unknown>): string {
   const vis = (b: RowT["blocks"][number]) =>
-    !b.hidden && !(b.visibility === "whenData" && data[b.id] == null) && (WIDGETS as Record<string, unknown>)[b.type];
+    !blockHidden(b, data) && (WIDGETS as Record<string, unknown>)[b.type];
   const rowsSig = (rows: RowT[]) => rows.map((r) => `${r.h}|${r.blocks.filter(vis).map((b) => `${b.id}:${b.type}`).join(",")}`).join(";");
   const base = `${layout.gap}/${layout.align ?? "top"}/`;
   return layout.zones?.length
@@ -317,10 +355,8 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
     rowEl.style.gap = gap;
     rowEl.style.gridRow = String(offset + i + 1);
     for (const block of row.blocks) {
-      // Hidden by an automation (showObject/hideObject) — skip rendering entirely.
-      if (block.hidden) continue;
-      // Conditional visibility: a "whenData" block hides when its bound source resolved to nothing.
-      if (block.visibility === "whenData" && data[block.id] == null) continue;
+      // Hidden by an automation, a "whenData" block with no data, or a failing visibleWhen test.
+      if (blockHidden(block, data)) continue;
       // A cached bundle older than the document may not know this type — skip, don't blank.
       if (!(WIDGETS as Record<string, unknown>)[block.type]) continue;
       const cell = document.createElement("div");

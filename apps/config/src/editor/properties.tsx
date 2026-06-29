@@ -326,6 +326,13 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.visibility = v === "whenData" ? "whenData" : undefined;
     });
+  // #50 — value-conditional visibility: show the block only when its value passes a test.
+  const editVisibleWhen = (op: string, value?: string) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (!target) return;
+      target.visibleWhen = op ? ({ op, value: op === "empty" || op === "nonempty" ? undefined : value } as typeof target.visibleWhen) : undefined;
+    });
   const clearSource = () =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
@@ -407,13 +414,35 @@ export function BlockFields({
         </div>
       )}
       {BINDABLE.has(block.type) && (
-        <label class="field">
-          <span>Visibility</span>
-          <select value={block.visibility ?? "always"} onChange={(e) => editVisibility((e.currentTarget as HTMLSelectElement).value)}>
-            <option value="always">Always show</option>
-            <option value="whenData">Only when its source has data</option>
-          </select>
-        </label>
+        <>
+          <label class="field">
+            <span>Visibility</span>
+            <select value={block.visibility ?? "always"} onChange={(e) => editVisibility((e.currentTarget as HTMLSelectElement).value)}>
+              <option value="always">Always show</option>
+              <option value="whenData">Only when its source has data</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Show only when value…</span>
+            <select value={block.visibleWhen?.op ?? ""} onChange={(e) => editVisibleWhen((e.currentTarget as HTMLSelectElement).value, block.visibleWhen?.value != null ? String(block.visibleWhen.value) : "")}>
+              <option value="">Always (no value test)</option>
+              <option value="gt">greater than</option>
+              <option value="gte">≥</option>
+              <option value="lt">less than</option>
+              <option value="lte">≤</option>
+              <option value="eq">equals</option>
+              <option value="ne">does not equal</option>
+              <option value="nonempty">is not empty</option>
+              <option value="empty">is empty</option>
+            </select>
+          </label>
+          {block.visibleWhen && block.visibleWhen.op !== "empty" && block.visibleWhen.op !== "nonempty" && (
+            <label class="field">
+              <span>Value</span>
+              <input value={block.visibleWhen.value != null ? String(block.visibleWhen.value) : ""} onInput={(e) => editVisibleWhen(block.visibleWhen!.op, (e.currentTarget as HTMLInputElement).value)} />
+            </label>
+          )}
+        </>
       )}
       <h4>Emphasis</h4>
       <div class="row wrap">

@@ -567,3 +567,26 @@ describe("multi-page boards (v9.x)", () => {
     now.mockRestore();
   });
 });
+
+describe("value-conditional visibility — visibleWhen (#50)", () => {
+  it("hides a block failing its value test and shows one that passes", () => {
+    const layout = { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "hi", type: "stat", width: 1, props: { value: "7", label: "HideMe" }, visibleWhen: { op: "gt", value: 100 } },
+      { id: "lo", type: "stat", width: 1, props: { value: "7", label: "ShowMe" }, visibleWhen: { op: "lt", value: 100 } },
+    ] }] };
+    renderPayload(payload(layout));
+    const txt = document.getElementById("app")!.textContent || "";
+    expect(txt).toContain("ShowMe");
+    expect(txt).not.toContain("HideMe");
+  });
+  it("empty / nonempty test against resolved data", () => {
+    const layout = { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+      { id: "a", type: "stat", width: 1, props: { label: "A" }, visibleWhen: { op: "nonempty" } },
+      { id: "b", type: "stat", width: 1, props: { label: "B" }, visibleWhen: { op: "empty" } },
+    ] }] };
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout, data: { a: 42 } } } as never);
+    const txt = document.getElementById("app")!.textContent || "";
+    expect(txt).toContain("A"); // has data → nonempty passes
+    expect(txt).not.toContain("B"); // has data → empty fails → hidden
+  });
+});
