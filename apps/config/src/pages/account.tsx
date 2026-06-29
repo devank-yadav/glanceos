@@ -23,6 +23,9 @@ export function AccountPage() {
   const [importBusy, setImportBusy] = useState(false);
   // #167 — privacy dashboard: what's stored about you.
   const [data, setData] = useState<{ boards: number; screens: number; automations: number; customDataKeys: number; tasks: number; inlets: number; apiKeys: number; connections: { provider: string; label: string; status: string }[] } | null>(null);
+  // #149 — Focus mode: a personal toggle (stored as the `focusMode` data key) that hides
+  // every block marked "Hide in Focus mode" across the user's screens.
+  const [focus, setFocus] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -32,7 +35,15 @@ export function AccountPage() {
       .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); setHomeName(s.user.homeLocationName ?? null); } })
       .catch(() => {});
     api.get<NonNullable<typeof data>>("/api/account/data-summary").then(setData).catch(() => {});
+    api.get<{ value?: unknown }>("/api/data/focusMode").then((r) => setFocus(r.value === true || r.value === "true" || r.value === "on")).catch(() => {});
   }, []);
+
+  const toggleFocus = async () => {
+    const nextOn = !focus;
+    setFocus(nextOn);
+    try { await api.post("/api/data/focusMode", { value: nextOn }); toast.success(nextOn ? "Focus mode on — noisy blocks hidden on your screens" : "Focus mode off"); }
+    catch { setFocus(!nextOn); toast.error("Couldn't update Focus mode"); }
+  };
 
   const toLogin = () => { location.hash = "#/login"; location.reload(); };
 
@@ -132,6 +143,16 @@ export function AccountPage() {
           <label class="field grow"><span>Current password</span><input type="password" autoComplete="current-password" value={cur} onInput={(e) => setCur((e.currentTarget as HTMLInputElement).value)} /></label>
           <label class="field grow"><span>New password <em>(min 8 characters)</em></span><input type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.currentTarget as HTMLInputElement).value)} /></label>
           <div class="row"><button class="primary" disabled={!cur || next.length < 8} onClick={savePassword}>Change password</button></div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Focus mode</h2>
+          <p class="muted">Hide noisy blocks across your screens for deep work. Mark blocks <em>"Hide in Focus mode"</em> in the Studio, then flip this — your screens update instantly. An automation can also turn it on automatically (e.g. when your calendar shows you're in a meeting).</p>
+          <div class="row">
+            <button class={focus ? "primary" : "ghost"} onClick={toggleFocus} aria-pressed={focus}>
+              {focus ? "Focus is on — turn off" : "Turn Focus on"}
+            </button>
+          </div>
         </section>
 
         {data && (

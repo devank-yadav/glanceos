@@ -1,6 +1,7 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "./auth";
 import { connLookupForOrg } from "./connections";
+import { getCustomData } from "./customdata";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
@@ -105,25 +106,37 @@ export async function composeState(device: DeviceRow, now = Date.now(), opts: { 
     const { weekday, minute } = wallClock(now, device.timezone);
     quietDim = windowActive(profile.quietHours, minute, weekday);
   }
+  const data = await resolveWidgetData(
+    layout.document,
+    device.user_id ?? "",
+    connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
+    geo,
+    `dev:${device.id}`, // per-device snapshot key for the "since you looked" digest
+    opts.commit ?? true,
+  );
+  // #149 Focus mode — when the user's `focusMode` data key is on (set by a tap, the API, or an
+  // automation during a meeting via calendar.isBusyNow), flag focus active in a reserved data
+  // key so the screen hides every block marked `focusHide`. Off by default; costs one cheap read.
+  if (device.user_id && focusFlag(getCustomData(device.user_id, "focusMode"))) data["__focus"] = true;
   return {
     claimed: true,
     state: {
       layoutVersion: layout.version,
       layout: layout.document,
-      data: await resolveWidgetData(
-        layout.document,
-        device.user_id ?? "",
-        connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
-        geo,
-        `dev:${device.id}`, // per-device snapshot key for the "since you looked" digest
-        opts.commit ?? true,
-      ),
+      data,
       deviceName: device.name ?? undefined,
       tv,
       effectiveTheme,
       quietDim,
     },
   };
+}
+
+// A focusMode value is "on" for true / 1 / "true" / "on" / "yes" (any case); anything else is off.
+function focusFlag(v: unknown): boolean {
+  if (v === true || v === 1) return true;
+  if (typeof v === "string") return ["true", "on", "yes", "1"].includes(v.trim().toLowerCase());
+  return false;
 }
 
 export async function pushDevice(deviceId: string): Promise<void> {

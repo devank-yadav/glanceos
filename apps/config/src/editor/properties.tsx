@@ -340,6 +340,12 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.fallback = text.trim() || undefined;
     });
+  // #149 — mark a block to hide while Focus mode is on (set focusHide; undefined when off).
+  const editFocusHide = (on: boolean) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.focusHide = on || undefined;
+    });
   const clearSource = () =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
@@ -455,6 +461,10 @@ export function BlockFields({
           </label>
         </>
       )}
+      <label class="field checkbox">
+        <input type="checkbox" checked={!!block.focusHide} onChange={(e) => editFocusHide((e.currentTarget as HTMLInputElement).checked)} />
+        <span>Hide in Focus mode</span>
+      </label>
       <h4>Emphasis</h4>
       <div class="row wrap">
         <label class="field checkbox">

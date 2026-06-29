@@ -398,6 +398,20 @@ describe("daily brief + contextual greeting (#148/#154)", () => {
   });
 });
 
+describe("focus mode (#149)", () => {
+  const board = (focus: boolean) => ({ claimed: true, state: { layoutVersion: 1, data: focus ? { __focus: true } : {}, layout: { ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
+    { id: "keep", type: "divider", width: 1, props: {} },
+    { id: "noisy", type: "divider", width: 1, props: {}, focusHide: true },
+  ] }] } } } as unknown as StreamPayloadT);
+
+  it("hides focusHide blocks only when focus is active", () => {
+    renderPayload(board(false));
+    expect(document.querySelectorAll("#app .widget").length).toBe(2);
+    renderPayload(board(true));
+    expect(document.querySelectorAll("#app .widget").length).toBe(1);
+  });
+});
+
 describe("pomodoro is a live, self-running timer", () => {
   const pomo = (props: object) =>
     renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [

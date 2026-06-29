@@ -403,7 +403,7 @@ const VisibleWhen = z.object({
   op: z.enum(["gt", "gte", "lt", "lte", "eq", "ne", "empty", "nonempty"]),
   value: z.union([z.number(), z.string()]).optional(),
 });
-const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional() };
+const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),

@@ -168,6 +168,8 @@ function blockScalar(b: RowT["blocks"][number], data: Record<string, unknown>): 
 // data, or a visibleWhen value test that fails (#50). Shared by structuralSig + render.
 function blockHidden(b: RowT["blocks"][number], data: Record<string, unknown>): boolean {
   if (b.hidden) return true;
+  // #149 Focus mode: when the server flags focus active (reserved data key), hide noisy blocks.
+  if (b.focusHide && data["__focus"]) return true;
   if (b.visibility === "whenData" && data[b.id] == null) return true;
   const vw = b.visibleWhen;
   if (!vw) return false;
