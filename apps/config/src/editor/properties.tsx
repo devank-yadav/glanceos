@@ -333,6 +333,12 @@ export function BlockFields({
       if (!target) return;
       target.visibleWhen = op ? ({ op, value: op === "empty" || op === "nonempty" ? undefined : value } as typeof target.visibleWhen) : undefined;
     });
+  // #22 — authored fallback shown on the screen when the bound data is missing/empty.
+  const editFallback = (text: string) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.fallback = text.trim() || undefined;
+    });
   const clearSource = () =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
@@ -442,6 +448,10 @@ export function BlockFields({
               <input value={block.visibleWhen.value != null ? String(block.visibleWhen.value) : ""} onInput={(e) => editVisibleWhen(block.visibleWhen!.op, (e.currentTarget as HTMLInputElement).value)} />
             </label>
           )}
+          <label class="field">
+            <span>When no data, show…</span>
+            <input placeholder="(leave blank to keep the block's own content)" value={block.fallback ?? ""} onInput={(e) => editFallback((e.currentTarget as HTMLInputElement).value)} />
+          </label>
         </>
       )}
       <h4>Emphasis</h4>

@@ -358,6 +358,25 @@ describe("live alert banner", () => {
   });
 });
 
+describe("authored fallback (#22)", () => {
+  const mk = (data: Record<string, unknown>) => renderPayload({ claimed: true, state: { layoutVersion: 1, data, layout: {
+    ...baseLayout,
+    rows: [{ id: "r1", h: 6, blocks: [{ id: "s", type: "stat", width: 1, props: { value: "12" }, fallback: "No data yet" }] }],
+  } } } as unknown as StreamPayloadT);
+
+  it("shows the fallback when the bound datum is missing, and the widget once data arrives", () => {
+    mk({}); // nothing at data.s → fallback
+    expect([...document.querySelectorAll(".placeholder")].some((p) => p.textContent === "No data yet")).toBe(true);
+    mk({ s: { value: 42 } }); // data present → real widget, no fallback
+    expect([...document.querySelectorAll(".placeholder")].some((p) => p.textContent === "No data yet")).toBe(false);
+  });
+
+  it("treats an empty array as no data", () => {
+    mk({ s: [] });
+    expect([...document.querySelectorAll(".placeholder")].some((p) => p.textContent === "No data yet")).toBe(true);
+  });
+});
+
 describe("pomodoro is a live, self-running timer", () => {
   const pomo = (props: object) =>
     renderPayload(payload({ ...baseLayout, rows: [{ id: "r", h: 6, blocks: [
