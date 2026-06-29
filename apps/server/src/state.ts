@@ -1,15 +1,13 @@
 import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
-import { expandInstances } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "./auth";
 import { connLookupForOrg } from "./connections";
-import { mastersMapForOrg } from "./masters";
 import { getCustomData } from "./customdata";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
-import { getLayout, getOwnedLayout, listSetups } from "./layouts";
+import { getLayout, getOwnedLayout } from "./layouts";
 import { activeScheduledLayout, hasSchedules, wallClock } from "./schedules";
-import { allBlocks, resolveWidgetData } from "./widgets";
+import { resolveWidgetData } from "./widgets";
 import { sunTimes } from "./astro";
 
 // A screen inherits the account home location when it has none of its own, so a
@@ -117,12 +115,8 @@ export async function composeState(device: DeviceRow, now = Date.now(), opts: { 
     const { weekday, minute } = wallClock(now, device.timezone);
     quietDim = windowActive(profile.quietHours, minute, weekday);
   }
-  // #84 — expand reusable/master-block instances into their master's content BEFORE resolving
-  // data + sending the layout, so the zod-free screen never sees an instance. No-op (same object)
-  // for boards without instances.
-  const doc = expandInstances(layout.document, mastersMapForOrg(device.org_id));
   const data = await resolveWidgetData(
-    doc,
+    layout.document,
     device.user_id ?? "",
     connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
     geo,
@@ -137,7 +131,7 @@ export async function composeState(device: DeviceRow, now = Date.now(), opts: { 
     claimed: true,
     state: {
       layoutVersion: layout.version,
-      layout: doc, // #84 — instances already expanded to their masters
+      layout: layout.document,
       data,
       deviceName: device.name ?? undefined,
       tv,
@@ -152,19 +146,6 @@ function focusFlag(v: unknown): boolean {
   if (v === true || v === 1) return true;
   if (typeof v === "string") return ["true", "on", "yes", "1"].includes(v.trim().toLowerCase());
   return false;
-}
-
-// #84 — after a master block is edited, re-push every screen showing a board that has an
-// instance of it (the layout docs aren't mutated — composeState just re-expands with the new
-// master). Bounded by the org's board count; only runs on a master edit.
-export async function pushInstancesOfMaster(orgId: string | null, masterId: string): Promise<void> {
-  if (!orgId) return;
-  for (const s of listSetups(orgId)) {
-    const rec = getLayout(s.id);
-    if (rec && allBlocks(rec.document).some((b) => (b as { instanceOf?: string }).instanceOf === masterId)) {
-      await pushDevicesUsingLayout(s.id);
-    }
-  }
 }
 
 export async function pushDevice(deviceId: string): Promise<void> {

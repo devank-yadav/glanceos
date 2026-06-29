@@ -403,7 +403,7 @@ const VisibleWhen = z.object({
   op: z.enum(["gt", "gte", "lt", "lte", "eq", "ne", "empty", "nonempty"]),
   value: z.union([z.number(), z.string()]).optional(),
 });
-const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), instanceOf: z.string().max(64).optional() };
+const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),
@@ -730,29 +730,5 @@ export type ZoneT = z.infer<typeof Zone>;
 export type LayoutT = z.infer<typeof Layout>;
 export type PageSettingT = NonNullable<LayoutT["pageSettings"]>[number];
 export type PageScheduleT = NonNullable<PageSettingT["schedule"]>;
-
-// #84 — reusable/master blocks. A "master" defines a card's type + props + style once; a block
-// becomes a linked "instance" by carrying `instanceOf: <masterId>`. expandInstances replaces each
-// instance with its master's content (keeping the instance's own id + placement) — run server-side
-// at compose time and in the editor before preview, so the screen runtime never sees an instance
-// and stays byte-identical. A missing master leaves the block as-is (renders its own props).
-export interface MasterDef { type: WidgetT["type"]; props: unknown; style?: WidgetT["style"] }
-export function expandInstances<T extends { rows: RowT[]; pages?: RowT[][]; zones?: { rows: RowT[] }[] }>(doc: T, masters: Map<string, MasterDef>): T {
-  let changed = false;
-  const fix = (blk: WidgetT): WidgetT => {
-    const mid = (blk as { instanceOf?: string }).instanceOf;
-    if (!mid) return blk;
-    const m = masters.get(mid);
-    if (!m) return blk;
-    changed = true;
-    return { ...blk, type: m.type, props: m.props, style: m.style ?? blk.style } as WidgetT;
-  };
-  const fixRows = (rows: RowT[]): RowT[] => rows.map((r) => ({ ...r, blocks: r.blocks.map(fix) }));
-  const rows = fixRows(doc.rows);
-  const pages = doc.pages ? doc.pages.map(fixRows) : undefined;
-  const zones = doc.zones ? doc.zones.map((z) => ({ ...z, rows: fixRows(z.rows) })) : undefined;
-  if (!changed) return doc; // no instances → return the same object (cheap for ordinary boards)
-  return { ...doc, rows, ...(pages ? { pages } : {}), ...(zones ? { zones } : {}) };
-}
 
 export const PAGE_UNITS = 24;
