@@ -9,6 +9,7 @@ process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-engine-"));
 process.env.GLANCEOS_RATE_LIMIT = "off";
 
 const { migrate } = await import("../db");
+const { db } = await import("../db");
 const { createUser } = await import("../auth");
 const { setCustomData, getCustomData } = await import("../customdata");
 const { listTasks } = await import("../tasks");
@@ -17,7 +18,7 @@ const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
 const { ensurePersonalOrg } = await import("../orgs");
 const { createConnection } = await import("../connections");
-const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred, calendarContext } = await import("./engine");
+const { evaluate, buildContext, runActions, fireAutomations, dryRunAutomation, runAutomationById, drainDeferred, calendarContext, persistEngineState, hydrateEngineState } = await import("./engine");
 
 migrate();
 const user = createUser("Auto", "auto@example.com", "password123")!;
@@ -572,5 +573,27 @@ describe("calendarContext — deepened calendar substrate (F5)", () => {
     expect(c.nextIsAllDay).toBe(true);
     expect(c.nextIsOnline).toBe(false);
     expect(c.isBusyNow).toBe(false);
+  });
+});
+
+describe("persistEngineState / hydrateEngineState — sensing history survives a restart (#1)", () => {
+  it("flushes the engine maps to the engine_state table", () => {
+    persistEngineState();
+    const keys = (db.prepare("SELECT k FROM engine_state").all() as Array<{ k: string }>).map((r) => r.k);
+    expect(keys).toContain("deferred");
+    expect(keys).toContain("prev");
+    expect(keys).toContain("trend");
+  });
+  it("hydrates the deferred-action queue from the DB (a restart re-runs a queued action)", async () => {
+    // Simulate a row written before a restart: a setData action already due.
+    const row = JSON.stringify([{ dueMs: Date.now() - 1000, userId: user.id, action: { kind: "setData", key: "hydrated", value: "yes" }, ctx: { time: { ts: Date.now() } }, layoutId: null }]);
+    db.prepare("INSERT INTO engine_state (k, v) VALUES ('deferred', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").run(row);
+    hydrateEngineState();
+    await drainDeferred(new Date());
+    expect(getCustomData(user.id, "hydrated")).toBe("yes");
+  });
+  it("survives corrupt state without throwing (starts fresh)", () => {
+    db.prepare("INSERT INTO engine_state (k, v) VALUES ('trend', '{not json') ON CONFLICT(k) DO UPDATE SET v = excluded.v").run();
+    expect(() => hydrateEngineState()).not.toThrow();
   });
 });

@@ -16,6 +16,7 @@ import { connLookupForOrg, listConnections } from "../connections";
 import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
 import { allBlocks } from "../widgets";
+import { db } from "../db";
 import { weatherData } from "../fetchers/weather";
 import { precipData } from "../fetchers/openmeteo";
 import { sunTimes, tzMinuteOfDay } from "../astro";
@@ -798,6 +799,39 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
       lastPresencePerson.set(pk, here);
     }
   }
+  persistEngineState(); // #1 — flush sensing history so a restart doesn't re-baseline
+}
+
+// #1 — persist the engine's in-memory sensing maps + deferred queue to `engine_state`
+// (one JSON row per map), flushed once per tick and hydrated on boot. Bounded by the same
+// caps the maps already enforce; wrapped so a serialize/DB hiccup never crashes the tick.
+const ENGINE_STATE_MAPS: Array<[string, Map<string, unknown>]> = [
+  ["trend", trendSamples as Map<string, unknown>],
+  ["change", lastChange as Map<string, unknown>],
+  ["sustained", sustainedSince as Map<string, unknown>],
+  ["prev", prevCtx as unknown as Map<string, unknown>],
+  ["online", lastOnline as Map<string, unknown>],
+  ["presence", lastPresence as Map<string, unknown>],
+  ["presencePerson", lastPresencePerson as Map<string, unknown>],
+  ["timeFire", lastTimeFire as Map<string, unknown>],
+];
+export function persistEngineState(): void {
+  try {
+    const stmt = db.prepare("INSERT INTO engine_state (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v");
+    db.transaction(() => {
+      for (const [k, m] of ENGINE_STATE_MAPS) stmt.run(k, JSON.stringify([...m]));
+      stmt.run("deferred", JSON.stringify(deferredQueue));
+    })();
+  } catch { /* a flush hiccup must never break the tick; next tick retries */ }
+}
+/** Restore the engine's sensing history from the DB on boot (call once after migrate()). */
+export function hydrateEngineState(): void {
+  try {
+    const read = (k: string): unknown => { const r = db.prepare("SELECT v FROM engine_state WHERE k = ?").get(k) as { v: string } | undefined; return r ? JSON.parse(r.v) : null; };
+    for (const [k, m] of ENGINE_STATE_MAPS) { const e = read(k); if (Array.isArray(e)) { m.clear(); for (const pair of e) if (Array.isArray(pair)) m.set(pair[0] as string, pair[1]); } }
+    const def = read("deferred");
+    if (Array.isArray(def)) { deferredQueue.length = 0; deferredQueue.push(...(def as Deferred[])); }
+  } catch { /* corrupt/absent state → start fresh, exactly as before this feature */ }
 }
 
 const describeAction = (a: ActionT): string => {

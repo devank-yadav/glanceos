@@ -6,7 +6,7 @@ import { checkpoint, migrate } from "./db";
 import { emailConfigured } from "./email";
 import { runLifecycleSweep } from "./lifecycle";
 import { runAlertChecks } from "./notifications";
-import { runAutomationTick } from "./automation/engine";
+import { hydrateEngineState, runAutomationTick } from "./automation/engine";
 import { pruneAutomationRuns } from "./automations";
 import { pruneProofOfPlay } from "./playlog";
 import { gcRateLimits } from "./ratelimit";
@@ -18,6 +18,7 @@ import { gcUploads } from "./uploads";
 validateConfig(); // fail fast on a broken GLANCEOS_* env
 migrate();
 seedTemplates();
+hydrateEngineState(); // #1 — restore automation sensing history so a restart doesn't re-baseline
 
 // Rotation safety: warn loudly if stored secrets can't be decrypted with the
 // current/previous key (operator changed GLANCEOS_SECRET_KEY without rotating).
