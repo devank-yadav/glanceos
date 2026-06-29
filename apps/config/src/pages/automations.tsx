@@ -292,6 +292,7 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
   const [items, setItems] = useState<Automation[] | null>(null);
   const [editing, setEditing] = useState<Automation | null>(null);
   const [history, setHistory] = useState<{ name: string; runs: RunLog[] } | null>(null);
+  const [histFilter, setHistFilter] = useState<"all" | "ran" | "skipped">("all"); // #12 run-history filter
   const confirm = useConfirm();
   const toast = useToast();
   const scoped = layoutId != null;
@@ -402,12 +403,23 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
         </ul>
       ))}
       {history && (
-        <Modal open onClose={() => setHistory(null)} title={`Run history — ${history.name}`} width={520}>
+        <Modal open onClose={() => { setHistory(null); setHistFilter("all"); }} title={`Run history — ${history.name}`} width={520}>
           {history.runs.length === 0 ? (
             <p class="muted">No runs recorded yet.</p>
-          ) : (
+          ) : (() => {
+            const ran = history.runs.filter((r) => r.matched).length;
+            const shown = history.runs.filter((r) => histFilter === "all" || (histFilter === "ran") === r.matched);
+            return (<>
+            <div class="row spread" style={{ marginBottom: "8px" }}>
+              <div class="row" style={{ gap: "4px" }}>
+                {(["all", "ran", "skipped"] as const).map((f) => (
+                  <button key={f} class={`day-toggle ${histFilter === f ? "on" : ""}`} onClick={() => setHistFilter(f)}>{f === "all" ? "All" : f === "ran" ? "Ran" : "Skipped"}</button>
+                ))}
+              </div>
+              <span class="muted">{ran} ran · {history.runs.length - ran} skipped of {history.runs.length}</span>
+            </div>
             <ul class="picker-list key-list run-log">
-              {history.runs.map((r) => (
+              {shown.map((r) => (
                 <li key={r.id} class="row spread">
                   <span class="key-meta">
                     <strong>{r.matched ? `ran ${r.actionsRun} action${r.actionsRun === 1 ? "" : "s"}` : "didn't match"}</strong>
@@ -417,7 +429,8 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
                 </li>
               ))}
             </ul>
-          )}
+            </>);
+          })()}
         </Modal>
       )}
     </>
