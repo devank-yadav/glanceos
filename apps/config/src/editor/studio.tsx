@@ -1166,6 +1166,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
                 <button class="icon-btn" title="Align center" onClick={() => styleSelected({ align: "center" })}><Icon.alignCenter /></button>
                 <button class="icon-btn" title="Align right" onClick={() => styleSelected({ align: "end" })}><Icon.alignRight /></button>
                 <span class="multi-sep" />
+                <button class="icon-btn" title="Align top" onClick={() => styleSelected({ valign: "top" })}><Icon.alignTop /></button>
+                <button class="icon-btn" title="Align middle" onClick={() => styleSelected({ valign: "middle" })}><Icon.alignMiddle /></button>
+                <button class="icon-btn" title="Align bottom" onClick={() => styleSelected({ valign: "bottom" })}><Icon.alignBottom /></button>
+                <span class="multi-sep" />
                 <button class="icon-btn" title="Invert (black)" onClick={invertSelected}><Icon.moon /></button>
                 <button class="icon-btn" title="Lock / unlock" onClick={lockSelected}><Icon.lock /></button>
                 <button class="icon-btn" title="Equalize column widths" disabled={!canEqualizeSelection()} onClick={equalizeSelected}><Icon.grid /></button>
