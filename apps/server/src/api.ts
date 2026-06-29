@@ -26,7 +26,7 @@ import { playLogCsv, playLogForGroup, recordPlayLog, type PlayLogEntry } from ".
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
-  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, getDevice, listDevices, recordTelemetry,
+  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, devicesOwnedBy, getDevice, listDevices, recordTelemetry,
   registerDevice, setDeviceLocation, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
@@ -1481,6 +1481,23 @@ ${og}
     destroyAllSessions(c.get("userId"));
     deleteCookie(c, SESSION_COOKIE, { path: "/" });
     return c.json({ ok: true });
+  });
+
+  // #167 — privacy dashboard: a transparent count of what's stored about you, plus which
+  // apps you've connected (label + status only — secrets are never read here). Pairs with
+  // the existing full-backup export and account-delete below it.
+  app.get("/api/account/data-summary", (c) => {
+    const userId = c.get("userId"), orgId = c.get("orgId");
+    return c.json({
+      boards: listSetups(orgId).length,
+      screens: devicesOwnedBy(userId).length,
+      automations: countAutomations(userId),
+      customDataKeys: listCustomData(userId).length,
+      tasks: listTasks(userId, "default").length,
+      inlets: listInlets(userId).length,
+      apiKeys: listKeys(userId).length,
+      connections: listConnections(orgId).map((x) => ({ provider: x.provider, label: x.label, status: x.status })),
+    });
   });
 
   // ---- API keys (session-only: you can't manage keys with a key — these routes

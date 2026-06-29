@@ -21,6 +21,8 @@ export function AccountPage() {
   const [boardText, setBoardText] = useState("");
   const [importMode, setImportMode] = useState<"append" | "replace">("append");
   const [importBusy, setImportBusy] = useState(false);
+  // #167 — privacy dashboard: what's stored about you.
+  const [data, setData] = useState<{ boards: number; screens: number; automations: number; customDataKeys: number; tasks: number; inlets: number; apiKeys: number; connections: { provider: string; label: string; status: string }[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -29,6 +31,7 @@ export function AccountPage() {
     api.get<{ user: UserInfo | null }>("/api/auth/status")
       .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); setHomeName(s.user.homeLocationName ?? null); } })
       .catch(() => {});
+    api.get<NonNullable<typeof data>>("/api/account/data-summary").then(setData).catch(() => {});
   }, []);
 
   const toLogin = () => { location.hash = "#/login"; location.reload(); };
@@ -130,6 +133,33 @@ export function AccountPage() {
           <label class="field grow"><span>New password <em>(min 8 characters)</em></span><input type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.currentTarget as HTMLInputElement).value)} /></label>
           <div class="row"><button class="primary" disabled={!cur || next.length < 8} onClick={savePassword}>Change password</button></div>
         </section>
+
+        {data && (
+          <section class="card account-section">
+            <h2>Your data</h2>
+            <p class="muted">Everything GlanceOS stores for your account — nothing more. Export the full backup or delete the account below.</p>
+            <div class="data-grid">
+              {([["Boards", data.boards], ["Screens", data.screens], ["Automations", data.automations], ["Tasks", data.tasks], ["Data keys", data.customDataKeys], ["Webhooks", data.inlets], ["API keys", data.apiKeys]] as [string, number][]).map(([label, n]) => (
+                <div class="data-stat" key={label}><b>{n}</b><span>{label}</span></div>
+              ))}
+            </div>
+            {data.connections.length > 0 && (
+              <>
+                <p class="muted data-conn-head">Connected apps that can read data on your behalf:</p>
+                <ul class="data-conn-list">
+                  {data.connections.map((c, i) => (
+                    <li key={i}>
+                      <span class="data-conn-label">{c.label}</span>
+                      <span class="muted">{c.provider}</span>
+                      <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p class="muted">Manage or disconnect any of these on the <a href="#/integrations">Connections</a> page.</p>
+              </>
+            )}
+          </section>
+        )}
 
         <section class="card account-section">
           <h2>Sessions & data</h2>
