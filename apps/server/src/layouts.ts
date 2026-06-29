@@ -204,7 +204,7 @@ const VERSION_KEEP = (() => { const n = Number(process.env.GLANCEOS_VERSION_KEEP
 // autosaves don't flood history. 0 in tests captures every save.
 const VERSION_MIN_INTERVAL_MS = (() => { const n = Number(process.env.GLANCEOS_VERSION_MIN_INTERVAL_MS); return Number.isFinite(n) && n >= 0 ? n : 5 * 60_000; })();
 
-export interface LayoutVersionMeta { id: number; summary: string; createdAt: number }
+export interface LayoutVersionMeta { id: number; summary: string; createdAt: number; label: string | null }
 
 /** Archive a board's CURRENT document as a version (throttled + pruned). Called
  *  by updateLayout before it overwrites, so each version is a restorable past state. */
@@ -217,7 +217,8 @@ export function snapshotLayout(id: number, now = Date.now()): void {
   db.prepare("INSERT INTO layout_versions (layout_id, user_id, document, summary, created_at) VALUES (?, ?, ?, ?, ?)")
     .run(id, row.user_id, row.document, row.name, now);
   db.prepare(
-    `DELETE FROM layout_versions WHERE layout_id = ? AND id NOT IN (
+    // #95 — never prune a LABELED (named) version: a named restore point is permanent.
+    `DELETE FROM layout_versions WHERE layout_id = ? AND label IS NULL AND id NOT IN (
        SELECT id FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)`,
   ).run(id, id, VERSION_KEEP);
 }
@@ -226,9 +227,19 @@ export function snapshotLayout(id: number, now = Date.now()): void {
 export function listLayoutVersions(layoutId: number, orgId: string, limit = 50): LayoutVersionMeta[] {
   if (!getOwnedLayout(layoutId, orgId)) return [];
   const rows = db.prepare(
-    "SELECT id, summary, created_at FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
-  ).all(layoutId, Math.min(Math.max(1, limit), 100)) as { id: number; summary: string; created_at: number }[];
-  return rows.map((r) => ({ id: r.id, summary: r.summary, createdAt: r.created_at }));
+    "SELECT id, summary, created_at, label FROM layout_versions WHERE layout_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+  ).all(layoutId, Math.min(Math.max(1, limit), 100)) as { id: number; summary: string; created_at: number; label: string | null }[];
+  return rows.map((r) => ({ id: r.id, summary: r.summary, createdAt: r.created_at, label: r.label ?? null }));
+}
+
+/** #95 — name (or clear, with null/"") a board version. A labeled version is protected from
+ *  the auto-prune, so it becomes a permanent restore point. Returns false if the board isn't
+ *  the org's or the version doesn't belong to it. */
+export function setVersionLabel(layoutId: number, versionId: number, orgId: string, label: string | null): boolean {
+  if (!getOwnedLayout(layoutId, orgId)) return false;
+  const clean = label?.trim().slice(0, 80) || null;
+  const r = db.prepare("UPDATE layout_versions SET label = ? WHERE id = ? AND layout_id = ?").run(clean, versionId, layoutId);
+  return r.changes > 0;
 }
 
 /** The parsed document of one version of an owned board (for restore/preview). */

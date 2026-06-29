@@ -31,7 +31,7 @@ import { Icon } from "./icons";
 import { editorReducer, initialEditor, primaryId } from "./state";
 
 // Mirrors the server's listLayoutVersions() row (GET /api/layouts/:id/versions).
-type LayoutVersionMeta = { id: number; summary: string; createdAt: number };
+type LayoutVersionMeta = { id: number; summary: string; createdAt: number; label: string | null };
 
 // Block types that get the structured per-line list editor instead of a textarea.
 const LIST_EDIT = new Set<WidgetType>(["bulletList", "numberedList", "checklist", "steps"]);
@@ -169,6 +169,8 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [histBusy, setHistBusy] = useState(false);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [versions, setVersions] = useState<LayoutVersionMeta[]>([]);
+  const [namingId, setNamingId] = useState<number | null>(null); // #95 version being named
+  const [nameText, setNameText] = useState("");
   const [canCast, setCanCast] = useState(false);
   const [castMsg, setCastMsg] = useState("");
   const [convertId, setConvertId] = useState<string | null>(null);
@@ -795,12 +797,22 @@ export function Studio({ layoutId }: { layoutId: number }) {
     setShareOpen(true); setShareCopied(false);
     api.get<{ token: string | null; url: string | null }>(`/api/layouts/${layoutId}/share`).then((r) => setShareUrl(r.url)).catch(() => {});
   };
-  const openHistory = () => {
-    setHistOpen(true); setHistBusy(true);
+  const refetchVersions = () =>
     api.get<LayoutVersionMeta[]>(`/api/layouts/${layoutId}/versions`)
       .then((rows) => setVersions(Array.isArray(rows) ? rows : []))
-      .catch(() => setVersions([]))
-      .finally(() => setHistBusy(false));
+      .catch(() => setVersions([]));
+  const openHistory = () => {
+    setHistOpen(true); setHistBusy(true);
+    refetchVersions().finally(() => setHistBusy(false));
+  };
+  // #95 — name a version (a named version is a permanent, prune-proof restore point).
+  const nameVersion = async (vid: number, label: string) => {
+    try {
+      await api.patch(`/api/layouts/${layoutId}/versions/${vid}`, { label: label.trim() || null });
+      setNamingId(null);
+      await refetchVersions();
+      toast.success(label.trim() ? "Version named" : "Name cleared");
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   const restoreVersion = async (vid: number) => {
     setRestoringId(vid);
@@ -976,14 +988,29 @@ export function Studio({ layoutId }: { layoutId: number }) {
               <p class="muted">No saved versions yet. As you edit, GlanceOS quietly archives the previous state every few minutes — they'll show up here to restore.</p>
             ) : (
               <>
-                <p class="muted">Restore the board to an earlier saved state. Restoring is itself undoable — your current state is archived first.</p>
+                <p class="muted">Restore the board to an earlier saved state. Restoring is itself undoable — your current state is archived first. Name a version to keep it as a permanent restore point.</p>
                 <ul class="history-list">
                   {versions.map((v) => (
                     <li key={v.id} class="row spread history-row">
-                      <span class="history-when" title={new Date(v.createdAt).toLocaleString()}>{timeAgo(v.createdAt)}</span>
-                      <button class="ghost" disabled={restoringId !== null} onClick={() => restoreVersion(v.id)}>
-                        {restoringId === v.id ? "Restoring…" : "Restore"}
-                      </button>
+                      <span class="history-when" title={new Date(v.createdAt).toLocaleString()}>
+                        {v.label ? <span class="history-label" title="Named version — kept permanently">★ {v.label}</span> : null}
+                        {timeAgo(v.createdAt)}
+                      </span>
+                      {namingId === v.id ? (
+                        <span class="row" style={{ gap: "4px" }}>
+                          <input class="history-name-input" autofocus value={nameText} placeholder="Version name"
+                            onInput={(e) => setNameText((e.currentTarget as HTMLInputElement).value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") nameVersion(v.id, nameText); if (e.key === "Escape") setNamingId(null); }} />
+                          <button class="ghost" onClick={() => nameVersion(v.id, nameText)}>Save</button>
+                        </span>
+                      ) : (
+                        <span class="row" style={{ gap: "4px" }}>
+                          <button class="ghost" title={v.label ? "Rename / unname" : "Name this version"} onClick={() => { setNamingId(v.id); setNameText(v.label ?? ""); }}>{v.label ? "Rename" : "Name"}</button>
+                          <button class="ghost" disabled={restoringId !== null} onClick={() => restoreVersion(v.id)}>
+                            {restoringId === v.id ? "Restoring…" : "Restore"}
+                          </button>
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>

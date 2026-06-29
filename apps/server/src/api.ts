@@ -41,7 +41,7 @@ import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
   getLayoutByShareToken, getLayoutVersionDocument, getOwnedLayout, getShareInfo, importFromHub,
   listLayoutVersions, listPendingTemplates,
-  listPublished, listSetups, publishForReview, setReviewStatus, setShareToken, shareExpired,
+  listPublished, listSetups, publishForReview, setReviewStatus, setShareToken, setVersionLabel, shareExpired,
   updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
 import {
@@ -911,6 +911,16 @@ export function buildApp(): Hono<Env> {
     const updated = updateLayout(id, doc)!; // archives the pre-restore state too → restore is undoable
     await pushDevicesUsingLayout(id);
     return c.json({ id: updated.id, version: updated.version });
+  });
+
+  // #95 — name (or clear) a version. Labeled versions become permanent restore points.
+  app.patch("/api/layouts/:id/versions/:vid", async (c) => {
+    const id = Number(c.req.param("id"));
+    const body = (await c.req.json().catch(() => ({}))) as { label?: string | null };
+    if (!setVersionLabel(id, Number(c.req.param("vid")), c.get("orgId"), body.label ?? null)) {
+      return c.json({ error: "version not found" }, 404);
+    }
+    return c.json({ ok: true });
   });
 
   app.delete("/api/layouts/:id", async (c) => {
