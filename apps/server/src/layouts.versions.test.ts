@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createUser } from "./auth";
 import { migrate } from "./db";
 import {
-  blankDocument, createLayout, getLayoutVersionDocument, listLayoutVersions, updateLayout,
+  blankDocument, createLayout, getLayoutVersionDocument, listLayoutVersions, listSetups, updateLayout, updateLayoutMeta,
 } from "./layouts";
 import { ensurePersonalOrg } from "./orgs";
 
@@ -41,5 +41,18 @@ describe("board version history", () => {
     updateLayout(layout.id, blankDocument("P1"), 3_000_000);
     expect(listLayoutVersions(layout.id, "not-the-owner")).toEqual([]);
     expect(getLayoutVersionDocument(layout.id, 999999, "not-the-owner")).toBeUndefined();
+  });
+});
+
+describe("board folders (#104)", () => {
+  it("moves a board into a folder and back to unfiled", () => {
+    const l = createLayout("Folderable", blankDocument("Folderable"), { userId: user.id, orgId: org });
+    expect(listSetups(org).find((s) => s.id === l.id)!.folder).toBeNull();
+    updateLayoutMeta(l.id, { folder: "Work" });
+    expect(listSetups(org).find((s) => s.id === l.id)!.folder).toBe("Work");
+    updateLayoutMeta(l.id, { name: "Renamed" }); // folder undefined → unchanged
+    expect(listSetups(org).find((s) => s.id === l.id)!.folder).toBe("Work");
+    updateLayoutMeta(l.id, { folder: null }); // explicit unfile
+    expect(listSetups(org).find((s) => s.id === l.id)!.folder).toBeNull();
   });
 });

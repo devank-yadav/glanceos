@@ -119,6 +119,7 @@ export interface SetupSummary {
   deviceNames: string[];
   widgetCount: number;
   rowCount: number;
+  folder: string | null;
 }
 
 export interface LayoutRecord {

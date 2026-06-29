@@ -3848,3 +3848,8 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .price-features li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .price-features svg { width: 15px; height: 15px; flex: none; color: var(--indigo); }
 .price-card .btn { width: 100%; justify-content: center; text-align: center; }
+
+/* #104 — board folder section heading above each card grid. */
+.board-folder { margin-bottom: 18px; }
+.folder-heading { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--fg); margin: 10px 0 8px; }
+.folder-heading svg { width: 15px; height: 15px; opacity: 0.7; }

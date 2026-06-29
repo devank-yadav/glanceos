@@ -20,6 +20,7 @@ export interface LayoutRecord {
   description: string;
   importCount: number;
   reviewStatus: string; // 'pending' | 'approved' — only meaningful when published
+  folder: string | null; // #104 — organize boards into collections (null = Unfiled)
 }
 
 export interface SetupSummary extends LayoutRecord {
@@ -49,6 +50,7 @@ interface LayoutRow {
   description: string;
   import_count: number;
   review_status: string;
+  folder: string | null;
 }
 
 function toRecord(row: LayoutRow): LayoutRecord {
@@ -66,6 +68,7 @@ function toRecord(row: LayoutRow): LayoutRecord {
     description: row.description,
     importCount: row.import_count,
     reviewStatus: row.review_status ?? "approved",
+    folder: row.folder ?? null,
   };
 }
 
@@ -249,20 +252,24 @@ export function updateLayout(id: number, document: LayoutT, now = Date.now()): L
 
 export function updateLayoutMeta(
   id: number,
-  patch: { name?: string; description?: string; published?: boolean },
+  patch: { name?: string; description?: string; published?: boolean; folder?: string | null },
 ): LayoutRecord | undefined {
   const existing = getLayout(id);
   if (!existing) return undefined;
   const name = patch.name?.trim() || existing.name;
   // Keep the document's name in sync — it's what screens and exports carry.
   const document = { ...existing.document, name };
+  // folder: undefined = leave as-is; "" / null = unfile; a value = move there. (COALESCE
+  // can't clear, so resolve the final folder explicitly before the UPDATE.)
+  const folder = patch.folder === undefined ? existing.folder : (patch.folder?.trim() || null);
   db.prepare(
-    "UPDATE layouts SET name = ?, document = ?, description = COALESCE(?, description), published = COALESCE(?, published) WHERE id = ?",
+    "UPDATE layouts SET name = ?, document = ?, description = COALESCE(?, description), published = COALESCE(?, published), folder = ? WHERE id = ?",
   ).run(
     name,
     JSON.stringify(document),
     patch.description ?? null,
     patch.published === undefined ? null : patch.published ? 1 : 0,
+    folder,
     id,
   );
   return getLayout(id);

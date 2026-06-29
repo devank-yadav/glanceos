@@ -75,11 +75,24 @@ export function SetupsPage() {
                 body={q ? "Try a different search." : "Create your first board, or start from a template."}
                 action={q ? undefined : { label: "New board", onClick: newBoard }}
               />
-            ) : (
-              <div class="cards">
-                {filtered.map((s) => <SetupCard key={s.id} setup={s} onChanged={refresh} />)}
-              </div>
-            )}
+            ) : (() => {
+              // #104 — group boards by folder (sorted; Unfiled last). Folder headings only
+              // appear once at least one board has a folder, so the flat list is unchanged
+              // for people who never use them.
+              const folders = [...new Set((setups ?? []).map((s) => s.folder).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b));
+              const groups = [
+                ...folders.map((f) => ({ folder: f as string | null, items: filtered.filter((s) => s.folder === f) })),
+                { folder: null as string | null, items: filtered.filter((s) => !s.folder) },
+              ].filter((g) => g.items.length > 0);
+              return groups.map((g) => (
+                <section key={g.folder ?? "_unfiled"} class="board-folder">
+                  {folders.length > 0 && <h3 class="folder-heading"><Icon.layers /> {g.folder ?? "Unfiled"} <span class="muted">· {g.items.length}</span></h3>}
+                  <div class="cards">
+                    {g.items.map((s) => <SetupCard key={s.id} setup={s} folders={folders} onChanged={refresh} />)}
+                  </div>
+                </section>
+              ));
+            })()}
           </>
         ) : (
           <SharedBoards items={shared} />
@@ -119,10 +132,21 @@ function SharedBoards({ items }: { items: SharedLayout[] | null }) {
   );
 }
 
-function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () => Promise<void> }) {
+function SetupCard({ setup, folders, onChanged }: { setup: SetupSummary; folders: string[]; onChanged: () => Promise<void> }) {
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+
+  // #104 — move this board into a folder (null = remove from folder).
+  const moveTo = async (folder: string | null) => {
+    await api.patch(`/api/layouts/${setup.id}`, { folder });
+    toast.success(folder ? `Moved to "${folder}"` : "Removed from folder");
+    await onChanged();
+  };
+  const newFolder = async () => {
+    const f = window.prompt("New folder name")?.trim();
+    if (f) await moveTo(f);
+  };
 
   const exportJson = async () => {
     const record = await api.get<LayoutRecord>(`/api/layouts/${setup.id}`);
@@ -162,6 +186,9 @@ function SetupCard({ setup, onChanged }: { setup: SetupSummary; onChanged: () =>
               { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
               { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
               { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
+              ...folders.filter((f) => f !== setup.folder).map((f) => ({ label: `Move to "${f}"`, icon: <Icon.layers />, onClick: () => moveTo(f) })),
+              { label: "Move to new folder…", icon: <Icon.plus />, onClick: newFolder },
+              ...(setup.folder ? [{ label: "Remove from folder", icon: <Icon.x />, onClick: () => moveTo(null) }] : []),
               { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
             ]}
           />

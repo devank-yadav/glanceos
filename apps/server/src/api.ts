@@ -883,7 +883,7 @@ export function buildApp(): Hono<Env> {
     const id = Number(c.req.param("id"));
     if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as {
-      name?: string; description?: string; published?: boolean;
+      name?: string; description?: string; published?: boolean; folder?: string | null;
     };
     const updated = updateLayoutMeta(id, body)!;
     return c.json(updated);
