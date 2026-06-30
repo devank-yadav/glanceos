@@ -26,7 +26,7 @@ import { playLogCsv, playLogForGroup, recordPlayLog, type PlayLogEntry } from ".
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
-  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, devicesOwnedBy, getDevice, listDevices, recordTelemetry,
+  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, devicesOwnedBy, getDevice, listDevices, recordTelemetry, setLowBatterySwap,
   registerDevice, setDeviceLocation, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
@@ -152,6 +152,8 @@ function deviceSummary(d: DeviceRow) {
     longitude: d.longitude,
     renderOpts: safeJsonObj(d.render_opts),
     tv: { tvMode: !!profile.tvMode, safeArea: profile.safeArea, burnIn: profile.burnIn, wake: profile.wake, quietHours: profile.quietHours },
+    lowBattery: profile.lowBattery ?? null, // #58 — low-battery board swap config
+    lowBatteryName: profile.lowBattery ? getLayout(profile.lowBattery.layoutId)?.name ?? null : null,
     platform: profile.platform ?? null,
     nativeVersion: profile.nativeVersion ?? null,
     groupId: d.group_id,
@@ -566,6 +568,7 @@ export function buildApp(): Hono<Env> {
       groupId?: number | null;
       timezone?: string | null;
       location?: { name: string; latitude: number; longitude: number } | null;
+      lowBattery?: { layoutId: number | null; pct?: number };
     };
     if (body.timezone !== undefined && !setDeviceTimezone(id, body.timezone, orgId)) {
       return c.json({ error: "device not found or invalid timezone" }, 400);
@@ -579,6 +582,11 @@ export function buildApp(): Hono<Env> {
     }
     if (body.tv !== undefined) {
       if (!setDeviceTvSettings(id, orgId, body.tv)) return c.json({ error: "device not found" }, 404);
+    }
+    if (body.lowBattery !== undefined) {
+      // #58 — validate the swap board is one this org owns before storing it (no cross-org refs).
+      if (body.lowBattery.layoutId != null && !getOwnedLayout(body.lowBattery.layoutId, orgId)) return c.json({ error: "board not found" }, 404);
+      if (!setLowBatterySwap(id, orgId, body.lowBattery.layoutId, body.lowBattery.pct)) return c.json({ error: "device not found" }, 404);
     }
     if (body.groupId !== undefined) {
       if (!setDeviceGroup(id, body.groupId, userId)) return c.json({ error: "device or group not found" }, 404);

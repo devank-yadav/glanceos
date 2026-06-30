@@ -25,6 +25,11 @@ function geoForDevice(device: DeviceRow): { latitude: number; longitude: number 
  *  group default. No group / no group settings → exactly the previous behavior.
  *  (Board rotation now lives inside a board as pages, not as device playlists.) */
 export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
+  // #58 — battery critically low → swap to the user's designated minimal board so a panel about
+  // to die shows a calm low-battery screen instead of dying mid-content. Own-org only (no cross-
+  // org leak even if the owner moved orgs or deleted the board). Wins over every normal board.
+  const lb = deviceProfile(device).lowBattery;
+  if (lb && device.battery != null && device.battery <= lb.pct && getOwnedLayout(lb.layoutId, device.org_id ?? "")) return lb.layoutId;
   // Wall-clock fallback: screen tz → account default tz → server tz.
   const accountTz = device.user_id ? getUser(device.user_id)?.defaultTimezone ?? null : null;
   const deviceTz = device.timezone ?? accountTz;

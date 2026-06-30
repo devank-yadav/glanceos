@@ -118,6 +118,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
   const [tving, setTving] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
+  const [batterying, setBatterying] = useState(false);
   const [groups, setGroups] = useState<DisplayGroup[]>([]);
   useEffect(() => { api.get<DisplayGroup[]>("/api/groups").then(setGroups).catch(() => {}); }, []);
   const toast = useToast();
@@ -179,6 +180,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
             { label: "Identify (flash)", icon: <Icon.target />, onClick: () => command("identify") },
             { label: "Location & time…", icon: <Icon.settings />, onClick: () => setSettingsOpen(true) },
             { label: "Customize blocks…", icon: <Icon.layers />, onClick: () => setCustomizing(true) },
+            { label: "Low-battery board…", icon: <Icon.warning />, onClick: () => setBatterying(true) },
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
             { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
             { label: "TV mode…", icon: <Icon.monitor />, onClick: () => setTving(true) },
@@ -256,6 +258,10 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
 
       <Modal open={customizing} onClose={() => setCustomizing(false)} title={`Customize blocks — ${device.name ?? "screen"}`}>
         {customizing && <OverridesEditor device={device} onSaved={onChanged} />}
+      </Modal>
+
+      <Modal open={batterying} onClose={() => setBatterying(false)} title={`Low-battery board — ${device.name ?? "screen"}`}>
+        {batterying && <LowBatteryEditor device={device} setups={setups} onSaved={onChanged} onClose={() => setBatterying(false)} />}
       </Modal>
     </div>
   );
@@ -560,6 +566,48 @@ function PreviewEmpty({ icon, label }: { icon: ComponentChildren; label: string 
         <span class="preview-empty-icon" aria-hidden="true">{icon}</span>
         <span class="muted">{label}</span>
       </div>
+    </div>
+  );
+}
+
+// ---- #58 low-battery board swap ----
+// When a panel's battery drops to/below the threshold, the screen swaps to a calm minimal board
+// (the user's choice) instead of dying mid-content. Server-side: the swap wins over the normal
+// board in currentLayoutId; here we just pick the board + threshold (stored in the device profile).
+function LowBatteryEditor({ device, setups, onSaved, onClose }: { device: DeviceSummary; setups: SetupSummary[]; onSaved: () => Promise<void>; onClose: () => void }) {
+  const [layoutId, setLayoutId] = useState<number | null>(device.lowBattery?.layoutId ?? null);
+  const [pct, setPct] = useState<number>(device.lowBattery?.pct ?? 15);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const save = async (nextId: number | null, nextPct: number) => {
+    setBusy(true);
+    try {
+      await api.patch(`/api/devices/${device.id}`, { lowBattery: { layoutId: nextId, pct: nextPct } });
+      toast.success(nextId ? "Low-battery board set" : "Low-battery swap turned off");
+      await onSaved();
+      if (!nextId) onClose();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div class="low-battery-editor">
+      <p class="muted" style={{ marginTop: 0 }}>
+        When this screen's battery falls to the threshold, it switches to a minimal board so it never dies mid-content.
+        {device.battery != null ? ` Currently ${device.battery}%.` : " This screen hasn't reported a battery level yet."}
+      </p>
+      <label class="field">
+        <span>Switch to this board</span>
+        <select value={layoutId ?? ""} disabled={busy} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; const id = v ? Number(v) : null; setLayoutId(id); save(id, pct); }}>
+          <option value="">Off — keep the normal board</option>
+          {setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </label>
+      {layoutId != null && (
+        <label class="field">
+          <span>At or below · {pct}%</span>
+          <input type="range" min="5" max="50" step="5" value={pct} disabled={busy} onInput={(e) => setPct(Number((e.currentTarget as HTMLInputElement).value))} onChange={(e) => save(layoutId, Number((e.currentTarget as HTMLInputElement).value))} />
+        </label>
+      )}
     </div>
   );
 }

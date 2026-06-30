@@ -94,6 +94,8 @@ export interface DeviceSummary {
     wake?: { startMin: number; endMin: number; daysMask: number };
     quietHours?: { startMin: number; endMin: number; daysMask: number };
   };
+  lowBattery?: { layoutId: number; pct: number } | null;
+  lowBatteryName?: string | null;
   platform: string | null;
   nativeVersion: string | null;
   groupId: number | null;

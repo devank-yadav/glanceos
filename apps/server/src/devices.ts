@@ -40,6 +40,7 @@ export interface DeviceProfile {
   burnIn?: { pixelShift: boolean; dim: boolean; screensaverAfterMin: number };
   wake?: { startMin: number; endMin: number; daysMask: number };
   quietHours?: { startMin: number; endMin: number; daysMask: number }; // v6.1 soft-dim window
+  lowBattery?: { layoutId: number; pct: number }; // #58 — swap to this board at/below pct% battery
   platform?: string;
   nativeVersion?: string;
 }
@@ -82,6 +83,10 @@ export function deviceProfile(device: DeviceRow): DeviceProfile {
     const q = p.quietHours as Record<string, unknown>;
     out.quietHours = { startMin: clamp(q.startMin, 0, 1439), endMin: clamp(q.endMin, 0, 1439), daysMask: clamp(q.daysMask, 0, 127, 127) };
   }
+  if (p.lowBattery && typeof p.lowBattery === "object") {
+    const lb = p.lowBattery as Record<string, unknown>;
+    if (typeof lb.layoutId === "number" && lb.layoutId > 0) out.lowBattery = { layoutId: Math.round(lb.layoutId), pct: clamp(lb.pct, 1, 99, 15) };
+  }
   const platform = shortLabel(p.platform, 24);
   if (platform) out.platform = platform;
   const nativeVersion = shortLabel(p.nativeVersion, 24);
@@ -104,6 +109,18 @@ export function setDeviceTvSettings(
   if (patch.burnIn !== undefined) p.burnIn = patch.burnIn;
   if (patch.wake !== undefined) { if (patch.wake === null) delete p.wake; else p.wake = patch.wake; }
   if (patch.quietHours !== undefined) { if (patch.quietHours === null) delete p.quietHours; else p.quietHours = patch.quietHours; }
+  db.prepare("UPDATE devices SET profile = ? WHERE id = ?").run(JSON.stringify(p), id);
+  return getDevice(id) ?? null;
+}
+
+/** #58 — set/clear the low-battery board swap on a device's profile (layoutId null clears it). */
+export function setLowBatterySwap(id: string, orgId: string, layoutId: number | null, pct = 15): DeviceRow | null {
+  const device = getDevice(id);
+  if (!device || device.org_id !== orgId) return null;
+  let p: Record<string, unknown> = {};
+  try { p = JSON.parse(device.profile) as Record<string, unknown>; } catch { /* defaults */ }
+  if (layoutId == null) delete p.lowBattery;
+  else p.lowBattery = { layoutId: Math.round(layoutId), pct: clamp(pct, 1, 99, 15) };
   db.prepare("UPDATE devices SET profile = ? WHERE id = ?").run(JSON.stringify(p), id);
   return getDevice(id) ?? null;
 }
