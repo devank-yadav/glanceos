@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-devov-"));
 const { migrate } = await import("./db");
 migrate();
-const { listOverrides, setOverride, deleteOverride, overridesMap, applyOverrides, clearOverrides } = await import("./deviceOverrides");
+const { listOverrides, setOverride, deleteOverride, overridesMap, applyOverrides, clearOverrides, overridesSig } = await import("./deviceOverrides");
 
 describe("#48 per-device overrides", () => {
   it("sets, lists, and maps overrides", () => {
@@ -38,6 +38,19 @@ describe("#48 per-device overrides", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const doc: any = { rows: [{ id: "r", h: 6, blocks: [{ id: "x", type: "divider", width: 1, props: {} }] }] };
     expect(applyOverrides(doc, overridesMap("dev-none"))).toBe(doc);
+  });
+
+  it("overridesSig changes on add / edit / remove (so the e-ink ETag busts)", () => {
+    expect(overridesSig("dev3")).toBe("");
+    setOverride("dev3", "b1", { x: 1 }, 1000);
+    const s1 = overridesSig("dev3");
+    expect(s1).not.toBe("");
+    setOverride("dev3", "b1", { x: 2 }, 2000); // edit → newer updated_at
+    expect(overridesSig("dev3")).not.toBe(s1);
+    setOverride("dev3", "b2", { y: 1 }, 3000); // add → count up
+    const s3 = overridesSig("dev3");
+    deleteOverride("dev3", "b2"); // remove → count down
+    expect(overridesSig("dev3")).not.toBe(s3);
   });
 
   it("delete + clear", () => {

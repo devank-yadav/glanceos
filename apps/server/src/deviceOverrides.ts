@@ -17,6 +17,15 @@ export function listOverrides(deviceId: string): DeviceOverride[] {
     .map((r) => ({ blockId: r.block_id, props: parseObj(r.props) }));
 }
 
+/** A cheap fingerprint of a device's overrides (count + newest updated_at). The e-ink /display
+ *  ETag + render cache-buster fold this in so the panel re-renders when an override is added,
+ *  edited, or removed — even when the change only touches non-data-bound props (which leave the
+ *  resolved `data` untouched, so version+data alone wouldn't notice). "" when the device has none. */
+export function overridesSig(deviceId: string): string {
+  const r = db.prepare("SELECT COUNT(*) AS c, COALESCE(MAX(updated_at), 0) AS m FROM device_overrides WHERE device_id = ?").get(deviceId) as { c: number; m: number };
+  return r.c ? `${r.c}.${r.m}` : "";
+}
+
 /** blockId → props-patch map for a device, for applyOverrides() at compose time. */
 export function overridesMap(deviceId: string): Map<string, Record<string, unknown>> {
   const m = new Map<string, Record<string, unknown>>();

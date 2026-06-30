@@ -58,7 +58,7 @@ import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
-import { deleteOverride, listOverrides, setOverride } from "./deviceOverrides";
+import { deleteOverride, listOverrides, overridesSig, setOverride } from "./deviceOverrides";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
@@ -482,7 +482,11 @@ export function buildApp(): Hono<Env> {
     // that doesn't send If-None-Match gets the old always-200 + base refresh.
     const payload = await composeState(device, undefined, { commit: false }); // ETag probe; render.bmp commits the "since you looked" baseline
     const dataJson = payload.claimed ? safeStableJson(payload.state.data) : "";
-    const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).digest("hex").slice(0, 16)}"`;
+    // #48 — fold the per-device override fingerprint in: overrides live outside the layout (no
+    // version bump) and a non-data-bound prop override leaves `data` unchanged, so without this an
+    // e-ink panel would 304 and keep a stale render after an override change.
+    const ovSig = overridesSig(device.id);
+    const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).update(" ").update(ovSig).digest("hex").slice(0, 16)}"`;
     const ifNone = c.req.header("if-none-match");
     const conditional = ifNone !== undefined;
     const prev = displayEtags.get(device.id);
@@ -495,7 +499,7 @@ export function buildApp(): Hono<Env> {
     return c.json({
       status: 0,
       claimed: true,
-      image_url: `${baseUrl()}/api/devices/me/render.bmp?id=${device.id}&secret=${device.secret}&v=${version}`,
+      image_url: `${baseUrl()}/api/devices/me/render.bmp?id=${device.id}&secret=${device.secret}&v=${version}${ovSig ? `&o=${ovSig}` : ""}`, // #48 — bust the image cache on an override change too
       filename: `glanceos-${layoutId ?? "blank"}-${version}.bmp`,
       refresh_rate: refresh,
       reset_firmware: false,
