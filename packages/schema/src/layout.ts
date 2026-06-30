@@ -403,7 +403,18 @@ const VisibleWhen = z.object({
   op: z.enum(["gt", "gte", "lt", "lte", "eq", "ne", "empty", "nonempty"]),
   value: z.union([z.number(), z.string()]).optional(),
 });
-const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional() };
+// A time/date window (minute-of-day [0,1439], wraps past midnight when end <= start; daysMask
+// is a bit per weekday Sun=bit0; fromDate/toDate are inclusive YYYY-MM-DD). Shared by page
+// rotation and per-block scheduling (#80) so one screen-side evaluator serves both.
+const TimeWindow = z.object({
+  startMin: z.number().int().min(0).max(1439).optional(),
+  endMin: z.number().int().min(0).max(1439).optional(),
+  daysMask: z.number().int().min(0).max(127).optional(),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+// #80 — show a block only inside this window (else it's hidden, like a failing visibleWhen).
+const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), schedule: TimeWindow.optional() };
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),
@@ -707,15 +718,7 @@ export const Layout = z.object({
       z.object({
         name: z.string().max(60).optional(),
         seconds: z.number().int().min(1).max(3600).optional(),
-        schedule: z
-          .object({
-            startMin: z.number().int().min(0).max(1439).optional(),
-            endMin: z.number().int().min(0).max(1439).optional(),
-            daysMask: z.number().int().min(0).max(127).optional(),
-            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-          })
-          .optional(),
+        schedule: TimeWindow.optional(),
       }),
     )
     .max(9)

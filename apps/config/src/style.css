@@ -3903,3 +3903,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .override-kv .override-key { flex: 0 0 38%; }
 .override-kv .override-val { flex: 1; }
 .override-actions { gap: 8px; margin-top: 2px; }
+
+/* #80 — per-block schedule editor (block Options) */
+.block-schedule { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; margin: 2px 0 4px; border: 1px solid var(--rule, rgba(127,127,127,0.18)); border-radius: 8px; }
+.block-schedule .row { gap: 8px; }
+.block-schedule .field { flex: 1; }
+.day-pills { gap: 4px; }
+.day-pill { width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--rule, rgba(127,127,127,0.3)); background: none; color: inherit; cursor: pointer; font-size: 12px; font-weight: 600; padding: 0; }
+.day-pill.on { background: var(--indigo, #6366f1); border-color: var(--indigo, #6366f1); color: #fff; }
+.tiny { font-size: 11px; }

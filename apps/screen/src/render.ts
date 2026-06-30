@@ -29,6 +29,7 @@ export function getCells(): ReadonlyMap<string, { el: HTMLElement }> { return ce
 
 let spotlightStop: (() => void) | null = null;
 let pageStop: (() => void) | null = null;
+let blockSchedStop: (() => void) | null = null;
 let lastPayload: StreamPayloadT | null = null;
 let pageChanging = false; // set by the rotation ticker so the next rebuild fades the page in
 
@@ -115,6 +116,22 @@ function armPageRotate(pages: RowT[][] | null, settings: (PageSettingT | undefin
   pageStop = () => window.clearInterval(h);
 }
 
+// #80 — re-render the moment a per-block schedule window flips (mirrors armPageRotate). A 1 s
+// ticker that re-renders only when the set of schedule-active states changes; boards with no
+// scheduled block arm nothing. blockHidden() then shows/hides the block with the calm crossfade.
+function armBlockSchedules(layout: LayoutT): void {
+  blockSchedStop?.();
+  blockSchedStop = null;
+  const scheduled: RowT["blocks"][number][] = [];
+  const scan = (rows: RowT[]) => { for (const r of rows) for (const bl of r.blocks) if (bl.schedule) scheduled.push(bl); };
+  if (layout.zones?.length) for (const z of layout.zones) scan(z.rows); else scan(layout.rows);
+  if (!scheduled.length) return;
+  const sig = () => scheduled.map((bl) => (pageScheduleActive(bl.schedule, new Date()) ? "1" : "0")).join("");
+  let last = sig();
+  const h = window.setInterval(() => { const s = sig(); if (s !== last && lastPayload) { last = s; renderPayload(lastPayload); } }, 1000);
+  blockSchedStop = () => window.clearInterval(h);
+}
+
 // v8.0 spotlight: cycle a calm emphasis across the board's cells (others dim), one at a
 // time, deterministic from the wall clock so multiple screens move in lockstep. Re-armed
 // each render; a board with no `spotlight` clears any leftover emphasis. Paused while a
@@ -168,6 +185,8 @@ function blockScalar(b: RowT["blocks"][number], data: Record<string, unknown>): 
 // data, or a visibleWhen value test that fails (#50). Shared by structuralSig + render.
 function blockHidden(b: RowT["blocks"][number], data: Record<string, unknown>): boolean {
   if (b.hidden) return true;
+  // #80 — per-block schedule: hide the block outside its time/date window (reuses the page eval).
+  if (b.schedule && !pageScheduleActive(b.schedule, new Date())) return true;
   // #149 Focus mode: when the server flags focus active (reserved data key), hide noisy blocks.
   if (b.focusHide && data["__focus"]) return true;
   if (b.visibility === "whenData" && data[b.id] == null) return true;
@@ -306,7 +325,7 @@ export function renderPayload(payload: StreamPayloadT): void {
   // Same skeleton as last tick → diff in place (no flash); else full rebuild.
   // (When the active page changes, the sig differs → a clean rebuild of that page.)
   const sig = structuralSig(layout, state.data);
-  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); armPageRotate(allPages, board.pageSettings, defaultSecs); return; }
+  if (mountedSig === sig && cells.size > 0) { updateCells(layout, state.data); applySpotlight(layout.spotlight); armPageRotate(allPages, board.pageSettings, defaultSecs); armBlockSchedules(layout); return; }
   reset();
   mountedSig = sig;
   if (layout.zones && layout.zones.length > 0) {
@@ -330,6 +349,7 @@ export function renderPayload(payload: StreamPayloadT): void {
   pageChanging = false;
   applySpotlight(layout.spotlight);
   armPageRotate(allPages, board.pageSettings, defaultSecs);
+  armBlockSchedules(layout);
 }
 
 // Build one document page (a height-unit grid of rows) for the given rows. Used

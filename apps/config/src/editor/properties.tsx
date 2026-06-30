@@ -346,6 +346,22 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.focusHide = on || undefined;
     });
+  // #80 — per-block schedule: show the block only inside a time/day/date window. Merge a patch
+  // (a null/"" field clears it); an all-blank schedule prunes back to undefined (= always shown).
+  const sched = block.schedule;
+  const editSchedule = (patch: Partial<NonNullable<WidgetT["schedule"]>> | null) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (!target) return;
+      if (patch === null) { target.schedule = undefined; return; }
+      const next: Record<string, unknown> = { ...(target.schedule ?? {}), ...patch };
+      for (const k of Object.keys(next)) if (next[k] == null || next[k] === "") delete next[k];
+      target.schedule = (Object.keys(next).length ? next : undefined) as WidgetT["schedule"];
+    });
+  const dayOn = (b: number): boolean => (sched?.daysMask == null ? true : ((sched.daysMask >> b) & 1) === 1);
+  const toggleDay = (b: number) => { const base = sched?.daysMask ?? 127; const next = base ^ (1 << b); editSchedule({ daysMask: next === 127 ? undefined : next }); };
+  const hhmm = (m?: number) => (m == null ? "" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  const toMin = (s: string): number | undefined => { const m = /^(\d{2}):(\d{2})$/.exec(s); return m ? Number(m[1]) * 60 + Number(m[2]) : undefined; };
   const clearSource = () =>
     stageEdit((d) => {
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
@@ -465,6 +481,36 @@ export function BlockFields({
         <input type="checkbox" checked={!!block.focusHide} onChange={(e) => editFocusHide((e.currentTarget as HTMLInputElement).checked)} />
         <span>Hide in Focus mode</span>
       </label>
+      <label class="field checkbox">
+        <input type="checkbox" checked={!!sched} onChange={(e) => editSchedule((e.currentTarget as HTMLInputElement).checked ? {} : null)} />
+        <span>Show only on a schedule</span>
+      </label>
+      {sched && (
+        <div class="block-schedule">
+          <div class="row">
+            <label class="field"><span>From</span>
+              <input type="time" value={hhmm(sched.startMin)} onInput={(e) => editSchedule({ startMin: toMin((e.currentTarget as HTMLInputElement).value) })} />
+            </label>
+            <label class="field"><span>To</span>
+              <input type="time" value={hhmm(sched.endMin)} onInput={(e) => editSchedule({ endMin: toMin((e.currentTarget as HTMLInputElement).value) })} />
+            </label>
+          </div>
+          <div class="row wrap day-pills" role="group" aria-label="Days of week">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <button type="button" key={i} class={`day-pill${dayOn(i) ? " on" : ""}`} aria-pressed={dayOn(i)} onClick={() => toggleDay(i)}>{d}</button>
+            ))}
+          </div>
+          <div class="row">
+            <label class="field"><span>Start date</span>
+              <input type="date" value={sched.fromDate ?? ""} onInput={(e) => editSchedule({ fromDate: (e.currentTarget as HTMLInputElement).value })} />
+            </label>
+            <label class="field"><span>End date</span>
+              <input type="date" value={sched.toDate ?? ""} onInput={(e) => editSchedule({ toDate: (e.currentTarget as HTMLInputElement).value })} />
+            </label>
+          </div>
+          <p class="muted tiny">Hidden outside this window. Leave times empty for all-day; all days on = every day.</p>
+        </div>
+      )}
       <h4>Emphasis</h4>
       <div class="row wrap">
         <label class="field checkbox">

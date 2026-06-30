@@ -53,6 +53,25 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageSettings: Array.from({ length: 10 }, () => ({})) }).success).toBe(false);
   });
 
+  it("#80 per-block schedule round-trips + bounds (no schedule = always shown)", () => {
+    const doc = Layout.parse({
+      schemaVersion: 3,
+      name: "Sched",
+      rows: [{ id: "r", blocks: [
+        { id: "always", type: "divider", props: {} },
+        { id: "morning", type: "text", props: { content: "Good morning" }, schedule: { startMin: 360, endMin: 720, daysMask: 62 } },
+        { id: "promo", type: "text", props: { content: "Holiday" }, schedule: { fromDate: "2026-12-24", toDate: "2026-12-26" } },
+      ] }],
+    });
+    const blocks = doc.rows[0]!.blocks;
+    expect(blocks[0]!.schedule).toBeUndefined(); // absent = always shown
+    expect(blocks[1]!.schedule).toEqual({ startMin: 360, endMin: 720, daysMask: 62 });
+    expect(blocks[2]!.schedule?.fromDate).toBe("2026-12-24");
+    // bounds mirror page schedules: minute ≤ 1439, dates YYYY-MM-DD
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {}, schedule: { startMin: 1440 } }] }] }).success).toBe(false);
+    expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {}, schedule: { fromDate: "2026/01/01" } }] }] }).success).toBe(false);
+  });
+
   it("supports optional signage zones (no migration; absent = single doc)", () => {
     const noZones = Layout.parse({ schemaVersion: 3, name: "Plain", rows: [{ id: "r", blocks: [{ id: "a", type: "divider", props: {} }] }] });
     expect(noZones.zones).toBeUndefined(); // existing docs parse unchanged
