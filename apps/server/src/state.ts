@@ -2,6 +2,7 @@ import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "./auth";
 import { connLookupForOrg } from "./connections";
 import { getCustomData } from "./customdata";
+import { applyOverrides, overridesMap } from "./deviceOverrides";
 import { deviceProfile, devicesOwnedBy, devicesUsingLayout, getDevice, type DeviceRow } from "./devices";
 import { activeGroupScheduledLayout, deviceIdsInGroup, getGroupRow } from "./groups";
 import { connectedDeviceIds, emit, isConnected } from "./hub";
@@ -115,8 +116,12 @@ export async function composeState(device: DeviceRow, now = Date.now(), opts: { 
     const { weekday, minute } = wallClock(now, device.timezone);
     quietDim = windowActive(profile.quietHours, minute, weekday);
   }
+  // #48 — per-device overrides: merge this screen's prop patches into the shared board before
+  // resolving data + sending the layout, so one board can show device-specific values (e.g. the
+  // kitchen screen's weather block at the kitchen's coordinates). No-op when the device has none.
+  const doc = applyOverrides(layout.document, overridesMap(device.id));
   const data = await resolveWidgetData(
-    layout.document,
+    doc,
     device.user_id ?? "",
     connLookupForOrg(device.org_id ?? ""), // a shared board resolves under its org's connections
     geo,
@@ -131,7 +136,7 @@ export async function composeState(device: DeviceRow, now = Date.now(), opts: { 
     claimed: true,
     state: {
       layoutVersion: layout.version,
-      layout: layout.document,
+      layout: doc, // #48 — per-device overrides already merged in
       data,
       deviceName: device.name ?? undefined,
       tv,

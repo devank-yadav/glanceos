@@ -3888,3 +3888,18 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .snippet-name:hover { background: var(--soft, rgba(127,127,127,0.1)); }
 .snippet-name-input { flex: 1; padding: 2px 6px; font-size: 13px; }
 .side-empty { padding: 6px 2px; font-size: 12px; }
+
+/* #48 — per-device block overrides editor */
+.overrides-list { display: flex; flex-direction: column; gap: 6px; max-height: 56vh; overflow: auto; }
+.override-row { border: 1px solid var(--rule, rgba(127,127,127,0.18)); border-radius: 8px; background: var(--card-bg, transparent); }
+.override-row.has-override { border-color: var(--indigo, #6366f1); }
+.override-head { width: 100%; gap: 8px; padding: 8px 10px; background: none; border: none; cursor: pointer; color: inherit; font: inherit; text-align: left; }
+.override-head:hover { background: var(--soft, rgba(127,127,127,0.08)); border-radius: 8px; }
+.override-title { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.override-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 18ch; }
+.override-kind { font-size: 11px; }
+.override-body { padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--rule, rgba(127,127,127,0.12)); }
+.override-kv { gap: 6px; }
+.override-kv .override-key { flex: 0 0 38%; }
+.override-kv .override-val { flex: 1; }
+.override-actions { gap: 8px; margin-top: 2px; }

@@ -117,6 +117,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
   const [scheduling, setScheduling] = useState(false);
   const [tving, setTving] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
   const [groups, setGroups] = useState<DisplayGroup[]>([]);
   useEffect(() => { api.get<DisplayGroup[]>("/api/groups").then(setGroups).catch(() => {}); }, []);
   const toast = useToast();
@@ -177,6 +178,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
             { label: "Reload now", icon: <Icon.convert />, onClick: () => command("reload") },
             { label: "Identify (flash)", icon: <Icon.target />, onClick: () => command("identify") },
             { label: "Location & time…", icon: <Icon.settings />, onClick: () => setSettingsOpen(true) },
+            { label: "Customize blocks…", icon: <Icon.layers />, onClick: () => setCustomizing(true) },
             { label: previewing ? "Hide e-ink preview" : "E-ink preview", icon: <Icon.monitor />, onClick: () => setPreviewing((v) => !v) },
             { label: "Schedule…", icon: <Icon.convert />, onClick: () => setScheduling(true) },
             { label: "TV mode…", icon: <Icon.monitor />, onClick: () => setTving(true) },
@@ -250,6 +252,10 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
 
       <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title={`Location & time — ${device.name ?? "screen"}`}>
         {settingsOpen && <ScreenSettings device={device} onSaved={onChanged} />}
+      </Modal>
+
+      <Modal open={customizing} onClose={() => setCustomizing(false)} title={`Customize blocks — ${device.name ?? "screen"}`}>
+        {customizing && <OverridesEditor device={device} onSaved={onChanged} />}
       </Modal>
     </div>
   );
@@ -554,6 +560,115 @@ function PreviewEmpty({ icon, label }: { icon: ComponentChildren; label: string 
         <span class="preview-empty-icon" aria-hidden="true">{icon}</span>
         <span class="muted">{label}</span>
       </div>
+    </div>
+  );
+}
+
+// ---- #48 per-device block overrides ----
+// From one shared board, a single screen can override specific blocks' props (e.g. its own
+// location on a weather block). Saved as a sparse prop patch, merged server-side at compose time.
+type FlatBlock = { id: string; type: string; label: string; props: Record<string, unknown> };
+
+function flattenBlocks(doc: LayoutT): FlatBlock[] {
+  const out: FlatBlock[] = [];
+  const rows = (rs: LayoutT["rows"]) => { for (const r of rs) for (const b of r.blocks) out.push(toFlat(b)); };
+  rows(doc.rows);
+  if (doc.pages) for (const p of doc.pages) rows(p);
+  if (doc.zones) for (const z of doc.zones) rows(z.rows);
+  return out;
+}
+function toFlat(b: LayoutT["rows"][number]["blocks"][number]): FlatBlock {
+  const props = ((b as { props?: unknown }).props ?? {}) as Record<string, unknown>;
+  const text = [props.label, props.title, props.heading, props.text, props.name].find((v) => typeof v === "string" && v.trim());
+  return { id: b.id, type: b.type, label: (text ? String(text).trim().slice(0, 44) : b.type), props };
+}
+// A value typed as text becomes a number/boolean/null/JSON when it parses, else stays a string —
+// so "51.5" → 51.5, "true" → true, and "Kitchen" stays "Kitchen".
+function parseVal(v: string): unknown { const t = v.trim(); if (!t) return ""; try { return JSON.parse(t); } catch { return v; } }
+function patchToRows(patch: Record<string, unknown>): { k: string; v: string }[] {
+  return Object.entries(patch).map(([k, v]) => ({ k, v: typeof v === "string" ? v : JSON.stringify(v) }));
+}
+
+function OverridesEditor({ device, onSaved }: { device: DeviceSummary; onSaved: () => Promise<void> }) {
+  const [doc, setDoc] = useState<LayoutT | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, Record<string, unknown>>>({});
+  const toast = useToast();
+  const layoutId = device.layoutId ?? null;
+
+  useEffect(() => {
+    if (layoutId === null) return;
+    let alive = true;
+    api.get<LayoutRecord>(`/api/layouts/${layoutId}`).then((r) => { if (alive) setDoc(r.document); }).catch(() => { if (alive) setFailed(true); });
+    api.get<{ blockId: string; props: Record<string, unknown> }[]>(`/api/devices/${device.id}/overrides`)
+      .then((list) => { if (alive) setOverrides(Object.fromEntries(list.map((o) => [o.blockId, o.props]))); }).catch(() => {});
+    return () => { alive = false; };
+  }, [layoutId, device.id]);
+
+  const save = async (blockId: string, patch: Record<string, unknown>) => {
+    try {
+      await api.put(`/api/devices/${device.id}/overrides/${blockId}`, { props: patch });
+      setOverrides((m) => { const n = { ...m }; if (Object.keys(patch).length) n[blockId] = patch; else delete n[blockId]; return n; });
+      toast.success(Object.keys(patch).length ? "Saved for this screen" : "Override cleared");
+      await onSaved();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+
+  if (layoutId === null) return <p class="muted">Assign a board to this screen first — then you can tailor individual blocks just for it.</p>;
+  if (failed) return <p class="muted">Couldn't load this screen's board.</p>;
+  if (!doc) return <p class="muted">Loading the board…</p>;
+  const blocks = flattenBlocks(doc);
+  const customized = Object.keys(overrides).length;
+  return (
+    <div class="overrides-editor">
+      <p class="muted" style={{ marginTop: 0 }}>
+        Override specific blocks just for <strong>{device.name ?? "this screen"}</strong> — e.g. set this screen's own location on a weather block.
+        Untouched blocks keep the shared board's values.{customized > 0 ? ` ${customized} block${customized > 1 ? "s" : ""} customized.` : ""}
+      </p>
+      <div class="overrides-list">
+        {blocks.length === 0 && <p class="muted">This board has no blocks yet.</p>}
+        {blocks.map((b) => <OverrideRow key={b.id} block={b} patch={overrides[b.id] ?? {}} onSave={(p) => save(b.id, p)} />)}
+      </div>
+    </div>
+  );
+}
+
+function OverrideRow({ block, patch, onSave }: { block: FlatBlock; patch: Record<string, unknown>; onSave: (p: Record<string, unknown>) => Promise<void> }) {
+  const has = Object.keys(patch).length > 0;
+  const [open, setOpen] = useState(has);
+  const [rows, setRows] = useState<{ k: string; v: string }[]>(() => patchToRows(patch));
+  // Re-sync local rows when the saved override for THIS block changes (e.g. after a clear).
+  useEffect(() => { setRows(patchToRows(patch)); }, [block.id, JSON.stringify(patch)]);
+  const propKeys = Object.keys(block.props);
+  const edit = (i: number, key: "k" | "v", val: string) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [key]: val } : r)));
+  const apply = () => {
+    const next: Record<string, unknown> = {};
+    for (const { k, v } of rows) { const key = k.trim(); if (key) next[key] = parseVal(v); }
+    onSave(next);
+  };
+  return (
+    <div class={`override-row${has ? " has-override" : ""}`}>
+      <button type="button" class="override-head row spread" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span class="override-title"><Icon.layers /> <strong>{block.label}</strong> <span class="muted override-kind">{block.type}</span></span>
+        <span class="row">{has && <span class="pill">customized</span>}<Icon.chevron /></span>
+      </button>
+      {open && (
+        <div class="override-body">
+          {rows.map((r, i) => (
+            <div class="override-kv row" key={i}>
+              <input class="override-key" list={`pk-${block.id}`} placeholder="property" value={r.k} onInput={(e) => edit(i, "k", (e.currentTarget as HTMLInputElement).value)} />
+              <input class="override-val" placeholder={r.k && block.props[r.k] !== undefined ? `board: ${JSON.stringify(block.props[r.k])}` : "value"} value={r.v} onInput={(e) => edit(i, "v", (e.currentTarget as HTMLInputElement).value)} />
+              <IconButton label="Remove field" icon={<Icon.trash />} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} />
+            </div>
+          ))}
+          <datalist id={`pk-${block.id}`}>{propKeys.map((k) => <option key={k} value={k} />)}</datalist>
+          <div class="row override-actions">
+            <button type="button" onClick={() => setRows((rs) => [...rs, { k: "", v: "" }])}><Icon.plus /> Add field</button>
+            <button type="button" class="primary" onClick={apply}>Save</button>
+            {has && <button type="button" class="danger" onClick={() => { setRows([]); onSave({}); }}>Clear</button>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

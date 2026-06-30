@@ -58,6 +58,7 @@ import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
+import { deleteOverride, listOverrides, setOverride } from "./deviceOverrides";
 import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
@@ -605,6 +606,27 @@ export function buildApp(): Hono<Env> {
     if (!deleteDevice(c.req.param("id"), c.get("orgId"))) {
       return c.json({ error: "device not found" }, 404);
     }
+    return c.json({ ok: true });
+  });
+
+  // ---- #48 per-device block overrides (this screen shows different props for a block) ----
+  const ownDevice = (c: Context) => { const d = getDevice(c.req.param("id") ?? ""); return d && d.org_id === c.get("orgId") ? d : null; };
+  app.get("/api/devices/:id/overrides", (c) => {
+    const d = ownDevice(c); return d ? c.json(listOverrides(d.id)) : c.json({ error: "device not found" }, 404);
+  });
+  app.put("/api/devices/:id/overrides/:blockId", async (c) => {
+    const d = ownDevice(c);
+    if (!d) return c.json({ error: "device not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { props?: unknown };
+    setOverride(d.id, c.req.param("blockId"), body.props ?? {});
+    await pushDevice(d.id); // this screen re-renders with the override merged in
+    return c.json({ ok: true });
+  });
+  app.delete("/api/devices/:id/overrides/:blockId", async (c) => {
+    const d = ownDevice(c);
+    if (!d) return c.json({ error: "device not found" }, 404);
+    deleteOverride(d.id, c.req.param("blockId"));
+    await pushDevice(d.id);
     return c.json({ ok: true });
   });
 
