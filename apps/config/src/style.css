@@ -3912,3 +3912,8 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .day-pill { width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--rule, rgba(127,127,127,0.3)); background: none; color: inherit; cursor: pointer; font-size: 12px; font-weight: 600; padding: 0; }
 .day-pill.on { background: var(--indigo, #6366f1); border-color: var(--indigo, #6366f1); color: #fff; }
 .tiny { font-size: 11px; }
+
+/* #106 — favorite/pin board toggle on board cards */
+.fav-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--muted, #888); cursor: pointer; border-radius: 6px; padding: 0; opacity: 0.55; }
+.fav-btn:hover { background: var(--soft, rgba(127,127,127,0.1)); opacity: 1; }
+.fav-btn.is-fav { color: var(--indigo, #6366f1); opacity: 1; }

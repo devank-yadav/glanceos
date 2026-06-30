@@ -13,11 +13,32 @@ import { navigate } from "../router";
 
 interface SharedLayout { id: number; name: string; access: "viewer" | "editor"; ownerName: string; widgetCount: number }
 
+// #106 — favorite/pin boards. A personal, per-device UI preference (like recent blocks &
+// snippets), so it lives in localStorage — no server, no migration. Pinned boards float into a
+// "Favorites" section at the top for one-click access regardless of folder.
+const FAV_KEY = "glanceos.favoriteBoards";
+function loadFavs(): Set<number> {
+  try { const a = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]") as unknown; return new Set(Array.isArray(a) ? a.filter((n): n is number => typeof n === "number") : []); }
+  catch { return new Set(); }
+}
+function useFavorites() {
+  const [favs, setFavs] = useState<Set<number>>(() => loadFavs());
+  const toggle = (id: number) =>
+    setFavs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem(FAV_KEY, JSON.stringify([...next])); } catch { /* storage full/blocked — keep in-memory */ }
+      return next;
+    });
+  return { favs, toggle };
+}
+
 export function SetupsPage() {
   const [tab, setTab] = useState<"mine" | "shared">("mine");
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
   const [shared, setShared] = useState<SharedLayout[] | null>(null);
   const [q, setQ] = useState("");
+  const { favs, toggle: toggleFav } = useFavorites();
   const toast = useToast();
 
   const refresh = async () => {
@@ -84,14 +105,26 @@ export function SetupsPage() {
                 ...folders.map((f) => ({ folder: f as string | null, items: filtered.filter((s) => s.folder === f) })),
                 { folder: null as string | null, items: filtered.filter((s) => !s.folder) },
               ].filter((g) => g.items.length > 0);
-              return groups.map((g) => (
-                <section key={g.folder ?? "_unfiled"} class="board-folder">
-                  {folders.length > 0 && <h3 class="folder-heading"><Icon.layers /> {g.folder ?? "Unfiled"} <span class="muted">· {g.items.length}</span></h3>}
-                  <div class="cards">
-                    {g.items.map((s) => <SetupCard key={s.id} setup={s} folders={folders} onChanged={refresh} />)}
-                  </div>
-                </section>
-              ));
+              const card = (s: SetupSummary) => <SetupCard key={s.id} setup={s} folders={folders} onChanged={refresh} isFav={favs.has(s.id)} onToggleFav={() => toggleFav(s.id)} />;
+              // #106 — pinned boards surface in a Favorites section at the top, for one-click reach
+              // regardless of folder; they still appear in their folder section below.
+              const favItems = filtered.filter((s) => favs.has(s.id));
+              return (
+                <>
+                  {favItems.length > 0 && (
+                    <section class="board-folder">
+                      <h3 class="folder-heading"><Icon.pin /> Favorites <span class="muted">· {favItems.length}</span></h3>
+                      <div class="cards">{favItems.map(card)}</div>
+                    </section>
+                  )}
+                  {groups.map((g) => (
+                    <section key={g.folder ?? "_unfiled"} class="board-folder">
+                      {folders.length > 0 && <h3 class="folder-heading"><Icon.layers /> {g.folder ?? "Unfiled"} <span class="muted">· {g.items.length}</span></h3>}
+                      <div class="cards">{g.items.map(card)}</div>
+                    </section>
+                  ))}
+                </>
+              );
             })()}
           </>
         ) : (
@@ -132,7 +165,7 @@ function SharedBoards({ items }: { items: SharedLayout[] | null }) {
   );
 }
 
-function SetupCard({ setup, folders, onChanged }: { setup: SetupSummary; folders: string[]; onChanged: () => Promise<void> }) {
+function SetupCard({ setup, folders, onChanged, isFav, onToggleFav }: { setup: SetupSummary; folders: string[]; onChanged: () => Promise<void>; isFav: boolean; onToggleFav: () => void }) {
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
@@ -180,6 +213,8 @@ function SetupCard({ setup, folders, onChanged }: { setup: SetupSummary; folders
       <div class="setup-card-body">
         <div class="row spread">
           <h3 class="card-title" title={setup.name}>{setup.name}</h3>
+          <div class="row" style={{ gap: "2px" }}>
+          <button type="button" class={`fav-btn${isFav ? " is-fav" : ""}`} onClick={onToggleFav} aria-pressed={isFav} aria-label={isFav ? "Unpin board" : "Pin board"} title={isFav ? "Unpin from favorites" : "Pin to favorites"}><Icon.pin /></button>
           <Menu
             trigger={<Icon.more />}
             items={[
@@ -192,6 +227,7 @@ function SetupCard({ setup, folders, onChanged }: { setup: SetupSummary; folders
               { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
             ]}
           />
+          </div>
         </div>
         {setup.usedBy > 0 ? (
           <p class="tile-status live" title={setup.deviceNames.join(", ")}>
