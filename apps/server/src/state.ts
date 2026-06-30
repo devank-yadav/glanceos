@@ -1,4 +1,4 @@
-import type { StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
+import type { LayoutT, RowT, StreamPayloadT, TvStateT, WakeWindowT } from "@glanceos/schema";
 import { getUser, userHomeGeo } from "./auth";
 import { connLookupForOrg } from "./connections";
 import { getCustomData } from "./customdata";
@@ -73,6 +73,41 @@ export function windowActive(win: WakeWindowT, minute: number, weekday: number):
 export function wakePower(wake: WakeWindowT | undefined, minute: number, weekday: number): "on" | "off" {
   if (!wake) return "on";
   return windowActive(wake, minute, weekday) ? "on" : "off";
+}
+
+// #80 — server-side mirror of the screen's pageScheduleActive() (apps/screen render.ts), kept in
+// sync field-for-field. Used only to fingerprint the e-ink /display ETag: a per-block `schedule`
+// is evaluated screen-side, so when a scheduled block flips at a time boundary the layout version
+// and resolved data are unchanged and a panel would 304 into a stale frame. The headless e-ink
+// render runs on this server, so evaluating with the SAME `now` (server-local) matches what it
+// will paint. Web/TV don't need this — they get a fresh composeState push on any change.
+type BlockSchedule = NonNullable<RowT["blocks"][number]["schedule"]>;
+function scheduleActiveAt(s: BlockSchedule | undefined, now: Date): boolean {
+  if (!s) return true;
+  if (s.fromDate || s.toDate) {
+    const d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (s.fromDate && d < s.fromDate) return false;
+    if (s.toDate && d > s.toDate) return false;
+  }
+  if (s.daysMask != null && ((s.daysMask >> now.getDay()) & 1) === 0) return false;
+  if (s.startMin != null && s.endMin != null) {
+    const t = now.getHours() * 60 + now.getMinutes();
+    const inWin = s.startMin <= s.endMin ? t >= s.startMin && t < s.endMin : t >= s.startMin || t < s.endMin;
+    if (!inWin) return false;
+  }
+  return true;
+}
+
+/** #80 — a fingerprint of which scheduled blocks are active right now (across rows/pages/zones).
+ *  Folded into the e-ink ETag so a panel re-renders at a schedule boundary. "" when the board has
+ *  no scheduled blocks (so unscheduled boards' ETags are unaffected). */
+export function scheduledSig(doc: LayoutT, now = new Date()): string {
+  const parts: string[] = [];
+  const scan = (rows: RowT[]) => { for (const r of rows) for (const b of r.blocks) if (b.schedule) parts.push(`${b.id}:${scheduleActiveAt(b.schedule, now) ? 1 : 0}`); };
+  scan(doc.rows);
+  if (doc.pages) for (const p of doc.pages) scan(p);
+  if (doc.zones) for (const z of doc.zones) scan(z.rows);
+  return parts.join(",");
 }
 
 // The TV settings the screen applies (undefined for non-TV devices), incl. the

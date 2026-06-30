@@ -70,7 +70,7 @@ import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
-  pushGroupDevices, pushUserDevices,
+  pushGroupDevices, pushUserDevices, scheduledSig,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
@@ -486,7 +486,10 @@ export function buildApp(): Hono<Env> {
     // version bump) and a non-data-bound prop override leaves `data` unchanged, so without this an
     // e-ink panel would 304 and keep a stale render after an override change.
     const ovSig = overridesSig(device.id);
-    const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).update(" ").update(ovSig).digest("hex").slice(0, 16)}"`;
+    // #80 — also fold in which scheduled blocks are active now, so an e-ink panel re-renders at a
+    // per-block schedule boundary (the flip is screen-side, so version+data alone wouldn't notice).
+    const schedSig = payload.claimed && payload.state.layout ? scheduledSig(payload.state.layout) : "";
+    const etag = `W/"${layoutId ?? 0}.${version}.${createHash("sha1").update(dataJson).update(" ").update(ovSig).update("|").update(schedSig).digest("hex").slice(0, 16)}"`;
     const ifNone = c.req.header("if-none-match");
     const conditional = ifNone !== undefined;
     const prev = displayEtags.get(device.id);
