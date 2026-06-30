@@ -41,7 +41,7 @@ import {
   blankDocument, clearShareToken, createLayout, deleteLayout, duplicateLayout, getLayout,
   getLayoutByShareToken, getLayoutVersionDocument, getOwnedLayout, getShareInfo, importFromHub,
   listLayoutVersions, listPendingTemplates,
-  listPublished, listSetups, publishForReview, setReviewStatus, setShareToken, setVersionLabel, shareExpired,
+  listPublished, listSetups, publishForReview, setArchived, setReviewStatus, setShareToken, setVersionLabel, shareExpired,
   updateLayout, updateLayoutMeta, verifySharePassword,
 } from "./layouts";
 import {
@@ -776,7 +776,7 @@ export function buildApp(): Hono<Env> {
 
   // ---- setups ----
 
-  app.get("/api/layouts", (c) => c.json(listSetups(c.get("orgId")).map(setupSummary)));
+  app.get("/api/layouts", (c) => c.json(listSetups(c.get("orgId"), { archived: c.req.query("archived") === "1" }).map(setupSummary))); // #107 ?archived=1 → the archive view
 
   app.post("/api/layouts", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { name?: string; document?: unknown };
@@ -914,8 +914,9 @@ export function buildApp(): Hono<Env> {
     const id = Number(c.req.param("id"));
     if (!getOwnedLayout(id, c.get("orgId"))) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as {
-      name?: string; description?: string; published?: boolean; folder?: string | null;
+      name?: string; description?: string; published?: boolean; folder?: string | null; archived?: boolean;
     };
+    if (body.archived !== undefined) setArchived(id, c.get("orgId"), body.archived); // #107 archive/restore
     const updated = updateLayoutMeta(id, body)!;
     return c.json(updated);
   });

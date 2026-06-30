@@ -21,6 +21,7 @@ export interface LayoutRecord {
   importCount: number;
   reviewStatus: string; // 'pending' | 'approved' — only meaningful when published
   folder: string | null; // #104 — organize boards into collections (null = Unfiled)
+  archived: boolean; // #107 — soft-deleted: hidden from the main list/pickers but restorable
 }
 
 export interface SetupSummary extends LayoutRecord {
@@ -51,6 +52,7 @@ interface LayoutRow {
   import_count: number;
   review_status: string;
   folder: string | null;
+  archived_at: number | null;
 }
 
 function toRecord(row: LayoutRow): LayoutRecord {
@@ -69,6 +71,7 @@ function toRecord(row: LayoutRow): LayoutRecord {
     importCount: row.import_count,
     reviewStatus: row.review_status ?? "approved",
     folder: row.folder ?? null,
+    archived: !!row.archived_at,
   };
 }
 
@@ -139,13 +142,15 @@ export function verifySharePassword(pwHash: string | null, candidate: string | u
   return typeof candidate === "string" && verifyHash(candidate, pwHash);
 }
 
-export function listSetups(orgId: string): SetupSummary[] {
+export function listSetups(orgId: string, opts: { archived?: boolean } = {}): SetupSummary[] {
+  // #107 — the main list shows only active boards; pass { archived: true } for the archive view.
+  const archiveClause = opts.archived ? "AND l.archived_at IS NOT NULL" : "AND l.archived_at IS NULL";
   const rows = db
     .prepare(
       `SELECT l.*, COUNT(d.id) AS used_by,
               COALESCE(GROUP_CONCAT(d.name, char(31)), '') AS device_names
        FROM layouts l LEFT JOIN devices d ON d.layout_id = l.id
-       WHERE l.org_id = ? AND l.is_template = 0
+       WHERE l.org_id = ? AND l.is_template = 0 ${archiveClause}
        GROUP BY l.id ORDER BY l.id LIMIT 1000`, // safety cap against a pathological/abusive count
     )
     .all(orgId) as Array<LayoutRow & { used_by: number; device_names: string }>;
@@ -284,6 +289,11 @@ export function updateLayoutMeta(
     id,
   );
   return getLayout(id);
+}
+
+/** #107 — archive (soft-delete) or restore a board. Org-scoped; returns false if not owned. */
+export function setArchived(id: number, orgId: string, archived: boolean, now = Date.now()): boolean {
+  return db.prepare("UPDATE layouts SET archived_at = ? WHERE id = ? AND org_id = ?").run(archived ? now : null, id, orgId).changes > 0;
 }
 
 /** Returns the ids of devices that were using the layout (they need a push). */

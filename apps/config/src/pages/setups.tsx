@@ -38,14 +38,15 @@ export function SetupsPage() {
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
   const [shared, setShared] = useState<SharedLayout[] | null>(null);
   const [q, setQ] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const { favs, toggle: toggleFav } = useFavorites();
   const toast = useToast();
 
   const refresh = async () => {
-    try { setSetups(await api.get<SetupSummary[]>("/api/layouts")); }
+    try { setSetups(await api.get<SetupSummary[]>(`/api/layouts${showArchived ? "?archived=1" : ""}`)); }
     catch (e) { toast.error(`Couldn't load boards: ${e instanceof Error ? e.message : e}`); }
   };
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { setSetups(null); refresh(); }, [showArchived]); // #107 — reload when toggling the archive view
   useEffect(() => {
     if (tab === "shared" && shared === null) api.get<SharedLayout[]>("/api/shared/layouts").then(setShared).catch(() => setShared([]));
   }, [tab]);
@@ -68,6 +69,11 @@ export function SetupsPage() {
           <input placeholder="Search boards…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search boards" />
         </label>
       )}
+      {tab === "mine" && (
+        <button onClick={() => setShowArchived((v) => !v)} aria-pressed={showArchived} title={showArchived ? "Back to active boards" : "View archived boards"}>
+          {showArchived ? <><Icon.chevron /> Active boards</> : <><Icon.eyeOff /> Archived</>}
+        </button>
+      )}
       <button class="primary" onClick={newBoard}><Icon.plus /> New board</button>
     </>
   );
@@ -84,18 +90,21 @@ export function SetupsPage() {
         {tab === "mine" ? (
           <>
             <p class="muted page-intro">
-              A board is a dashboard you design once and show on any screen — disconnect a screen and its board survives;
-              show one board on many screens and they stay in step.
+              {showArchived
+                ? "Archived boards are tucked away here — hidden from your board list and from screen pickers, but kept safe. Restore one anytime from its ⋯ menu."
+                : "A board is a dashboard you design once and show on any screen — disconnect a screen and its board survives; show one board on many screens and they stay in step."}
             </p>
             {setups === null ? (
               <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
             ) : filtered.length === 0 ? (
               <EmptyState
-                icon={<Icon.pencil />}
-                title={q ? "No boards match" : "No boards yet"}
-                body={q ? "Try a different search." : "Create your first board, or start from a template."}
-                action={q ? undefined : { label: "New board", onClick: newBoard }}
+                icon={showArchived ? <Icon.eyeOff /> : <Icon.pencil />}
+                title={q ? "No boards match" : showArchived ? "No archived boards" : "No boards yet"}
+                body={q ? "Try a different search." : showArchived ? "Archive a board from its ⋯ menu to tuck it away here." : "Create your first board, or start from a template."}
+                action={q || showArchived ? undefined : { label: "New board", onClick: newBoard }}
               />
+            ) : showArchived ? (
+              <div class="cards">{filtered.map((s) => <SetupCard key={s.id} setup={s} folders={[]} onChanged={refresh} isFav={favs.has(s.id)} onToggleFav={() => toggleFav(s.id)} />)}</div>
             ) : (() => {
               // #104 — group boards by folder (sorted; Unfiled last). Folder headings only
               // appear once at least one board has a folder, so the flat list is unchanged
@@ -192,6 +201,13 @@ function SetupCard({ setup, folders, onChanged, isFav, onToggleFav }: { setup: S
     toast.success("Exported");
   };
 
+  // #107 — archive (soft-delete) or restore; archived boards leave the main list + pickers.
+  const setArchivedFn = async (archived: boolean) => {
+    await api.patch(`/api/layouts/${setup.id}`, { archived });
+    toast.success(archived ? "Board archived" : "Board restored");
+    await onChanged();
+  };
+
   const remove = async () => {
     const ok = await confirm({
       title: `Delete "${setup.name}"?`,
@@ -224,6 +240,9 @@ function SetupCard({ setup, folders, onChanged, isFav, onToggleFav }: { setup: S
               ...folders.filter((f) => f !== setup.folder).map((f) => ({ label: `Move to "${f}"`, icon: <Icon.layers />, onClick: () => moveTo(f) })),
               { label: "Move to new folder…", icon: <Icon.plus />, onClick: newFolder },
               ...(setup.folder ? [{ label: "Remove from folder", icon: <Icon.x />, onClick: () => moveTo(null) }] : []),
+              setup.archived
+                ? { label: "Restore", icon: <Icon.eye />, onClick: () => setArchivedFn(false) }
+                : { label: "Archive", icon: <Icon.eyeOff />, onClick: () => setArchivedFn(true) },
               { label: "Delete", icon: <Icon.trash />, danger: true, onClick: remove },
             ]}
           />

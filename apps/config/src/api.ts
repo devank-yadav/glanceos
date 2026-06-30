@@ -123,6 +123,7 @@ export interface SetupSummary {
   widgetCount: number;
   rowCount: number;
   folder: string | null;
+  archived?: boolean;
 }
 
 export interface SceneSummary {
