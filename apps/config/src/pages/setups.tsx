@@ -33,6 +33,17 @@ function useFavorites() {
   return { favs, toggle };
 }
 
+// #105 — board sort. Client-side over the fields the list already carries (no backend), persisted
+// per-device like favorites. Sorting orders boards within the Favorites section + each folder.
+const BOARD_SORTS: Record<string, (a: SetupSummary, b: SetupSummary) => number> = {
+  "name-asc": (a, b) => a.name.localeCompare(b.name),
+  "name-desc": (a, b) => b.name.localeCompare(a.name),
+  used: (a, b) => b.usedBy - a.usedBy || a.name.localeCompare(b.name),
+  newest: (a, b) => b.id - a.id,
+};
+const SORT_LABELS: [string, string][] = [["name-asc", "Name (A–Z)"], ["name-desc", "Name (Z–A)"], ["used", "Most used"], ["newest", "Newest"]];
+const SORT_KEY = "glanceos.boardSort";
+
 export function SetupsPage() {
   const [tab, setTab] = useState<"mine" | "shared">("mine");
   const [setups, setSetups] = useState<SetupSummary[] | null>(null);
@@ -56,10 +67,13 @@ export function SetupsPage() {
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
-  const filtered = useMemo(
-    () => (setups ?? []).filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase())),
-    [setups, q],
-  );
+  const [sort, setSort] = useState(() => { try { return localStorage.getItem(SORT_KEY) || "name-asc"; } catch { return "name-asc"; } });
+  const chooseSort = (v: string) => { setSort(v); try { localStorage.setItem(SORT_KEY, v); } catch { /* storage blocked — keep in-memory */ } };
+
+  const filtered = useMemo(() => {
+    const list = (setups ?? []).filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase()));
+    return list.sort(BOARD_SORTS[sort] ?? BOARD_SORTS["name-asc"]); // #105 — sort flows into favorites + folders
+  }, [setups, q, sort]);
 
   const actions = (
     <>
@@ -68,6 +82,11 @@ export function SetupsPage() {
           <Icon.search />
           <input placeholder="Search boards…" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} aria-label="Search boards" />
         </label>
+      )}
+      {tab === "mine" && (
+        <select class="board-sort" value={sort} onChange={(e) => chooseSort((e.currentTarget as HTMLSelectElement).value)} aria-label="Sort boards" title="Sort boards">
+          {SORT_LABELS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
       )}
       {tab === "mine" && (
         <button onClick={() => setShowArchived((v) => !v)} aria-pressed={showArchived} title={showArchived ? "Back to active boards" : "View archived boards"}>
