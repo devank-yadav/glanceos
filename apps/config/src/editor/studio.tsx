@@ -25,6 +25,7 @@ import { PagesPanel } from "./pagesPanel";
 import { SnippetsPanel, type SnippetMeta } from "./snippetsPanel";
 import { DraggablePanel } from "./DraggablePanel";
 import { Shortcuts } from "./shortcuts";
+import { countMatches, findReplaceInDoc } from "./findReplace";
 import { SlashMenu } from "./slash-menu";
 import { TableEditor } from "./tableEditor";
 import { BlockMenu } from "./toolbar";
@@ -158,6 +159,10 @@ export function Studio({ layoutId }: { layoutId: number }) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [presenting, setPresenting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  // #98 — find & replace text across the board (⌘F).
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQ, setFindQ] = useState("");
+  const [replaceV, setReplaceV] = useState("");
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -358,6 +363,11 @@ export function Studio({ layoutId }: { layoutId: number }) {
   }, [editing?.id]);
 
   const commitDoc = (doc: LayoutT) => { autoNameObjects(doc); dispatch({ type: "commit", doc }); };
+  // #98 — replace every occurrence across the board (one undo step via commitDoc).
+  const runReplaceAll = () => {
+    const { doc, count } = findReplaceInDoc(docRef.current, findQ, replaceV);
+    if (count > 0) { commitDoc(doc); toast.success(`Replaced ${count} occurrence${count === 1 ? "" : "s"}`); }
+  };
 
   // The rows currently being edited (active page) — the read-side counterpart to the
   // stageEdit lens. Reads docRef/activePageRef so it's correct inside ref-based handlers.
@@ -719,6 +729,9 @@ export function Studio({ layoutId }: { layoutId: number }) {
       if (meta && e.key.toLowerCase() === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
+      } else if (meta && e.key.toLowerCase() === "f") {
+        e.preventDefault(); // #98 — find & replace (override the browser's page find)
+        setFindOpen((v) => !v);
       } else if (meta && e.key.toLowerCase() === "a") {
         e.preventDefault(); // select every object on the board
         dispatch({ type: "selectMany", ids: editRows().flatMap((r) => r.blocks).map((b) => b.id) });
@@ -884,8 +897,24 @@ export function Studio({ layoutId }: { layoutId: number }) {
     } catch (e) { setCastMsg(String(e instanceof Error ? e.message : e)); }
   };
 
+  // #98 — live match count for the find bar (computed only while it's open).
+  const findMatches = findOpen && findQ ? countMatches(docRef.current, findQ) : 0;
+
   return (
     <div class="studio">
+      {findOpen && (
+        <div class="find-bar">
+          <input class="find-input" autoFocus placeholder="Find text on this board" value={findQ}
+            onInput={(e) => setFindQ((e.currentTarget as HTMLInputElement).value)}
+            onKeyDown={(e) => { if (e.key === "Escape") setFindOpen(false); }} />
+          <input class="find-input" placeholder="Replace with…" value={replaceV}
+            onInput={(e) => setReplaceV((e.currentTarget as HTMLInputElement).value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runReplaceAll(); if (e.key === "Escape") setFindOpen(false); }} />
+          <span class="find-count muted">{findQ ? `${findMatches} match${findMatches === 1 ? "" : "es"}` : ""}</span>
+          <button class="ghost" disabled={findMatches === 0} onClick={runReplaceAll}>Replace all</button>
+          <button class="ghost icon-btn" aria-label="Close find" title="Close (Esc)" onClick={() => setFindOpen(false)}><Icon.x /></button>
+        </div>
+      )}
       <header class="studio-bar">
         <nav class="studio-crumbs" aria-label="Breadcrumb">
           <a class="back" href={editorOrigin().path} title={`Back to ${editorOrigin().label}`}>← {editorOrigin().label}</a>
@@ -918,6 +947,7 @@ export function Studio({ layoutId }: { layoutId: number }) {
         <button class={`ghost hide-narrow${layoutOpen ? " on" : ""}`} title="Choose a layout for this board" onClick={() => setLayoutOpen(true)}><Icon.grid /> Layout</button>
         <button class="ghost icon-btn" disabled={state.past.length === 0} aria-label="Undo" title="Undo (⌘Z)" onClick={() => dispatch({ type: "undo" })}><Icon.undo /></button>
         <button class="ghost icon-btn" disabled={state.future.length === 0} aria-label="Redo" title="Redo (⇧⌘Z)" onClick={() => dispatch({ type: "redo" })}><Icon.redo /></button>
+        <button class={`ghost icon-btn${findOpen ? " on" : ""}`} aria-label="Find & replace" title="Find & replace (⌘F)" onClick={() => setFindOpen((v) => !v)}><Icon.search /></button>
         <button class="ghost icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setShowHelp(true)}><Icon.help /></button>
         <button class="ghost icon-btn" aria-label="Present" title="Present" onClick={() => setPresenting(true)}><Icon.play /></button>
         <button class={`ghost icon-btn${autoOpen ? " on" : ""}`} aria-label="Automations" title="Automations — make this board react" onClick={() => setAutoOpen(true)}><Icon.command /></button>

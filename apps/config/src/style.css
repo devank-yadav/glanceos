@@ -3914,6 +3914,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .metric-cur { flex: 0 0 auto; min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 .metric-input { flex: 0 0 6rem; }
 
+/* #98 — Studio find & replace bar */
+.find-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--soft, rgba(127,127,127,0.08)); border-bottom: 1px solid var(--rule, rgba(127,127,127,0.18)); }
+.find-input { flex: 0 1 220px; min-width: 0; }
+.find-count { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
+
 /* #153 — reflection journal (account page) */
 .journal-write { width: 100%; resize: vertical; margin-bottom: 8px; }
 .journal-list { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
