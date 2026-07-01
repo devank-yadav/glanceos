@@ -103,6 +103,24 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
   flex-shrink: 1;
   position: relative; /* #191 — containing block for the stale stamp */
 }
+/* #10 — a board button that fires an automation on tap (calm, monochrome, e-ink-safe). */
+.block-button {
+  font: inherit;
+  padding: 1.2vmin 2.6vmin;
+  border: 0.2vmin solid currentColor;
+  border-radius: 1vmin;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  align-self: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.block-button:active { opacity: 0.6; }
+.block-button:disabled { opacity: 0.4; cursor: default; }
+
 /* #191 — "as of Nm ago" on a block served from the last-known cache (#21): a calm freshness hint. */
 .stale-stamp {
   position: absolute;

@@ -57,6 +57,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   divider: [],
   image: [S("url", "Image URL"), Sel("fit", "Fit", ["cover", "contain"])],
   deck: [T("slides", "Slides (separate each with a blank line)"), N("seconds", "Seconds per slide")],
+  button: [S("label", "Button label")], // #10 — the automation is picked below (needs the live list)
   callout: [T("content", "Text"), S("emoji", "Emoji")],
   subheading: [S("content", "Text")],
   quote: [T("content", "Quote"), S("author", "Author")],
@@ -417,6 +418,7 @@ export function BlockFields({
         </div>
       )}
       {block.type === "image" && <ImageUpload onUploaded={(url) => editProp("url", url)} />}
+      {block.type === "button" && <AutomationPicker value={props.automationId} onChange={(id) => editProp("automationId", id || undefined)} />}
       {block.type === "tasks" && <TasksItemsEditor listId={(props.listId as string) || "default"} />}
       {block.type === "queue" && <QueueCounterEditor queueId={(props.queueId as string) || "default"} />}
       {block.type === "text" && (
@@ -568,6 +570,22 @@ export function BlockFields({
         </label>
       </div>
     </div>
+  );
+}
+
+// #10 — bind a button block to one of the account's automations (which the tap fires on demand).
+function AutomationPicker({ value, onChange }: { value: unknown; onChange: (id: string) => void }) {
+  const [autos, setAutos] = useState<{ id?: string; name: string }[]>([]);
+  useEffect(() => { api.get<{ id?: string; name: string }[]>("/api/automations").then(setAutos).catch(() => {}); }, []);
+  return (
+    <label class="field">
+      <span>Runs automation</span>
+      <select value={typeof value === "string" ? value : ""} onChange={(e) => onChange((e.currentTarget as HTMLSelectElement).value)}>
+        <option value="">— none (button does nothing) —</option>
+        {autos.filter((a) => a.id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </select>
+      {autos.length === 0 && <span class="muted tiny">Create an automation (trigger “On demand”) first, then bind it here.</span>}
+    </label>
   );
 }
 

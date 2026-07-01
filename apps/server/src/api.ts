@@ -124,6 +124,7 @@ const DEVICE_PLANE = new Set([
   "/api/devices/me/render.bmp",
   "/api/devices/me/telemetry",
   "/api/devices/me/play-log",
+  "/api/devices/me/action", // #10 — a board button tap fires an automation (device-auth)
 ]);
 
 type Env = { Variables: { userId: string; orgId: string; role: Role; principal: "session" | "apikey"; scopes: string[] } };
@@ -322,6 +323,7 @@ export function buildApp(): Hono<Env> {
   app.use("/api/devices/me/display", limiter("display", 120, 60_000, deviceKey));
   app.use("/api/devices/me/telemetry", limiter("telemetry", 120, 60_000, deviceKey));
   app.use("/api/devices/me/play-log", limiter("play-log", 120, 60_000, deviceKey));
+  app.use("/api/devices/me/action", limiter("action", 60, 60_000, deviceKey)); // #10 — cap button-tap spam
   app.use("/api/layouts/preview-state", limiter("preview", 120, 60_000, userKey));
   app.use("/api/source/preview", limiter("preview", 120, 60_000, userKey));
   app.use("/api/geocode", limiter("geocode", 60, 60_000, userKey));
@@ -546,6 +548,19 @@ export function buildApp(): Hono<Env> {
     const entries: PlayLogEntry[] = Array.isArray(body) ? body : Array.isArray((body as { entries?: PlayLogEntry[] }).entries) ? (body as { entries: PlayLogEntry[] }).entries : [body as PlayLogEntry];
     const written = recordPlayLog(device.id, entries, Date.now());
     return c.json({ ok: true, written });
+  });
+
+  // #10 — a board button tap fires one of the owner's automations on demand. Device-auth; the
+  // fire is user-scoped (runAutomationById → getAutomation(id, ownerId)), so a screen can only
+  // trigger automations belonging to the account that owns it — never another user's.
+  app.post("/api/devices/me/action", async (c) => {
+    const device = authDevice(c.req.header("id") ?? c.req.header("x-device-id"), c.req.header("access-token") ?? c.req.header("x-device-secret"));
+    if (!device) return c.json({ error: "unauthorized" }, 401);
+    if (!device.user_id) return c.json({ error: "unclaimed" }, 403);
+    const { automationId } = (await c.req.json().catch(() => ({}))) as { automationId?: string };
+    if (!automationId) return c.json({ error: "automationId required" }, 400);
+    try { return c.json(await runAutomationById(automationId, device.user_id)); }
+    catch { return c.json({ error: "automation not found" }, 404); }
   });
 
   // ---- screens (config plane) ----

@@ -416,6 +416,11 @@ const TimeWindow = z.object({
 // #80 — show a block only inside this window (else it's hidden, like a failing visibleWhen).
 const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), schedule: TimeWindow.optional() };
 
+// #10 — a tappable button that fires one of the account's automations on demand (web/TV/touch);
+// on e-ink it renders as a static labelled control. `automationId` refs an automation (kind
+// "manual"); unbound buttons just show their label.
+export const ButtonProps = z.object({ label: line(60).default("Tap"), automationId: z.string().max(64).optional() });
+
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),
   z.object({ ...b, type: z.literal("weather"), props: WeatherProps }),
@@ -656,6 +661,7 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("homeTile"), props: HomeTileProps }),
   // v8.0 rotation
   z.object({ ...b, type: z.literal("deck"), props: DeckProps }),
+  z.object({ ...b, type: z.literal("button"), props: ButtonProps }), // #10 — tap fires an automation
 ]);
 
 export const Row = z.object({

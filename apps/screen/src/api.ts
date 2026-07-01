@@ -12,6 +12,18 @@ function authHeaders(id: Identity): Record<string, string> {
   return { "x-device-id": id.deviceId, "x-device-secret": id.deviceSecret };
 }
 
+// #10 — fire the automation a board button is bound to (POST is device-authed; the server scopes
+// it to this screen's owner). Best-effort: a tap on an offline/unbound button quietly does nothing.
+export async function fireAction(automationId?: string): Promise<void> {
+  if (!automationId) return;
+  const raw = localStorage.getItem(ID_KEY);
+  if (!raw) return;
+  try {
+    const id = JSON.parse(raw) as Identity;
+    await fetch("/api/devices/me/action", { method: "POST", headers: { ...authHeaders(id), "content-type": "application/json" }, body: JSON.stringify({ automationId }) });
+  } catch { /* offline / not yet claimed — a button tap is fire-and-forget */ }
+}
+
 /**
  * Load the stored identity, or register as a brand-new device.
  * A 401 means the server no longer knows us (wiped DB) — re-register.

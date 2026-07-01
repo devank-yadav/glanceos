@@ -66,9 +66,12 @@ export const Trigger = z.discriminatedUnion("kind", [
   // v7.0 — an optional `person` watches a per-household lane (`presence.<name>`); absent
   // = the single-occupant `presence` lane (the individual-KW default, unchanged).
   z.object({ kind: z.literal("presence"), event: z.enum(["enter", "leave"]), person: z.string().max(60).optional() }),
+  // #10 — fires only on demand: a board button tap (POST /api/devices/me/action) or the config
+  // "Run now" button. Never fires on the tick, so it's the trigger for user-initiated routines.
+  z.object({ kind: z.literal("manual") }),
 ]);
 export type TriggerT = z.infer<typeof Trigger>;
-export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "interval", "time", "sun", "presence"] as const;
+export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick", "interval", "time", "sun", "presence", "manual"] as const;
 
 // ---- Action ----
 // Every action carries an optional `enabled` flag (default = on); runActions skips a

@@ -178,6 +178,20 @@ const divider: Render = (el) => {
   el.appendChild(div("divider-rule"));
 };
 
+// #10 — a tappable button that fires its bound automation (web/TV/touch). On e-ink it's just a
+// static labelled control (no tap). Fire is best-effort + dynamically imported so it costs nothing
+// until pressed. Unbound (no automationId) renders disabled.
+const button: Render = (el, widget) => {
+  if (widget.type !== "button") return;
+  const p = widget.props;
+  const b = document.createElement("button");
+  b.className = "block-button";
+  b.textContent = p.label || "Tap";
+  if (p.automationId) b.addEventListener("click", () => { void import("./api").then((m) => m.fireAction(p.automationId)); });
+  else b.disabled = true;
+  el.appendChild(b);
+};
+
 const image: Render = (el, widget) => {
   if (widget.type !== "image") return;
   const img = document.createElement("img");
@@ -2623,4 +2637,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   myDay, dailyBrief, healthRing, homeTile,
   // v8.0 rotation
   deck,
+  // #10 interactivity
+  button,
 };
