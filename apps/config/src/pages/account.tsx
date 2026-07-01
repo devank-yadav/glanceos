@@ -8,6 +8,20 @@ import { TimezoneSelect } from "../components/TimezoneSelect";
 import { LocationPicker, type ChosenLocation } from "../components/LocationPicker";
 import { useToast } from "../components/Toast";
 
+// #152 — coerce a stored data value to a chartable number (number or numeric string), else null.
+const toNum = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && v.trim() !== "") { const n = Number(v); return Number.isFinite(n) ? n : null; }
+  return null;
+};
+// #152 — a tiny inline trend line for a metric's recent history (currentColor, e-ink-safe).
+function miniSpark(values: number[]): string {
+  if (values.length < 2) return "";
+  const min = Math.min(...values), max = Math.max(...values), range = max - min || 1, w = 90, h = 22;
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - ((v - min) / range) * h).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${pts}"/></svg>`;
+}
+
 // Account management: rename, change password, log out everywhere, export a
 // backup, and delete the account (cascades all data server-side).
 export function AccountPage() {
@@ -32,6 +46,10 @@ export function AccountPage() {
   // #3 — Scenes: named snapshots of your data values, applied in one tap.
   const [scenes, setScenes] = useState<SceneSummary[]>([]);
   const [sceneName, setSceneName] = useState("");
+  // #152 — personal metrics journal: numeric data keys you log over time (auto-tracked by #27).
+  const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[] }[]>([]);
+  const [newMetric, setNewMetric] = useState("");
+  const [newValue, setNewValue] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -44,7 +62,31 @@ export function AccountPage() {
     api.get<{ value?: unknown }>("/api/data/focusMode").then((r) => setFocus(r.value === true || r.value === "true" || r.value === "on")).catch(() => {});
     api.get<SetupSummary[]>("/api/layouts").then(setBoards).catch(() => {});
     api.get<SceneSummary[]>("/api/scenes").then(setScenes).catch(() => {});
+    loadMetrics();
   }, []);
+
+  // #152 — the numeric data keys the user tracks, each with its recent history for a mini trend.
+  const loadMetrics = async () => {
+    try {
+      const all = await api.get<{ key: string; value: unknown }[]>("/api/data");
+      const numeric = all.filter((d) => toNum(d.value) != null);
+      const withHist = await Promise.all(numeric.map(async (d) => {
+        const h = await api.get<{ points: { value: number }[] }>(`/api/data/${encodeURIComponent(d.key)}/history?days=90`).catch(() => ({ points: [] as { value: number }[] }));
+        return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value) };
+      }));
+      setMetrics(withHist);
+    } catch { /* the card just stays empty */ }
+  };
+  const logValue = async (key: string, value: number) => {
+    if (!Number.isFinite(value)) return;
+    try { await api.post(`/api/data/${encodeURIComponent(key)}`, { value }); toast.success(`Logged ${key}: ${value}`); await loadMetrics(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const trackNew = async () => {
+    const name = newMetric.trim(); const value = Number(newValue);
+    if (!name || !Number.isFinite(value)) { toast.error("Enter a name and a number"); return; }
+    await logValue(name, value); setNewMetric(""); setNewValue("");
+  };
 
   const captureScene = async () => {
     const name = sceneName.trim();
@@ -215,6 +257,29 @@ export function AccountPage() {
               ))}
             </ul>
           )}
+        </section>
+
+        <section class="card account-section">
+          <h2>Personal metrics</h2>
+          <p class="muted">Log a number over time — weight, mood, focus hours — and it trends itself. Add a “Metric trend” block to a board to show any of these on a screen.</p>
+          {metrics.length > 0 && (
+            <ul class="metric-journal">
+              {metrics.map((m) => (
+                <li key={m.key} class="row spread metric-row">
+                  <span class="metric-name">{m.key}</span>
+                  <span class="metric-spark" dangerouslySetInnerHTML={{ __html: miniSpark(m.points) }} />
+                  <strong class="metric-cur">{m.value}</strong>
+                  <input class="metric-input" type="number" step="any" placeholder="log…" title={`Log a new ${m.key}`}
+                    onKeyDown={(e) => { if (e.key === "Enter") { const el = e.currentTarget as HTMLInputElement; const v = Number(el.value); if (el.value.trim() && Number.isFinite(v)) { logValue(m.key, v); el.value = ""; } } }} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <div class="row wrap" style={{ gap: "8px" }}>
+            <input placeholder="metric name (e.g. weight)" value={newMetric} onInput={(e) => setNewMetric((e.currentTarget as HTMLInputElement).value)} />
+            <input type="number" step="any" placeholder="value" value={newValue} onInput={(e) => setNewValue((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") trackNew(); }} />
+            <button class="ghost" disabled={!newMetric.trim() || newValue.trim() === ""} onClick={trackNew}>Track a number</button>
+          </div>
         </section>
 
         {data && (
