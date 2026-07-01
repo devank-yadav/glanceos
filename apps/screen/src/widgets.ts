@@ -763,6 +763,17 @@ const sparkline: Render = (el, w, data) => {
   if (v.length) el.appendChild(div("spark-last", String(v[v.length - 1])));
 };
 
+// #27 — draw a data key's recorded history (resolved to a number series by the server) as a spark.
+const metricHistory: Render = (el, w, data) => {
+  if (w.type !== "metricHistory") return;
+  heading2(el, w.props.label);
+  const v = Array.isArray(data) ? (data as unknown[]).filter((n): n is number => typeof n === "number") : [];
+  const wrap = div("spark");
+  wrap.innerHTML = sparkSvg(v);
+  el.appendChild(wrap);
+  if (v.length) el.appendChild(div("spark-last", String(v[v.length - 1])));
+};
+
 const barChart: Render = (el, w, data) => {
   if (w.type !== "barChart") return;
   heading2(el, w.props.label);
@@ -2639,4 +2650,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   deck,
   // #10 interactivity
   button,
+  // #27 metric history chart
+  metricHistory,
 };

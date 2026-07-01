@@ -99,6 +99,7 @@ export const BLOCKS: BlockDef[] = [
 
   // ===== v0.6 — charts =====
   { type: "sparkline", label: "Sparkline", glyph: "∿", category: "Charts", defaultH: 5, description: "Tiny line chart", keywords: "line trend chart graph", defaultProps: { values: "3,5,4,6,7,6,8,7,9", label: "" } },
+  { type: "metricHistory", label: "Metric trend", glyph: "∿", category: "Charts", defaultH: 5, description: "Charts a data key's recorded history over time", keywords: "metric history trend over time followers weight counter data key auto sparkline", defaultProps: { dataKey: "", label: "", days: 30 } },
   { type: "barChart", label: "Bar chart", glyph: "▁", category: "Charts", defaultH: 6, description: "Mini vertical bars", keywords: "bars chart graph", defaultProps: { values: "4,8,6,10,7,9", label: "" } },
   { type: "progressRing", label: "Progress ring", glyph: "◍", category: "Charts", defaultH: 6, description: "Circular percent", keywords: "ring percent circle", defaultProps: { value: 64, label: "" } },
   { type: "dotProgress", label: "Dot progress", glyph: "⣿", category: "Charts", defaultH: 4, description: "Filled dots out of N", keywords: "progress dots count", defaultProps: { value: 7, total: 10, label: "" } },

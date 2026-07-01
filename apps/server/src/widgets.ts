@@ -9,6 +9,7 @@ import {
 import { airQualityData, forecastData, precipData, uvData, windData } from "./fetchers/openmeteo";
 import { weatherData } from "./fetchers/weather";
 import { customDataWidget } from "./customdata";
+import { metricSeries } from "./metrics";
 import { queueData } from "./queues";
 import { listTasks, tasksData } from "./tasks";
 import { composeContextualGreeting, composeDailyBrief, dayContext } from "./daycontext";
@@ -108,6 +109,12 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
           break;
         case "queue": data[b.id] = queueData(b.props, userId); break;
         case "customData": { const cd = customDataWidget(b.props, userId); if (cd) data[b.id] = cd; break; }
+        // #27 — chart a numeric data key's recorded history as a series the sparkline draws.
+        case "metricHistory": {
+          const key = b.props.dataKey.trim();
+          if (key) data[b.id] = metricSeries(userId, key, now.getTime() - b.props.days * 86_400_000).map((p) => p.value);
+          break;
+        }
         // location-aware: screens inherit their device location for untouched blocks
         case "sunriseSunset": case "daylight": case "goldenHour": {
           const gp = g(b.props as { latitude?: number; longitude?: number });

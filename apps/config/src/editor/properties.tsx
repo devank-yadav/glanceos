@@ -110,6 +110,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   prosCons: [T("pros", "Pros (one per line)"), T("cons", "Cons (one per line)")],
   // v0.6 charts
   sparkline: [T("values", "Numbers (comma-separated)"), S("label", "Label")],
+  metricHistory: [S("dataKey", "Data key to chart (e.g. followers)"), S("label", "Label"), N("days", "Days of history")], // #27
   barChart: [T("values", "Numbers (comma-separated)"), S("label", "Label")],
   progressRing: [N("value", "Percent"), S("label", "Label")],
   dotProgress: [N("value", "Filled"), N("total", "Total"), S("label", "Label")],
