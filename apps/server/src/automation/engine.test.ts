@@ -613,3 +613,18 @@ describe("#2 per-action condition (branching)", () => {
     expect(r.run).toBe(2); // two steps executed (the skipped one is not counted)
   });
 });
+
+describe("#7 day-type conditions (isWeekend / isWorkday)", () => {
+  it("derives the booleans consistently with the weekday (tz-independent)", () => {
+    const c = buildContext(user.id);
+    expect(c.time.isWeekend).toBe(c.time.weekday === 0 || c.time.weekday === 6);
+    expect(c.time.isWorkday).toBe(c.time.weekday >= 1 && c.time.weekday <= 5);
+    expect(c.time.isWeekend).toBe(!c.time.isWorkday); // mutually exclusive, exhaustive
+  });
+  it("gates a rule on workday vs weekend", () => {
+    const wk = (isWorkday: boolean) => ({ ...ctx(), time: { hour: 9, minute: 0, minuteOfDay: 540, weekday: isWorkday ? 3 : 0, ts: 0, isWorkday, isWeekend: !isWorkday } }) as Parameters<typeof evaluate>[1];
+    expect(evaluate(field("time.isWorkday", "eq", true), wk(true))).toBe(true);
+    expect(evaluate(field("time.isWorkday", "eq", true), wk(false))).toBe(false);
+    expect(evaluate(field("time.isWeekend", "eq", true), wk(false))).toBe(true);
+  });
+});

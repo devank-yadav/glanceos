@@ -62,6 +62,8 @@ const FIELD_CATALOG: FieldDef[] = [
   { field: "time.minute", label: "Minute (0–59)", group: "Time", control: "number" },
   { field: "time.minuteOfDay", label: "Minute of day", group: "Time", control: "number" },
   { field: "time.weekday", label: "Day of week", group: "Time", control: "select", options: WEEKDAY_FULL.map((d, i) => ({ value: String(i), label: d })) },
+  { field: "time.isWeekend", label: "It’s the weekend", group: "Time", control: "bool" }, // #7
+  { field: "time.isWorkday", label: "It’s a workday (Mon–Fri)", group: "Time", control: "bool" }, // #7
   // Presence
   { field: "presence.home", label: "Someone is home", group: "Presence", control: "bool" },
   { field: "presence.state", label: "Presence", group: "Presence", control: "select", options: [{ value: "home", label: "Home" }, { value: "away", label: "Away" }] },
@@ -108,6 +110,8 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   { id: "weekend-am", group: "Time", label: "Weekend mornings (9am)", trigger: { kind: "time", atMinute: 540, daysMask: WEEKENDS_MASK } },
   { id: "midnight", group: "Time", label: "At midnight (daily reset)", trigger: { kind: "time", atMinute: 0, daysMask: 127 } },
   { id: "lunch", group: "Time", label: "Workday lunchtime (12pm)", trigger: { kind: "time", atMinute: 720, daysMask: WEEKDAYS_MASK } },
+  { id: "on-weekdays", group: "Time", label: "Only on weekdays (Mon–Fri)", trigger: { kind: "tick" }, conditions: fcond("time.isWorkday", "eq", true) },
+  { id: "on-weekends", group: "Time", label: "Only on weekends", trigger: { kind: "tick" }, conditions: fcond("time.isWeekend", "eq", true) },
   // On a cadence
   { id: "every-5", group: "Cadence", label: "Every 5 minutes", trigger: { kind: "interval", everyMinutes: 5 } },
   { id: "every-15", group: "Cadence", label: "Every 15 minutes", trigger: { kind: "interval", everyMinutes: 15 } },

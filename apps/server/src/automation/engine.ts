@@ -39,7 +39,7 @@ export interface Ctx {
   data: Record<string, unknown>; // the user's custom-data store, keyed by key
   webhook: unknown; // inlet payload (webhook trigger)
   device: Record<string, unknown>; // the device that transitioned (online/offline triggers)
-  time: { hour: number; minute: number; minuteOfDay: number; weekday: number; ts: number };
+  time: { hour: number; minute: number; minuteOfDay: number; weekday: number; ts: number; isWeekend: boolean; isWorkday: boolean };
   // v5.0 substrate — today's sun, in the user's location/timezone (undefined if no
   // screen has a location set). Lets boards react to daylight: `sun.isDaytime`,
   // `sun.minsToSunset`, etc. Also powers the "sun" trigger.
@@ -206,6 +206,10 @@ export function evaluate(
 const sustainedKey = (cond: Extract<ConditionT, { type: "sustained" }>): string => `${cond.minutes}:${safeStringify(cond.condition)}`;
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// #7 — derive day-type booleans so a rule can say "on weekdays" / "on weekends" without a
+// daysMask. Weekend = Sat/Sun in the user's own timezone; workday = Mon–Fri.
+const withDayType = (t: Omit<Ctx["time"], "isWeekend" | "isWorkday">): Ctx["time"] =>
+  ({ ...t, isWeekend: t.weekday === 0 || t.weekday === 6, isWorkday: t.weekday >= 1 && t.weekday <= 5 });
 // Wall-clock parts in the user's timezone — the "time" trigger means *their* 09:00,
 // not the server's (containers commonly run UTC). Falls back to server local time.
 function zonedTime(now: Date, tz: string): Ctx["time"] {
@@ -217,9 +221,9 @@ function zonedTime(now: Date, tz: string): Ctx["time"] {
     const hour = Number(parts.hour) % 24;
     const minute = Number(parts.minute);
     const weekday = WEEKDAYS.indexOf(parts.weekday as string);
-    return { hour, minute, minuteOfDay: hour * 60 + minute, weekday: weekday < 0 ? now.getDay() : weekday, ts: now.getTime() };
+    return withDayType({ hour, minute, minuteOfDay: hour * 60 + minute, weekday: weekday < 0 ? now.getDay() : weekday, ts: now.getTime() });
   } catch {
-    return { hour: now.getHours(), minute: now.getMinutes(), minuteOfDay: now.getHours() * 60 + now.getMinutes(), weekday: now.getDay(), ts: now.getTime() };
+    return withDayType({ hour: now.getHours(), minute: now.getMinutes(), minuteOfDay: now.getHours() * 60 + now.getMinutes(), weekday: now.getDay(), ts: now.getTime() });
   }
 }
 
