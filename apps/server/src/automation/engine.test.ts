@@ -632,7 +632,7 @@ describe("#7 day-type conditions (isWeekend / isWorkday)", () => {
 describe("#14 per-rule snooze", () => {
   it("mutes a matching rule until the snooze expires, then it fires again", async () => {
     const a = createAutomation(user.id, {
-      name: "Snoozy", enabled: true, trigger: { kind: "tick" }, conditions: null,
+      name: "Snoozy", enabled: true, trigger: { kind: "tick" },
       actions: [{ kind: "setData", key: "snz_ran", value: "yes" }],
     });
     snoozeAutomation(a.id, user.id, Date.now() + 3_600_000); // snoozed 1h ahead

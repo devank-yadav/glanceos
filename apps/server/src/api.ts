@@ -57,6 +57,7 @@ import { publicUrl } from "./email";
 import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
+import { metricSeries } from "./metrics";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
 import { deleteOverride, listOverrides, overridesSig, setOverride } from "./deviceOverrides";
 import {
@@ -1238,6 +1239,11 @@ ${og}
   app.get("/api/data/:key", (c) => {
     const value = getCustomData(c.get("userId"), c.req.param("key"));
     return value === undefined ? c.json({ error: "not found" }, 404) : c.json({ key: c.req.param("key"), value });
+  });
+  // #27 — the recorded history of a numeric data key (last N days, default 30) for charting.
+  app.get("/api/data/:key/history", (c) => {
+    const days = Math.min(365, Math.max(1, Number(c.req.query("days")) || 30));
+    return c.json({ key: c.req.param("key"), points: metricSeries(c.get("userId"), c.req.param("key"), Date.now() - days * 86_400_000) });
   });
   app.post("/api/data/:key", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { value?: unknown };

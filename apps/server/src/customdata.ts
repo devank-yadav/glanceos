@@ -1,5 +1,6 @@
 import type { CustomDataT } from "@glanceos/schema";
 import { db } from "./db";
+import { clearMetric, logMetric, toMetricNumber } from "./metrics";
 
 // A per-user key→JSON store (PRIMARY KEY (user_id, key)). The "customData" block
 // reads it; the public API (data:write), webhooks, and automations write it.
@@ -45,11 +46,16 @@ export function setCustomData(userId: string, key: string, value: unknown, now =
     "INSERT INTO custom_data (user_id, key, value, updated_at) VALUES (?, ?, ?, ?) " +
       "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
   ).run(userId, k, json, now);
+  // #27 — a numeric value also accumulates a time series (metric history) so it can be charted.
+  const num = toMetricNumber(value);
+  if (num != null) logMetric(userId, k, num, now);
   return { ok: true, entry: { key: k, value: value ?? null, updatedAt: now } };
 }
 
 export function deleteCustomData(userId: string, key: string): boolean {
-  return db.prepare("DELETE FROM custom_data WHERE user_id = ? AND key = ?").run(userId, key).changes > 0;
+  const gone = db.prepare("DELETE FROM custom_data WHERE user_id = ? AND key = ?").run(userId, key).changes > 0;
+  clearMetric(userId, key); // #27 — deleting a key also clears its recorded history (no orphan trail)
+  return gone;
 }
 
 /** Widget-facing resolver for a "customData" block. Returns null when no key is
