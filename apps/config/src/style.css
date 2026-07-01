@@ -3908,8 +3908,10 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 
 /* #152 — personal metrics journal (account page) */
 .metric-journal { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-direction: column; gap: 4px; }
-.metric-row { gap: 8px; align-items: center; }
+.metric-row { gap: 8px; align-items: center; flex-wrap: wrap; }
 .metric-name { flex: 1 1 auto; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.metric-pct { flex: 0 0 auto; min-width: 3.5ch; text-align: right; font-variant-numeric: tabular-nums; } /* #151 goal progress */
+.metric-goal { flex: 0 0 5rem; }
 .metric-spark { flex: 0 0 auto; color: var(--indigo, #6366f1); opacity: 0.85; display: inline-flex; height: 22px; }
 .metric-cur { flex: 0 0 auto; min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 .metric-input { flex: 0 0 6rem; }

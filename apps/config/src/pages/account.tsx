@@ -60,7 +60,7 @@ export function AccountPage() {
   const [scenes, setScenes] = useState<SceneSummary[]>([]);
   const [sceneName, setSceneName] = useState("");
   // #152 — personal metrics journal: numeric data keys you log over time (auto-tracked by #27).
-  const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[] }[]>([]);
+  const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[]; target?: number }[]>([]);
   const [newMetric, setNewMetric] = useState("");
   const [newValue, setNewValue] = useState("");
   // #153 — reflection journal: today's prompt + entry, and recent entries.
@@ -128,10 +128,13 @@ export function AccountPage() {
   const loadMetrics = async () => {
     try {
       const all = await api.get<{ key: string; value: unknown }[]>("/api/data");
-      const numeric = all.filter((d) => toNum(d.value) != null && !d.key.startsWith("habit.")); // #151 — habits show in their own card
+      // #151 goals — a `target.<key>` value is the goal for that metric (shown as % progress).
+      const targets: Record<string, number> = {};
+      for (const d of all) { if (d.key.startsWith("target.")) { const n = toNum(d.value); if (n != null) targets[d.key.slice(7)] = n; } }
+      const numeric = all.filter((d) => toNum(d.value) != null && !d.key.startsWith("habit.") && !d.key.startsWith("target.")); // habits + goals live elsewhere
       const withHist = await Promise.all(numeric.map(async (d) => {
         const h = await api.get<{ points: { value: number }[] }>(`/api/data/${encodeURIComponent(d.key)}/history?days=90`).catch(() => ({ points: [] as { value: number }[] }));
-        return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value) };
+        return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value), target: targets[d.key] };
       }));
       setMetrics(withHist);
     } catch { /* the card just stays empty */ }
@@ -145,6 +148,14 @@ export function AccountPage() {
     const name = newMetric.trim(); const value = Number(newValue);
     if (!name || !Number.isFinite(value)) { toast.error("Enter a name and a number"); return; }
     await logValue(name, value); setNewMetric(""); setNewValue("");
+  };
+  // #151 goals — set (or clear, with null) a metric's target, stored as `target.<key>`.
+  const setTarget = async (key: string, target: number | null) => {
+    try {
+      if (target == null || !Number.isFinite(target)) await api.del(`/api/data/${encodeURIComponent(`target.${key}`)}`).catch(() => {});
+      else await api.post(`/api/data/${encodeURIComponent(`target.${key}`)}`, { value: target });
+      await loadMetrics();
+    } catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
   const captureScene = async () => {
@@ -320,16 +331,19 @@ export function AccountPage() {
 
         <section class="card account-section">
           <h2>Personal metrics</h2>
-          <p class="muted">Log a number over time — weight, mood, focus hours — and it trends itself. Add a “Metric trend” block to a board to show any of these on a screen.</p>
+          <p class="muted">Log a number over time — weight, mood, focus hours — and it trends itself. Set a goal to track progress toward it. Add a “Metric trend” block to a board to show any of these on a screen.</p>
           {metrics.length > 0 && (
             <ul class="metric-journal">
               {metrics.map((m) => (
                 <li key={m.key} class="row spread metric-row">
                   <span class="metric-name">{m.key}</span>
                   <span class="metric-spark" dangerouslySetInnerHTML={{ __html: miniSpark(m.points) }} />
-                  <strong class="metric-cur">{m.value}</strong>
+                  <strong class="metric-cur">{m.value}{m.target != null ? <span class="muted"> / {m.target}</span> : null}</strong>
+                  {m.target != null && m.target !== 0 && <span class="metric-pct muted" title="Progress to goal">{Math.round((m.value / m.target) * 100)}%</span>}
                   <input class="metric-input" type="number" step="any" placeholder="log…" title={`Log a new ${m.key}`}
                     onKeyDown={(e) => { if (e.key === "Enter") { const el = e.currentTarget as HTMLInputElement; const v = Number(el.value); if (el.value.trim() && Number.isFinite(v)) { logValue(m.key, v); el.value = ""; } } }} />
+                  <input class="metric-goal" type="number" step="any" placeholder="goal" title={`Goal for ${m.key}`} value={m.target ?? ""}
+                    onChange={(e) => { const v = (e.currentTarget as HTMLInputElement).value.trim(); setTarget(m.key, v ? Number(v) : null); }} />
                 </li>
               ))}
             </ul>
