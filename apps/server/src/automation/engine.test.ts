@@ -13,7 +13,7 @@ const { db } = await import("../db");
 const { createUser } = await import("../auth");
 const { setCustomData, getCustomData } = await import("../customdata");
 const { listTasks } = await import("../tasks");
-const { createAutomation, listRuns } = await import("../automations");
+const { createAutomation, listRuns, snoozeAutomation } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
 const { registerDevice, claimDevice, setDeviceLocation } = await import("../devices");
 const { ensurePersonalOrg } = await import("../orgs");
@@ -626,5 +626,22 @@ describe("#7 day-type conditions (isWeekend / isWorkday)", () => {
     expect(evaluate(field("time.isWorkday", "eq", true), wk(true))).toBe(true);
     expect(evaluate(field("time.isWorkday", "eq", true), wk(false))).toBe(false);
     expect(evaluate(field("time.isWeekend", "eq", true), wk(false))).toBe(true);
+  });
+});
+
+describe("#14 per-rule snooze", () => {
+  it("mutes a matching rule until the snooze expires, then it fires again", async () => {
+    const a = createAutomation(user.id, {
+      name: "Snoozy", enabled: true, trigger: { kind: "tick" }, conditions: null,
+      actions: [{ kind: "setData", key: "snz_ran", value: "yes" }],
+    });
+    snoozeAutomation(a.id, user.id, Date.now() + 3_600_000); // snoozed 1h ahead
+    await fireAutomations(user.id, "tick", { now: new Date() });
+    expect(getCustomData(user.id, "snz_ran")).toBeFalsy(); // muted → did not run
+    expect(listRuns(a.id, user.id).length).toBe(0); // snoozed skips silently (no run recorded)
+
+    snoozeAutomation(a.id, user.id, null); // un-snooze
+    await fireAutomations(user.id, "tick", { now: new Date() });
+    expect(getCustomData(user.id, "snz_ran")).toBe("yes"); // now it runs
   });
 });

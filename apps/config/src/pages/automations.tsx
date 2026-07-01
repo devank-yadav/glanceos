@@ -27,7 +27,7 @@ type Cond =
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string }
-interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number }
+interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number; snoozedUntil?: number | null }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
@@ -322,6 +322,11 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
   });
 
   const toggle = async (a: Automation) => { await api.patch(`/api/automations/${a.id}`, { enabled: !a.enabled }).catch(() => {}); await load(); };
+  // #14 — mute a noisy rule for N minutes (0 clears the snooze).
+  const snooze = async (a: Automation, minutes: number) => {
+    try { await api.post(`/api/automations/${a.id}/snooze`, { minutes }); toast.success(minutes > 0 ? `Snoozed ${a.name}` : `${a.name} un-snoozed`); await load(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
   const runNow = async (a: Automation) => {
     try {
       const r = await api.post<{ matched: boolean; run: number; errors: string[] }>(`/api/automations/${a.id}/run-now`);
@@ -393,6 +398,7 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
             <li key={a.id} class="row spread">
               <span class="key-meta">
                 <strong>{a.name}</strong> {!a.enabled && <span class="chip subtle">off</span>}
+                {a.snoozedUntil != null && a.snoozedUntil > Date.now() && <span class="chip subtle" title={`Muted until ${new Date(a.snoozedUntil).toLocaleString()}`}>snoozed</span>}
                 <span class="muted">when {TRIGGERS.find((t) => t.id === a.trigger.kind)?.label ?? a.trigger.kind} → {a.actions.length} action{a.actions.length === 1 ? "" : "s"}</span>
                 <span class="muted">{a.lastRun ? `last ran ${new Date(a.lastRun).toLocaleString()} · ${a.runCount}×` : "never run"}</span>
               </span>
@@ -404,6 +410,9 @@ export function AutomationsPage({ layoutId, objects, embedded }: { layoutId?: nu
                   trigger={<Icon.list />}
                   items={[
                     { label: "Run history", icon: <Icon.list />, onClick: () => showHistory(a) },
+                    { label: "Snooze 1 hour", icon: <Icon.moon />, onClick: () => snooze(a, 60) },
+                    { label: "Snooze 8 hours", icon: <Icon.moon />, onClick: () => snooze(a, 480) },
+                    ...(a.snoozedUntil != null && a.snoozedUntil > Date.now() ? [{ label: "Un-snooze", icon: <Icon.sun />, onClick: () => snooze(a, 0) }] : []),
                     { label: "Duplicate", icon: <Icon.copy />, onClick: () => duplicate(a) },
                     { label: "Delete", icon: <Icon.trash />, danger: true, onClick: () => remove(a) },
                   ]}

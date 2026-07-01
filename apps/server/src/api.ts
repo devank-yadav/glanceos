@@ -63,7 +63,7 @@ import {
   createInlet, deleteInlet, isSinkKind, listInlets, resolveInlet, routeInlet, type SinkKind, updateInlet, verifyInletSignature,
 } from "./inlets";
 import {
-  countAutomations, createAutomation, deleteAutomation, getAutomation, listAutomations, listRuns, MAX_AUTOMATIONS_PER_USER, setAutomationEnabled, updateAutomation,
+  countAutomations, createAutomation, deleteAutomation, getAutomation, listAutomations, listRuns, MAX_AUTOMATIONS_PER_USER, setAutomationEnabled, snoozeAutomation, updateAutomation,
 } from "./automations";
 import { dryRunAutomation, runAutomationById } from "./automation/engine";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
@@ -1352,6 +1352,13 @@ ${og}
   app.post("/api/automations/:id/run-now", async (c) => {
     try { return c.json(await runAutomationById(c.req.param("id"), c.get("userId"))); }
     catch (e) { return c.json({ error: e instanceof Error ? e.message : "failed" }, 404); }
+  });
+  // #14 — mute a noisy rule for N minutes (minutes <= 0 clears the snooze). Capped at 7 days.
+  app.post("/api/automations/:id/snooze", async (c) => {
+    const { minutes } = (await c.req.json().catch(() => ({}))) as { minutes?: number };
+    const until = minutes && minutes > 0 ? Date.now() + Math.min(minutes, 10080) * 60_000 : null;
+    if (!snoozeAutomation(c.req.param("id"), c.get("userId"), until)) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true, snoozedUntil: until });
   });
   app.patch("/api/automations/:id", async (c) => {
     const body = await c.req.json().catch(() => null);

@@ -682,6 +682,9 @@ export async function fireAutomations(
     const sustainedMap = a.conditions ? resolveSustained(a.conditions, ctxKey(userId, a.layoutId), ctx, prev, trend, staleMs, ctx.time.ts) : {};
     const matched = a.conditions ? evaluate(a.conditions, ctx, prev, 0, trend, staleMs, sustainedMap) : true;
     if (matched) {
+      // #14 — snooze: a user muted this rule until snoozedUntil. Skip silently (don't record a
+      // run) while snoozed, so a noisy alert rule can be paused without deleting or disabling it.
+      if (a.snoozedUntil != null && ctx.time.ts < a.snoozedUntil) continue;
       // Cooldown: stay quiet for N minutes after a run so a long-held condition
       // (rain, low battery) doesn't re-fire every tick. lastRun is the persisted
       // last *matched* fire; we skip silently (keep lastRun) until it expires.

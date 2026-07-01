@@ -12,6 +12,7 @@ interface AutomationRow {
   layout_id: number | null;
   created_at: number; last_run: number | null; run_count: number;
   cooldown_min: number | null;
+  snoozed_until: number | null;
 }
 export interface AutomationRecord {
   id: string; name: string; enabled: boolean;
@@ -19,6 +20,7 @@ export interface AutomationRecord {
   layoutId: number | null; // board this rule belongs to (reads/writes its objects); null = global
   createdAt: number; lastRun: number | null; runCount: number;
   cooldownMinutes: number; // v6.1 "at most once per N minutes"; 0 = off
+  snoozedUntil: number | null; // #14 — muted until this ms timestamp; null = active
 }
 
 const hydrate = (r: AutomationRow): AutomationRecord => ({
@@ -29,7 +31,13 @@ const hydrate = (r: AutomationRow): AutomationRecord => ({
   layoutId: r.layout_id,
   createdAt: r.created_at, lastRun: r.last_run, runCount: r.run_count,
   cooldownMinutes: r.cooldown_min ?? 0,
+  snoozedUntil: r.snoozed_until ?? null,
 });
+
+/** #14 — mute an automation until `until` (ms), or clear the snooze with null. Org-scoped via userId. */
+export function snoozeAutomation(id: string, userId: string, until: number | null): boolean {
+  return db.prepare("UPDATE automations SET snoozed_until = ? WHERE id = ? AND user_id = ?").run(until, id, userId).changes > 0;
+}
 
 export function listAutomations(userId: string): AutomationRecord[] {
   return (db.prepare("SELECT * FROM automations WHERE user_id = ? ORDER BY created_at DESC").all(userId) as AutomationRow[]).map(hydrate);
