@@ -222,8 +222,20 @@ function structuralSig(layout: LayoutT, data: Record<string, unknown>): string {
 // Per-block content signature — re-render the cell only when its props/style/width/data change.
 const blockSig = (block: RowT["blocks"][number], datum: unknown) => JSON.stringify([block.props, block.style, block.width, datum]);
 
+// #191 — "as of Nm ago" for a block served from the last-known cache (#21). staleAt = when that
+// cached value was last fresh; the calm stamp is a quiet "this isn't live right now" trust signal.
+function agoLabel(ms: number): string {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+}
+const staleAtOf = (data: Record<string, unknown>, id: string): number | undefined =>
+  (data["__stale"] as Record<string, number> | undefined)?.[id];
+
 // (Re)paint a widget into a cell, applying its chrome (alignment/invert/flex weight).
-function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown): (() => void) | undefined {
+function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown, staleAt?: number): (() => void) | undefined {
   const st = block.style ?? { invert: false, align: "start", valign: "top" };
   // #22 — authored fallback: when a block's bound data is missing/empty, show the author's
   // fallback text instead of an empty or stale widget. Reuses the calm placeholder styling.
@@ -246,7 +258,9 @@ function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unkn
   const render = (WIDGETS as Record<string, (typeof WIDGETS)[keyof typeof WIDGETS] | undefined>)[block.type];
   if (!render) return undefined;
   try {
-    return render(cell, block, datum) || undefined;
+    const cleanup = render(cell, block, datum) || undefined;
+    if (staleAt) cell.appendChild(el("stale-stamp", `as of ${agoLabel(Date.now() - staleAt)}`)); // #191
+    return cleanup;
   } catch (err) {
     // A single throwing widget must NEVER blank the whole wall (e.g. malformed live
     // data at 3am): paint a calm placeholder for just this cell and keep every sibling
@@ -270,7 +284,7 @@ function updateCells(layout: LayoutT, data: Record<string, unknown>): void {
       if (c.sig === sig) continue; // unchanged → leave it (and its running interval) alone
       c.cleanup?.();
       c.el.replaceChildren();
-      c.cleanup = paintCell(c.el, block, data[block.id]);
+      c.cleanup = paintCell(c.el, block, data[block.id], staleAtOf(data, block.id));
       c.sig = sig;
       c.el.classList.remove("swap"); void c.el.offsetWidth; c.el.classList.add("swap"); // retrigger the fade
     }
@@ -390,7 +404,7 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
       // A cached bundle older than the document may not know this type — skip, don't blank.
       if (!(WIDGETS as Record<string, unknown>)[block.type]) continue;
       const cell = document.createElement("div");
-      const cleanup = paintCell(cell, block, data[block.id]); // sets className + flex weight + paints
+      const cleanup = paintCell(cell, block, data[block.id], staleAtOf(data, block.id)); // sets className + flex weight + paints
       cells.set(block.id, { el: cell, sig: blockSig(block, data[block.id]), cleanup }); // registered for in-place diff updates
       rowEl.appendChild(cell);
     }

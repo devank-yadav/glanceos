@@ -644,3 +644,18 @@ describe("value-conditional visibility — visibleWhen (#50)", () => {
     expect(txt).not.toContain("B"); // has data → empty fails → hidden
   });
 });
+
+describe("#191 stale stamp (as-of badge for cache-served blocks)", () => {
+  const layout = { ...baseLayout, rows: [{ id: "r1", h: 6, blocks: [{ id: "b1", type: "stat", width: 1, props: { value: "42" } }] }] };
+  it("shows an 'as of … ago' stamp on a block flagged in __stale", () => {
+    const p = { claimed: true, state: { layoutVersion: 1, layout, data: { b1: { value: "42" }, __stale: { b1: Date.now() - 5 * 60_000 } } } } as unknown as StreamPayloadT;
+    renderPayload(p);
+    const stamp = document.querySelector(".stale-stamp");
+    expect(stamp).not.toBeNull();
+    expect(stamp!.textContent || "").toMatch(/ago/);
+  });
+  it("no stamp for a fresh block (nothing in __stale)", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout, data: { b1: { value: "42" } } } } as unknown as StreamPayloadT);
+    expect(document.querySelector(".stale-stamp")).toBeNull();
+  });
+});
