@@ -763,6 +763,15 @@ const sparkline: Render = (el, w, data) => {
   if (v.length) el.appendChild(div("spark-last", String(v[v.length - 1])));
 };
 
+// #153 — a calm reflection: the day's prompt + your latest journal entry (resolved server-side).
+const journal: Render = (el, w, data) => {
+  if (w.type !== "journal") return;
+  heading2(el, w.props.label);
+  const d = (data && typeof data === "object" ? data : {}) as { prompt?: string; entry?: string };
+  if (d.prompt) el.appendChild(div("journal-prompt", d.prompt));
+  el.appendChild(div("journal-entry", d.entry || "…"));
+};
+
 // #27 — draw a data key's recorded history (resolved to a number series by the server) as a spark.
 const metricHistory: Render = (el, w, data) => {
   if (w.type !== "metricHistory") return;
@@ -2652,4 +2661,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   button,
   // #27 metric history chart
   metricHistory,
+  // #153 reflection
+  journal,
 };

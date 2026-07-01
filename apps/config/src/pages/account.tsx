@@ -50,6 +50,9 @@ export function AccountPage() {
   const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[] }[]>([]);
   const [newMetric, setNewMetric] = useState("");
   const [newValue, setNewValue] = useState("");
+  // #153 — reflection journal: today's prompt + entry, and recent entries.
+  const [journal, setJournal] = useState<{ day: string; prompt: string; entry: { text: string } | null; recent: { day: string; text: string }[] } | null>(null);
+  const [journalText, setJournalText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -63,7 +66,19 @@ export function AccountPage() {
     api.get<SetupSummary[]>("/api/layouts").then(setBoards).catch(() => {});
     api.get<SceneSummary[]>("/api/scenes").then(setScenes).catch(() => {});
     loadMetrics();
+    loadJournal();
   }, []);
+
+  // #153 — the journal for the user's LOCAL today (the server computes the prompt for that date).
+  const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const loadJournal = async () => {
+    try { const j = await api.get<NonNullable<typeof journal>>(`/api/journal?day=${localToday()}`); setJournal(j); setJournalText(j.entry?.text ?? ""); }
+    catch { /* card stays empty */ }
+  };
+  const saveJournal = async () => {
+    try { await api.put("/api/journal", { day: localToday(), text: journalText }); toast.success(journalText.trim() ? "Saved today's reflection" : "Cleared today's entry"); await loadJournal(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   // #152 — the numeric data keys the user tracks, each with its recent history for a mini trend.
   const loadMetrics = async () => {
@@ -280,6 +295,20 @@ export function AccountPage() {
             <input type="number" step="any" placeholder="value" value={newValue} onInput={(e) => setNewValue((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") trackNew(); }} />
             <button class="ghost" disabled={!newMetric.trim() || newValue.trim() === ""} onClick={trackNew}>Track a number</button>
           </div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Journal</h2>
+          <p class="muted">A calm end-of-day note.{journal?.prompt ? <> Today's prompt: <em>{journal.prompt}</em></> : ""}. Add a “Reflection” block to a board to show it on a screen.</p>
+          <textarea class="journal-write" rows={3} placeholder="Write today's reflection…" value={journalText} onInput={(e) => setJournalText((e.currentTarget as HTMLTextAreaElement).value)} />
+          <div class="row"><button class="ghost" onClick={saveJournal}>Save today's entry</button></div>
+          {journal && journal.recent.length > 0 && (
+            <ul class="journal-list">
+              {journal.recent.filter((r) => r.day !== journal.day).slice(0, 7).map((r) => (
+                <li key={r.day}><span class="muted journal-day">{r.day}</span> <span class="journal-past">{r.text}</span></li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {data && (

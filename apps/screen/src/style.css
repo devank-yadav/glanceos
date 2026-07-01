@@ -121,6 +121,10 @@ body.quiet-dim #app { filter: brightness(0.6); transition: filter 0.6s ease; }
 .block-button:active { opacity: 0.6; }
 .block-button:disabled { opacity: 0.4; cursor: default; }
 
+/* #153 — reflection block: a calm prompt above the latest entry */
+.journal-prompt { font-style: italic; opacity: 0.65; margin-bottom: 0.6vmin; }
+.journal-entry { line-height: 1.4; overflow: hidden; }
+
 /* #191 — "as of Nm ago" on a block served from the last-known cache (#21): a calm freshness hint. */
 .stale-stamp {
   position: absolute;

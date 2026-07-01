@@ -10,6 +10,7 @@ import { airQualityData, forecastData, precipData, uvData, windData } from "./fe
 import { weatherData } from "./fetchers/weather";
 import { customDataWidget } from "./customdata";
 import { metricSeries } from "./metrics";
+import { promptForDay, recentJournal } from "./journal";
 import { queueData } from "./queues";
 import { listTasks, tasksData } from "./tasks";
 import { composeContextualGreeting, composeDailyBrief, dayContext } from "./daycontext";
@@ -113,6 +114,13 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
         case "metricHistory": {
           const key = b.props.dataKey.trim();
           if (key) data[b.id] = metricSeries(userId, key, now.getTime() - b.props.days * 86_400_000).map((p) => p.value);
+          break;
+        }
+        // #153 — a calm reflection: today's prompt + the latest journal entry.
+        case "journal": {
+          const latest = recentJournal(userId, 1)[0];
+          const day = latest?.day ?? new Date(now.getTime()).toISOString().slice(0, 10);
+          data[b.id] = { prompt: promptForDay(day), entry: latest?.text ?? "" };
           break;
         }
         // location-aware: screens inherit their device location for untouched blocks

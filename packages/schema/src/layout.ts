@@ -140,6 +140,9 @@ export const SparklineProps = z.object({ values: line(400).default("3,5,4,6,7,6,
 // #27 — charts the recorded history of a numeric data key (metric_history) as a trend line, so a
 // number the source keeps no history for (followers, weight, a counter) shows its own sparkline.
 export const MetricHistoryProps = z.object({ dataKey: line(100).default(""), label: line(60).default(""), days: z.number().int().min(1).max(365).default(30) });
+// #153 — a reflection block: shows a calm daily prompt + your latest journal entry (answered in
+// the config app / on your phone; the wall is a gentle read-only nudge).
+export const JournalProps = z.object({ label: line(60).default("Reflection") });
 export const BarChartProps = z.object({ values: line(400).default("4,8,6,10,7,9"), label: line(60).default("") });
 export const ProgressRingProps = z.object({ value: z.number().min(0).max(100).default(64), label: line(60).default("") });
 export const DotProgressProps = z.object({ value: z.number().int().min(0).max(60).default(7), total: z.number().int().min(1).max(60).default(10), label: line(60).default("") });
@@ -487,6 +490,7 @@ export const Widget = z.discriminatedUnion("type", [
   // v0.6 charts
   z.object({ ...b, type: z.literal("sparkline"), props: SparklineProps }),
   z.object({ ...b, type: z.literal("metricHistory"), props: MetricHistoryProps }), // #27 — chart a data key's history
+  z.object({ ...b, type: z.literal("journal"), props: JournalProps }), // #153 — daily reflection prompt + latest entry
   z.object({ ...b, type: z.literal("barChart"), props: BarChartProps }),
   z.object({ ...b, type: z.literal("progressRing"), props: ProgressRingProps }),
   z.object({ ...b, type: z.literal("dotProgress"), props: DotProgressProps }),

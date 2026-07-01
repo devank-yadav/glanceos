@@ -58,6 +58,7 @@ import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
 import { metricSeries } from "./metrics";
+import { getJournal, promptForDay, recentJournal, setJournal } from "./journal";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
 import { deleteOverride, listOverrides, overridesSig, setOverride } from "./deviceOverrides";
 import {
@@ -1258,6 +1259,20 @@ ${og}
   });
   app.delete("/api/data/:key", (c) =>
     deleteCustomData(c.get("userId"), c.req.param("key")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
+
+  // #153 — reflection journal: the day's prompt + entry, and recent entries. `day` is the client's
+  // local date (YYYY-MM-DD); server date is the fallback.
+  const journalDay = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : new Date().toISOString().slice(0, 10));
+  app.get("/api/journal", (c) => {
+    const day = journalDay(c.req.query("day"));
+    return c.json({ day, prompt: promptForDay(day), entry: getJournal(c.get("userId"), day), recent: recentJournal(c.get("userId"), 30) });
+  });
+  app.put("/api/journal", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { day?: string; text?: string };
+    setJournal(c.get("userId"), journalDay(body.day), typeof body.text === "string" ? body.text : "");
+    await pushUserDevices(c.get("userId")); // a journal block on a screen reflects the new entry
+    return c.json({ ok: true });
+  });
 
   // ---- #3 scenes: named snapshots of your custom-data, applied in one tap ----
   app.get("/api/scenes", (c) => c.json(listScenes(c.get("userId"))));
