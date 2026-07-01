@@ -22,6 +22,19 @@ function miniSpark(values: number[]): string {
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${pts}"/></svg>`;
 }
 
+const dayStr = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+// #151 — a habit's streak = consecutive days done, ending today (or yesterday if today isn't done
+// yet, so the streak stays alive until midnight). Points come from the #27 metric history.
+function habitStreak(points: { at: number }[]): { doneToday: boolean; streak: number } {
+  const days = new Set(points.map((p) => dayStr(p.at)));
+  const doneToday = days.has(dayStr(Date.now()));
+  let streak = 0;
+  const cur = new Date();
+  if (!doneToday) cur.setDate(cur.getDate() - 1);
+  while (days.has(dayStr(cur.getTime()))) { streak++; cur.setDate(cur.getDate() - 1); }
+  return { doneToday, streak };
+}
+
 // Account management: rename, change password, log out everywhere, export a
 // backup, and delete the account (cascades all data server-side).
 export function AccountPage() {
@@ -53,6 +66,9 @@ export function AccountPage() {
   // #153 — reflection journal: today's prompt + entry, and recent entries.
   const [journal, setJournal] = useState<{ day: string; prompt: string; entry: { text: string } | null; recent: { day: string; text: string }[] } | null>(null);
   const [journalText, setJournalText] = useState("");
+  // #151 — habits: a `habit.<name>` numeric key logged (=1) each day you do it; streaks from #27.
+  const [habits, setHabits] = useState<{ key: string; name: string; doneToday: boolean; streak: number }[]>([]);
+  const [newHabit, setNewHabit] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -67,7 +83,35 @@ export function AccountPage() {
     api.get<SceneSummary[]>("/api/scenes").then(setScenes).catch(() => {});
     loadMetrics();
     loadJournal();
+    loadHabits();
   }, []);
+
+  // #151 — load `habit.<name>` keys, each with today-done + streak from its recorded history.
+  const loadHabits = async () => {
+    try {
+      const all = await api.get<{ key: string }[]>("/api/data");
+      const keys = all.filter((d) => d.key.startsWith("habit.")).map((d) => d.key);
+      const rows = await Promise.all(keys.map(async (key) => {
+        const h = await api.get<{ points: { at: number }[] }>(`/api/data/${encodeURIComponent(key)}/history?days=365`).catch(() => ({ points: [] as { at: number }[] }));
+        return { key, name: key.slice("habit.".length), ...habitStreak(h.points) };
+      }));
+      setHabits(rows.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch { /* card stays empty */ }
+  };
+  const markHabit = async (key: string) => {
+    try { await api.post(`/api/data/${encodeURIComponent(key)}`, { value: 1 }); await loadHabits(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+  const addHabit = async () => {
+    const name = newHabit.trim().replace(/[^\w -]/g, "");
+    if (!name) return;
+    await markHabit(`habit.${name}`); setNewHabit(""); // adding = you did it today
+    toast.success(`Tracking "${name}"`);
+  };
+  const removeHabit = async (key: string) => {
+    try { await api.del(`/api/data/${encodeURIComponent(key)}`); await loadHabits(); } // #27 clears its history too
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
 
   // #153 — the journal for the user's LOCAL today (the server computes the prompt for that date).
   const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -84,7 +128,7 @@ export function AccountPage() {
   const loadMetrics = async () => {
     try {
       const all = await api.get<{ key: string; value: unknown }[]>("/api/data");
-      const numeric = all.filter((d) => toNum(d.value) != null);
+      const numeric = all.filter((d) => toNum(d.value) != null && !d.key.startsWith("habit.")); // #151 — habits show in their own card
       const withHist = await Promise.all(numeric.map(async (d) => {
         const h = await api.get<{ points: { value: number }[] }>(`/api/data/${encodeURIComponent(d.key)}/history?days=90`).catch(() => ({ points: [] as { value: number }[] }));
         return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value) };
@@ -294,6 +338,27 @@ export function AccountPage() {
             <input placeholder="metric name (e.g. weight)" value={newMetric} onInput={(e) => setNewMetric((e.currentTarget as HTMLInputElement).value)} />
             <input type="number" step="any" placeholder="value" value={newValue} onInput={(e) => setNewValue((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") trackNew(); }} />
             <button class="ghost" disabled={!newMetric.trim() || newValue.trim() === ""} onClick={trackNew}>Track a number</button>
+          </div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Habits</h2>
+          <p class="muted">A daily “yes” — meditate, walk, read — with a streak. Tap Done each day you do it; miss a day and the streak resets.</p>
+          {habits.length > 0 && (
+            <ul class="habit-list">
+              {habits.map((h) => (
+                <li key={h.key} class="row spread habit-row">
+                  <span class="habit-name">{h.name}</span>
+                  <span class="habit-streak" title="Current streak">{h.streak > 0 ? `🔥 ${h.streak}` : "—"}</span>
+                  <button class={`ghost${h.doneToday ? " on" : ""}`} disabled={h.doneToday} onClick={() => markHabit(h.key)}>{h.doneToday ? "✓ Done today" : "Mark done"}</button>
+                  <button class="ghost danger icon-btn" aria-label={`Stop tracking ${h.name}`} title="Stop tracking" onClick={() => removeHabit(h.key)}>×</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div class="row" style={{ gap: "6px" }}>
+            <input placeholder="new habit (e.g. meditate)" value={newHabit} onInput={(e) => setNewHabit((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") addHabit(); }} />
+            <button class="ghost" disabled={!newHabit.trim()} onClick={addHabit}>Add habit</button>
           </div>
         </section>
 

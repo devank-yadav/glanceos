@@ -3914,6 +3914,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .metric-cur { flex: 0 0 auto; min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 .metric-input { flex: 0 0 6rem; }
 
+/* #151 — habits card (account page) */
+.habit-list { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.habit-row { gap: 8px; align-items: center; }
+.habit-name { flex: 1 1 auto; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.habit-streak { flex: 0 0 auto; min-width: 3.5ch; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* #98 — Studio find & replace bar */
 .find-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--soft, rgba(127,127,127,0.08)); border-bottom: 1px solid var(--rule, rgba(127,127,127,0.18)); }
 .find-input { flex: 0 1 220px; min-width: 0; }
