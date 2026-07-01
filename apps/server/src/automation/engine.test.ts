@@ -597,3 +597,19 @@ describe("persistEngineState / hydrateEngineState — sensing history survives a
     expect(() => hydrateEngineState()).not.toThrow();
   });
 });
+
+describe("#2 per-action condition (branching)", () => {
+  it("runs a step only when its own guard passes; unguarded steps always run", async () => {
+    const c = ctx({ data: { flag: "on" } });
+    const actions = [
+      { kind: "setData", key: "b2_when_on", value: "yes", condition: field("data.flag", "eq", "on") },
+      { kind: "setData", key: "b2_when_off", value: "yes", condition: field("data.flag", "eq", "off") },
+      { kind: "setData", key: "b2_always", value: "yes" },
+    ] as unknown as Parameters<typeof runActions>[0];
+    const r = await runActions(actions, user.id, c);
+    expect(getCustomData(user.id, "b2_when_on")).toBe("yes"); // guard passed → ran
+    expect(getCustomData(user.id, "b2_when_off")).toBeFalsy(); // guard failed → skipped
+    expect(getCustomData(user.id, "b2_always")).toBe("yes"); // no guard → ran
+    expect(r.run).toBe(2); // two steps executed (the skipped one is not counted)
+  });
+});

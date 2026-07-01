@@ -83,7 +83,12 @@ export const TRIGGER_KINDS = ["webhook", "deviceOffline", "deviceOnline", "tick"
 // window. Honored by the `alert` action (the full-screen banner) — soften = downgrade
 // to a calm, flash/chime-free info banner; suppress = skip that screen; hold = defer the
 // alert until quiet hours end. Default off = always interrupt (current behavior).
-const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional(), afterMinutes: z.number().int().min(1).max(1440).optional(), respectQuiet: z.enum(["off", "hold", "suppress", "soften"]).optional() });
+// `condition` (#2 branching): an optional per-action guard — the step runs only when it passes,
+// so one rule can do different things based on state ("if temp > 30 send an alert; else set the
+// board to normal" = two steps with opposite guards). Evaluated against the current context at run
+// time (level + time comparators); advanced sensing (trend/held/changed) belongs on the rule-level
+// conditions. Additive + optional → existing rules (all steps run) are unchanged.
+const act = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, enabled: z.boolean().optional(), afterMinutes: z.number().int().min(1).max(1440).optional(), respectQuiet: z.enum(["off", "hold", "suppress", "soften"]).optional(), condition: Condition.optional() });
 export const Action = z.discriminatedUnion("kind", [
   act({ kind: z.literal("setData"), key: z.string().min(1).max(100), value: z.unknown() }),
   act({ kind: z.literal("addTask"), listId: z.string().max(60).default("default"), text: z.string().min(1).max(500) }),

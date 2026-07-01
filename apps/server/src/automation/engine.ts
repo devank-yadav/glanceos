@@ -499,6 +499,7 @@ export async function runActions(actions: ActionT[], userId: string, ctx: Ctx, b
   let run = 0; let touched = false; const errors: string[] = [];
   for (const a of actions) {
     if (a.enabled === false) continue; // a step toggled off in the builder
+    if (a.condition && !evaluate(a.condition, ctx)) continue; // #2 — per-action guard: skip unless it passes now
     if (a.afterMinutes && a.afterMinutes > 0) { enqueueDeferred(userId, a, ctx, board, a.afterMinutes); run++; continue; } // run later
     // respectQuiet "hold": if any target screen is in quiet hours, defer the alert until
     // the soonest window ends. The deferred copy uses "suppress" so a drain that lands

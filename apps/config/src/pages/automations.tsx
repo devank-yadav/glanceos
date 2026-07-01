@@ -655,6 +655,17 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
               setAction(i, n > 0 ? { ...rest, afterMinutes: n } : (rest as Action));
             }} />m later</label>
             {a.actions.length > 1 && <button class="ghost danger icon-btn" onClick={() => set({ actions: a.actions.filter((_, j) => j !== i) })}>×</button>}
+            {/* #2 — an optional per-action guard: this step runs only when its condition passes. */}
+            <div class="action-guard">
+              {act.condition ? (
+                <div class="row" style={{ gap: "6px", alignItems: "flex-start" }}>
+                  <span class="muted" style={{ paddingTop: "6px" }}>only if</span>
+                  <div class="grow"><ConditionNode node={act.condition as Cond} objects={objects} onChange={(n) => setAction(i, { ...act, condition: n })} onRemove={() => { const { condition: _c, ...rest } = act as Action; setAction(i, rest as Action); }} /></div>
+                </div>
+              ) : (
+                <button class="ghost tiny" onClick={() => setAction(i, { ...act, condition: { type: "all", conditions: [] } })}>+ only if…</button>
+              )}
+            </div>
           </div>
         ))}
         <button class="ghost" onClick={() => set({ actions: [...a.actions, defaultAction(objects && objects.length ? (settable.length ? "setObjectText" : "showObject") : "setData", objects)] })}>+ Add action</button>
