@@ -686,3 +686,45 @@ describe("#14 alert grouping (storm → one calm summary)", () => {
     expect(alertStorm(u, t0 + 11 * 60_000)).toBe("deliver"); // window passed → normal again
   });
 });
+
+const { fireDataChanged } = await import("./engine");
+
+describe("#11 dataChanged trigger (event-driven data arrival)", () => {
+  it("fires only for the watched key", async () => {
+    createAutomation(user.id, {
+      name: "Watch foo", enabled: true, trigger: { kind: "dataChanged", key: "foo11" },
+      actions: [{ kind: "setData", key: "dc_ran", value: "yes" }],
+    });
+    setCustomData(user.id, "bar11", 1);
+    await fireDataChanged(user.id, "bar11"); // a different key → not ours
+    expect(getCustomData(user.id, "dc_ran")).toBeFalsy();
+    setCustomData(user.id, "foo11", 1);
+    await fireDataChanged(user.id, "foo11");
+    expect(getCustomData(user.id, "dc_ran")).toBe("yes");
+  });
+
+  it("an automation's own setData never fires it (rule chains can't loop)", async () => {
+    createAutomation(user.id, {
+      name: "Watch the watcher", enabled: true, trigger: { kind: "dataChanged", key: "dc_ran" },
+      actions: [{ kind: "setData", key: "dc_loop", value: "yes" }],
+    });
+    setCustomData(user.id, "foo11", 2);
+    await fireDataChanged(user.id, "foo11"); // "Watch foo" runs and WRITES dc_ran via its action…
+    expect(getCustomData(user.id, "dc_ran")).toBe("yes");
+    expect(getCustomData(user.id, "dc_loop")).toBeFalsy(); // …but that write does not cascade
+  });
+
+  it("pairs with crossesAbove for an instant value-cross alarm", async () => {
+    createAutomation(user.id, {
+      name: "Cross 10", enabled: true, trigger: { kind: "dataChanged", key: "lvl11" },
+      conditions: field("data.lvl11", "crossesAbove", 10),
+      actions: [{ kind: "setData", key: "crossed11", value: "yes" }],
+    });
+    setCustomData(user.id, "lvl11", 5);
+    await fireDataChanged(user.id, "lvl11"); // below the line → baseline, no fire
+    expect(getCustomData(user.id, "crossed11")).toBeFalsy();
+    setCustomData(user.id, "lvl11", 15);
+    await fireDataChanged(user.id, "lvl11"); // crossed 10 between writes → fires
+    expect(getCustomData(user.id, "crossed11")).toBe("yes");
+  });
+});

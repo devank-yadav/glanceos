@@ -67,7 +67,7 @@ import {
 import {
   countAutomations, createAutomation, deleteAutomation, getAutomation, listAutomations, listRuns, MAX_AUTOMATIONS_PER_USER, setAutomationEnabled, snoozeAutomation, updateAutomation,
 } from "./automations";
-import { dryRunAutomation, runAutomationById } from "./automation/engine";
+import { dryRunAutomation, fireDataChanged, runAutomationById } from "./automation/engine";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import {
@@ -1245,6 +1245,7 @@ ${og}
       const status = r.error === "too_large" ? 413 : r.error === "too_many_keys" ? 409 : 400;
       return c.json({ error: r.error }, status);
     }
+    await fireDataChanged(c.get("userId"), c.req.param("key")); // #11 — event-driven data arrival
     await pushUserDevices(c.get("userId"));
     return c.json(r.entry, 201);
   });

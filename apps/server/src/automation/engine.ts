@@ -635,7 +635,7 @@ const loadBoard = (userId: string, layoutId: number): { id: number; document: La
 export async function fireAutomations(
   userId: string,
   kind: TriggerT["kind"],
-  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx; presenceEvent?: "enter" | "leave"; presencePerson?: string } = {},
+  opts: { webhook?: unknown; device?: Record<string, unknown>; prev?: Ctx; now?: Date; ctx?: Ctx; usePrev?: boolean; live?: LiveCtx; presenceEvent?: "enter" | "leave"; presencePerson?: string; dataKey?: string } = {},
 ): Promise<void> {
   const autos = enabledByTrigger(userId, kind);
   if (autos.length === 0) return;
@@ -709,6 +709,7 @@ export async function fireAutomations(
     if (a.trigger.kind === "interval" && !intervalMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "presence" && (a.trigger.event !== opts.presenceEvent || (a.trigger.person ?? "") !== (opts.presencePerson ?? ""))) continue;
+    if (a.trigger.kind === "dataChanged" && a.trigger.key !== opts.dataKey) continue; // #11 — only the watched key
     const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
     // "held for N minutes" verdicts are driven once here (mutating sustainedSince), then
     // read purely inside evaluate. Only walks the tree when the rule uses `sustained`.
@@ -741,6 +742,13 @@ export async function fireAutomations(
 
 /** The ~60s tick: data-threshold ("tick"), time-of-day ("time"), and screen
  *  online↔offline edges. Wrapped by the caller so it never crashes the loop. */
+/** #11 — event-driven data arrival: a key was WRITTEN by the user/API/an inlet (never by an
+ *  automation's own setData — that would let rule chains loop). Fires the key's dataChanged rules
+ *  immediately, with prev-context threading so `changed`/`crossesAbove` conditions work. */
+export async function fireDataChanged(userId: string, key: string): Promise<void> {
+  await fireAutomations(userId, "dataChanged", { dataKey: key, usePrev: true });
+}
+
 export async function runAutomationTick(now = new Date()): Promise<void> {
   await drainDeferred(now); // run any "N minutes later" actions that have come due
   for (const userId of allUserIds()) {

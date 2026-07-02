@@ -26,7 +26,7 @@ type Cond =
   | { type: "timeWindow"; startMin: number; endMin: number; daysMask?: number } // gate to a daily time window
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
-interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string }
+interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string; key?: string }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number; snoozedUntil?: number | null; oncePerDay?: boolean }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
@@ -93,6 +93,7 @@ const TRIGGERS: { id: string; label: string }[] = [
   { id: "sun", label: "At sunrise / sunset" },
   { id: "presence", label: "When you arrive / leave home" },
   { id: "manual", label: "On demand (Run now, the API, or your phone)" },
+  { id: "dataChanged", label: "The moment a data value changes" },
 ];
 // Friendly one-tap "When…" scenarios — each seeds the trigger (and a starter
 // condition) so you don't have to assemble it by hand. Built on the existing
@@ -610,6 +611,11 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
           </label>
           <p class="muted" style={{ flexBasis: "100%", margin: 0 }}>Uses the location set on your screen. e.g. Sunset with −30 fires 30 min before sunset.</p>
         </div>
+      )}
+      {a.trigger.kind === "dataChanged" && (
+        <label class="field"><span>Watch this data key</span>
+          <input placeholder="e.g. temperature" value={a.trigger.key ?? ""} onInput={(e) => set({ trigger: { ...a.trigger, key: (e.currentTarget as HTMLInputElement).value } })} />
+        </label>
       )}
       {a.trigger.kind === "interval" && (
         <div class="row wrap">

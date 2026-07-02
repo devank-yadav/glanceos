@@ -5,7 +5,7 @@ import { addTask } from "./tasks";
 import { advanceQueue } from "./queues";
 import { setCustomData } from "./customdata";
 import { pushUserDevices } from "./state";
-import { fireAutomations } from "./automation/engine";
+import { fireAutomations, fireDataChanged } from "./automation/engine";
 
 // Inbound webhook inlets. POST /api/hooks/:secret (no session/CSRF — the secret
 // is the capability). An optional HMAC key requires a signed body. A fired inlet
@@ -107,7 +107,10 @@ export async function routeInlet(row: InletRow, payload: Record<string, unknown>
     }
     case "data": {
       const key = row.sink_target || (typeof payload.key === "string" ? payload.key : "");
-      if (key) setCustomData(uid, key, "value" in payload ? payload.value : payload);
+      if (key) {
+        setCustomData(uid, key, "value" in payload ? payload.value : payload);
+        if (opts.fireAutos !== false) await fireDataChanged(uid, key); // #11 — precise per-key trigger (webhook fires below too)
+      }
       break;
     }
     case "none":
