@@ -6,7 +6,10 @@ import { z } from "zod";
 // existing server seams — nothing here executes anything by itself.
 
 // v6.1 trend comparators read a small in-memory history of a numeric field (engine
-// ring-buffer) — direction over a window, not a level. They take no comparison value.
+// ring-buffer) — direction over a window, not a level. They take no comparison value —
+// EXCEPT (#6) an optional `value` = a lookback window in minutes: the direction then
+// comes from the persistent metric history for `data.*` fields ("rising over the last
+// 24 h"), reaching back up to ~90 days. Blank/absent = the live ~12-minute buffer.
 // v7.0 `stale` reads the same in-memory change-history as the trend buffer: true when a
 // field hasn't changed for `value` minutes (dead-sensor / "no update in a while" detection).
 // `crossesAbove`/`crossesBelow` are EDGE comparators: true only on the tick where the

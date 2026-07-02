@@ -18,6 +18,7 @@ import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
 import { allBlocks } from "../widgets";
 import { db } from "../db";
+import { metricSeries } from "../metrics";
 import { calendarContext, resolveUserCalendar, resolveUserWeather, type DayCalendar, type DayWeather } from "../daycontext";
 // Re-export the day-context helpers from their new leaf home so existing call sites
 // (the tick below, engine.test) keep importing them from "./engine".
@@ -183,7 +184,7 @@ export function evaluate(
       return s <= e ? t >= s && t < e : t >= s || t < e;
     }
     case "field": {
-      if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") return (trend?.[cond.field] ?? null) === cond.op;
+      if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") return (trend?.[trendKey(cond.field, trendLookback(cond))] ?? null) === cond.op;
       if (cond.op === "stale") { const ms = staleMs?.[cond.field]; const min = num(cond.value) ?? 0; return ms != null && ms >= min * 60_000; }
       const actual = resolvePath(ctx, cond.field);
       if (cond.op === "exists") return actual !== undefined && actual !== null;
@@ -323,16 +324,42 @@ function recordTrend(key: string, value: number, minuteStamp: number): void {
 }
 function trendDirection(buf: TrendSample[] | undefined): "rising" | "falling" | "steady" | null {
   if (!buf || buf.length < 3) return null; // not enough history yet → no trend (like "changed" before prev)
-  const first = buf[0]!.value, last = buf[buf.length - 1]!.value;
-  const tol = Math.max(1e-9, Math.abs(first) * 0.02);
-  if (last - first > tol) return "rising";
-  if (first - last > tol) return "falling";
-  return "steady";
+  return directionOf(buf[0]!.value, buf[buf.length - 1]!.value);
 }
-// Field paths a tree references with a trend comparator (so the tick samples only those).
-function collectTrendFields(cond: ConditionT | null | undefined, out: Set<string>): void {
+// Shared direction verdict: a ~2% band around the start value counts as steady, so
+// sensor jitter doesn't read as movement.
+function directionOf(first: number, last: number): "rising" | "falling" | "steady" {
+  const tol = Math.max(1e-9, Math.abs(first) * 0.02);
+  return last - first > tol ? "rising" : first - last > tol ? "falling" : "steady";
+}
+
+// #6 — arbitrary lookback windows. A trend comparator may carry `value` = a window in
+// minutes ("rising over the last 24 h"): the verdict then comes from the persistent
+// metric history (#27) instead of the live ~12-minute buffer, so it reaches back up
+// to the 90-day retention and survives restarts. History accumulates for numeric
+// custom-data writes, so lookback applies to `data.<key>` fields. A blank/zero/absent
+// value = the live buffer (existing rules unchanged — recipes store value "").
+const LOOKBACK_MAX_MIN = 90 * 24 * 60; // the metric-history retention
+function trendLookback(cond: Extract<ConditionT, { type: "field" }>): number | null {
+  const n = num(cond.value);
+  return n !== null && n >= 1 ? Math.min(Math.floor(n), LOOKBACK_MAX_MIN) : null;
+}
+// A trend verdict's slot in the per-pass map — windowed verdicts live beside the live
+// one ("data.x@1440" vs "data.x"), so two rules on the same field never collide.
+const trendKey = (field: string, lookbackMin: number | null): string => (lookbackMin ? `${field}@${lookbackMin}` : field);
+function lookbackDirection(userId: string, field: string, minutes: number, nowMs: number): "rising" | "falling" | "steady" | null {
+  if (!field.startsWith("data.")) return null; // history is keyed by custom-data key
+  const pts = metricSeries(userId, field.slice(5), nowMs - minutes * 60_000);
+  if (pts.length < 2) return null; // a single write in the window has no direction
+  return directionOf(pts[0]!.value, pts[pts.length - 1]!.value);
+}
+// Trend slots a tree references (field + optional window), keyed as the verdict map is.
+function collectTrendFields(cond: ConditionT | null | undefined, out: Map<string, { field: string; lookback: number | null }>): void {
   if (!cond) return;
-  if (cond.type === "field") { if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") out.add(cond.field); return; }
+  if (cond.type === "field") {
+    if (cond.op === "rising" || cond.op === "falling" || cond.op === "steady") { const lb = trendLookback(cond); out.set(trendKey(cond.field, lb), { field: cond.field, lookback: lb }); }
+    return;
+  }
   if (cond.type === "not" || cond.type === "sustained") return collectTrendFields(cond.condition, out);
   if (cond.type === "all" || cond.type === "any") cond.conditions.forEach((c) => collectTrendFields(c, out));
 }
@@ -648,7 +675,7 @@ export async function fireAutomations(
   const baseCtx = !hasLive && opts.ctx ? opts.ctx : buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, live });
   // Numeric fields any rule reads with a trend comparator + paths any rule watches for
   // staleness — the tick samples/stamps just these.
-  const trendNeeded = new Set<string>();
+  const trendNeeded = new Map<string, { field: string; lookback: number | null }>();
   const staleNeeded = new Set<string>();
   for (const a of autos) { collectTrendFields(a.conditions, trendNeeded); collectStaleFields(a.conditions, staleNeeded); }
   // Live-block sensing: for any board whose rules read objects.*, resolve its named
@@ -682,13 +709,15 @@ export async function fireAutomations(
       const ctx = layoutId == null ? baseCtx : board ? buildContext(userId, { webhook: opts.webhook, device: opts.device, now: opts.now, layout: board.document, live, liveObjects: liveObjectsByLayout.get(layoutId) }) : baseCtx;
       const tkey = ctxKey(userId, layoutId);
       const trend: Resolved["trend"] = {};
-      for (const f of trendNeeded) {
+      for (const [k, t] of trendNeeded) {
+        // #6 — a windowed verdict reads the persistent history; no live sampling needed.
+        if (t.lookback) { trend[k] = lookbackDirection(userId, t.field, t.lookback, ctx.time.ts); continue; }
         // Sample on every pass (not just the usePrev tick): a rising/falling/steady rule
         // can ride an interval/time/sun trigger too. recordTrend dedups within a clock
         // minute (minuteStamp replace), so repeated passes in one minute are harmless.
-        const v = num(resolvePath(ctx, f));
-        if (v !== null) recordTrend(`${tkey}:${f}`, v, Math.floor(ctx.time.ts / 60_000));
-        trend[f] = trendDirection(trendSamples.get(`${tkey}:${f}`));
+        const v = num(resolvePath(ctx, t.field));
+        if (v !== null) recordTrend(`${tkey}:${t.field}`, v, Math.floor(ctx.time.ts / 60_000));
+        trend[k] = trendDirection(trendSamples.get(`${tkey}:${t.field}`));
       }
       const staleMs: Record<string, number> = {};
       for (const f of staleNeeded) {
@@ -838,12 +867,22 @@ const describeAction = (a: ActionT): string => {
   }
 };
 
+// #6 — windowed trend verdicts come from persistent history, so previews and Run-now
+// CAN answer them (live-buffer trends still need the tick's samples → stay null here).
+function lookbackTrends(conditions: ConditionT | null | undefined, userId: string, nowMs: number): Record<string, "rising" | "falling" | "steady" | null> {
+  const need = new Map<string, { field: string; lookback: number | null }>();
+  collectTrendFields(conditions, need);
+  const out: Record<string, "rising" | "falling" | "steady" | null> = {};
+  for (const [k, t] of need) if (t.lookback) out[k] = lookbackDirection(userId, t.field, t.lookback, nowMs);
+  return out;
+}
+
 /** Preview an automation against the current context with NO side effects. A
  *  board-scoped preview reads that board's objects. */
 export function dryRunAutomation(a: AutomationT, userId: string, layoutId?: number | null): { matched: boolean; wouldRun: string[]; context: Ctx } {
   const board = layoutId != null ? loadBoard(userId, layoutId) : undefined;
   const ctx = buildContext(userId, board ? { layout: board.document } : {});
-  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, layoutId ?? null))) : true; // "changed" reflects the last tick
+  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, layoutId ?? null)), 0, lookbackTrends(a.conditions, userId, ctx.time.ts)) : true; // "changed" reflects the last tick
   return { matched, wouldRun: matched ? a.actions.map(describeAction) : [], context: ctx };
 }
 
@@ -854,7 +893,7 @@ export async function runAutomationById(id: string, userId: string): Promise<{ m
   if (!a) throw new Error("automation not found");
   const board = a.layoutId != null ? loadBoard(userId, a.layoutId) : undefined;
   const ctx = buildContext(userId, board ? { layout: board.document } : {});
-  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, a.layoutId))) : true;
+  const matched = a.conditions ? evaluate(a.conditions, ctx, prevCtx.get(ctxKey(userId, a.layoutId)), 0, lookbackTrends(a.conditions, userId, ctx.time.ts)) : true;
   let run = 0; const errors: string[] = [];
   if (matched) { const r = await runActions(a.actions, userId, ctx, board); run = r.run; errors.push(...r.errors); }
   recordRun(a.id, userId, "manual", matched, run, errors.length ? errors.join("; ") : null);

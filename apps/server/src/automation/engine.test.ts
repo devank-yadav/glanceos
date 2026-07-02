@@ -12,6 +12,7 @@ const { migrate } = await import("../db");
 const { db } = await import("../db");
 const { createUser } = await import("../auth");
 const { setCustomData, getCustomData } = await import("../customdata");
+const { logMetric } = await import("../metrics");
 const { listTasks } = await import("../tasks");
 const { createAutomation, listRuns, snoozeAutomation } = await import("../automations");
 const { createLayout, getLayout } = await import("../layouts");
@@ -726,5 +727,51 @@ describe("#11 dataChanged trigger (event-driven data arrival)", () => {
     setCustomData(user.id, "lvl11", 15);
     await fireDataChanged(user.id, "lvl11"); // crossed 10 between writes → fires
     expect(getCustomData(user.id, "crossed11")).toBe("yes");
+  });
+});
+
+describe("#6 lookback windows (trend over persistent metric history)", () => {
+  it("windowed 'rising' resolves from history on the FIRST pass (no 3-sample warm-up)", async () => {
+    const u = createUser("Look", "lookback@example.com", "password123")!;
+    const now = Date.UTC(2026, 5, 10, 12, 0);
+    logMetric(u.id, "lb", 10, now - 3 * 3_600_000); // 3 h ago
+    logMetric(u.id, "lb", 30, now - 60_000); // a minute ago
+    createAutomation(u.id, {
+      name: "Risen 6h", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "all", conditions: [{ type: "field", field: "data.lb", op: "rising", value: 360 }] },
+      actions: [{ kind: "setData", key: "lb_hit", value: "yes" }],
+    });
+    await fireAutomations(u.id, "tick", { now: new Date(now), usePrev: true });
+    expect(getCustomData(u.id, "lb_hit")).toBe("yes");
+  });
+
+  it("the window is respected — a single point inside it has no direction", async () => {
+    const u = createUser("Look2", "lookback2@example.com", "password123")!;
+    const now = Date.UTC(2026, 5, 10, 12, 0);
+    logMetric(u.id, "lb2", 10, now - 3 * 3_600_000); // outside the 1 h window
+    logMetric(u.id, "lb2", 30, now - 60_000); // the only point inside it
+    createAutomation(u.id, {
+      name: "Risen 1h", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "all", conditions: [{ type: "field", field: "data.lb2", op: "rising", value: 60 }] },
+      actions: [{ kind: "setData", key: "lb2_hit", value: "yes" }],
+    });
+    await fireAutomations(u.id, "tick", { now: new Date(now), usePrev: true });
+    expect(getCustomData(u.id, "lb2_hit")).toBeUndefined();
+  });
+
+  it("dry-run answers a windowed trend; a blank value stays the live buffer (recipe compat)", () => {
+    const u = createUser("Look3", "lookback3@example.com", "password123")!;
+    const now = Date.now(); // dryRun evaluates at the real clock — history just has to span it
+    logMetric(u.id, "lb3", 50, now - 2 * 3_600_000);
+    logMetric(u.id, "lb3", 20, now - 60_000);
+    const auto = {
+      name: "Fallen", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "field", field: "data.lb3", op: "falling", value: 1440 },
+      actions: [{ kind: "setData", key: "x", value: 1 }],
+    } as Parameters<typeof dryRunAutomation>[0];
+    expect(dryRunAutomation(auto, u.id).matched).toBe(true);
+    // value "" is how the trend recipes have always stored it → live buffer → no verdict here
+    const live = { ...auto, conditions: { type: "field", field: "data.lb3", op: "falling", value: "" } } as Parameters<typeof dryRunAutomation>[0];
+    expect(dryRunAutomation(live, u.id).matched).toBe(false);
   });
 });

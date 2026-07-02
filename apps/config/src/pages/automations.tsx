@@ -141,6 +141,7 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   // Trend — react to a direction, not just a level (uses the trend ring-buffer)
   { id: "rising", group: "Trend", label: "When a value has been rising", trigger: { kind: "tick" }, conditions: fcond("data.value", "rising", "") },
   { id: "falling", group: "Trend", label: "When a value has been falling", trigger: { kind: "tick" }, conditions: fcond("data.value", "falling", "") },
+  { id: "rising-24h", group: "Trend", label: "When a value has risen over the last 24 h", trigger: { kind: "tick" }, conditions: fcond("data.value", "rising", 1440) },
   // Screen health
   { id: "offline", group: "Screen", label: "When a screen goes offline", trigger: { kind: "deviceOffline" } },
   { id: "online", group: "Screen", label: "When a screen comes online", trigger: { kind: "deviceOnline" } },
@@ -863,6 +864,18 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
           <select value={leaf.op} onChange={(e) => onChange(patch({ op: (e.currentTarget as HTMLSelectElement).value }))}>
             {opChoices.map((o) => <option key={o} value={o}>{OP_LABEL[o] ?? o}</option>)}
           </select>
+          {(leaf.op === "rising" || leaf.op === "falling" || leaf.op === "steady") && leaf.field.startsWith("data.") && (
+            // #6 — optional lookback window: blank = the live ~12-min buffer; a number of
+            // minutes = direction over the persistent metric history (survives restarts).
+            <select class="cond-val" value={String(leaf.value ?? "")} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; onChange(patch({ value: v ? Number(v) : "" })); }}>
+              <option value="">live (~12 min)</option>
+              <option value="60">over the last hour</option>
+              <option value="360">over the last 6 h</option>
+              <option value="1440">over the last 24 h</option>
+              <option value="10080">over the last 7 days</option>
+              <option value="43200">over the last 30 days</option>
+            </select>
+          )}
           {!NO_VALUE_OPS.has(leaf.op) && (
             def?.control === "select"
               ? <select class="cond-val" value={String(leaf.value ?? def.options?.[0]?.value ?? "")} onChange={(e) => onChange(patch({ value: (e.currentTarget as HTMLSelectElement).value }))}>
