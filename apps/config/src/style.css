@@ -3471,6 +3471,12 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-head { margin-bottom: 6px; }
 .notif-head .ghost { font-size: 12px; padding: 3px 7px; }
 .notif-search { width: 100%; margin: 0 0 6px; font-size: 13px; } /* #43 — history search */
+/* #171 — the screens audit list */
+.audit-list { list-style: none; margin: 0; padding: 0; }
+.audit-row { padding: 10px 2px; border-top: 1px solid var(--rule); }
+.audit-row:first-child { border-top: none; padding-top: 2px; }
+.audit-line { margin: 3px 0; font-size: 14px; }
+.audit-mods { font-size: 12px; }
 .notif-empty { font-size: 13px; margin: 8px 2px; }
 .notif-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow: auto; }
 .notif-item-btn {

@@ -31,7 +31,7 @@ import {
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
 import { geocodeSearch, reverseGeocode } from "./fetchers/geocode";
-import { listSchedules, setSchedules, type Schedule } from "./schedules";
+import { listSchedules, setSchedules, wallClock, type Schedule } from "./schedules";
 import { archiveAll, listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, searchNotifications, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
@@ -73,7 +73,7 @@ import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from ".
 import { boardSnapshotPng, snapshotFilename } from "./snapshot";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
-  pushGroupDevices, pushUserDevices, scheduledSig,
+  pushGroupDevices, pushUserDevices, resolveLayoutWithReason, scheduledSig, wakePower, windowActive,
 } from "./state";
 import { addTask, deleteTask, listTasks, updateTask } from "./tasks";
 import {
@@ -556,6 +556,38 @@ export function buildApp(): Hono<Env> {
   // ---- screens (config plane) ----
 
   app.get("/api/devices", (c) => c.json(listDevices(c.get("orgId")).map(deviceSummary)));
+
+  // #171 — "what is every screen showing right now, and why": the REAL resolution
+  // ladder's verdict per claimed screen (resolveLayoutWithReason — the same call the
+  // render path uses, so this can't drift), plus the modifiers shaping the render.
+  app.get("/api/screens/audit", (c) => {
+    const now = Date.now();
+    return c.json(listDevices(c.get("orgId")).filter((d) => d.claimed_at !== null).map((d) => {
+      const { layoutId, reason } = resolveLayoutWithReason(d, now);
+      const board = layoutId ? getLayout(layoutId) : undefined;
+      const profile = deviceProfile(d);
+      const accountTz = d.user_id ? getUser(d.user_id)?.defaultTimezone ?? null : null;
+      const { minute, weekday } = wallClock(now, d.timezone ?? accountTz);
+      const focusVal = d.user_id ? getCustomData(d.user_id, "focusMode") : undefined;
+      return {
+        id: d.id,
+        name: d.name,
+        online: isConnected(d.id),
+        battery: d.battery,
+        lastSeen: d.last_seen,
+        showing: { layoutId, layoutName: board?.name ?? null, reason },
+        // Its own assigned board, when a higher rung (schedule / low-battery) outranks it.
+        outranked: d.layout_id && d.layout_id !== layoutId ? getLayout(d.layout_id)?.name ?? null : null,
+        modifiers: {
+          asleep: !!profile.tvMode && !!profile.wake && wakePower(profile.wake, minute, weekday) === "off",
+          quiet: !!profile.quietHours && windowActive(profile.quietHours, minute, weekday),
+          overrides: listOverrides(d.id).length, // #48 per-device block overrides in effect
+          focus: focusVal === true || focusVal === "true" || focusVal === "on", // #149
+          pages: board ? 1 + (board.document.pages?.length ?? 0) : 0,
+        },
+      };
+    }));
+  });
 
   app.post("/api/devices/claim", async (c) => {
     const body = ClaimRequest.safeParse(await c.req.json().catch(() => null));

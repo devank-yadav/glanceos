@@ -18,6 +18,53 @@ import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { navigate } from "../router";
 
+// #171 — the audit: every claimed screen's ACTUAL board right now and why it won the
+// resolution ladder (the server reads the real resolver, so this can't drift), plus
+// the modifiers shaping the render (sleep, quiet hours, Focus, overrides, pages).
+interface AuditRow {
+  id: string; name: string | null; online: boolean; battery: number | null; lastSeen: number | null;
+  showing: { layoutId: number | null; layoutName: string | null; reason: string };
+  outranked: string | null;
+  modifiers: { asleep: boolean; quiet: boolean; overrides: number; focus: boolean; pages: number };
+}
+const REASON_LABEL: Record<string, string> = {
+  lowBattery: "the low-battery swap", deviceSchedule: "its schedule", deviceBoard: "its own board",
+  homeBoard: "your home board", groupSchedule: "its group's schedule", groupBoard: "its group's board",
+};
+function ScreensAudit() {
+  const [rows, setRows] = useState<AuditRow[] | null>(null);
+  useEffect(() => { api.get<AuditRow[]>("/api/screens/audit").then(setRows).catch(() => setRows([])); }, []);
+  if (rows === null) return <p class="muted">Loading…</p>;
+  if (rows.length === 0) return <p class="muted">No claimed screens yet.</p>;
+  return (
+    <ul class="audit-list">
+      {rows.map((r) => (
+        <li key={r.id} class="audit-row">
+          <div class="row spread">
+            <strong>{r.name ?? "Unnamed screen"}</strong>
+            <span class={`tile-status ${r.online ? "live" : "muted"}`}>{r.online ? "online" : "offline"}</span>
+          </div>
+          <p class="audit-line">
+            {r.showing.layoutName
+              ? <>Showing <strong>{r.showing.layoutName}</strong> <span class="muted">— via {REASON_LABEL[r.showing.reason] ?? r.showing.reason}</span></>
+              : <span class="muted">Nothing to show — no board assigned anywhere in its chain.</span>}
+          </p>
+          {r.outranked && <p class="audit-line muted">Its own board “{r.outranked}” is set, but currently outranked.</p>}
+          <p class="audit-line audit-mods muted">
+            {[
+              r.modifiers.asleep && "display asleep (wake window)",
+              r.modifiers.quiet && "quiet hours — dimmed",
+              r.modifiers.focus && "Focus mode is hiding marked blocks",
+              r.modifiers.overrides > 0 && `${r.modifiers.overrides} block override${r.modifiers.overrides > 1 ? "s" : ""} on this screen`,
+              r.modifiers.pages > 1 && `${r.modifiers.pages} rotating pages`,
+            ].filter(Boolean).join(" · ") || "no modifiers"}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function ScreensPage() {
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [setups, setSetups] = useState<SetupSummary[]>([]);
@@ -34,6 +81,7 @@ export function ScreensPage() {
     } catch { return ""; }
   });
   const [claiming, setClaiming] = useState(!!pendingClaim);
+  const [auditing, setAuditing] = useState(false); // #171 — the "what's showing?" audit
 
   const refresh = async () => {
     try {
@@ -57,7 +105,12 @@ export function ScreensPage() {
 
   const onClaimed = async (id: string) => { setClaiming(false); await refresh(); setPickerFor(id); };
 
-  const actions = <button class="primary" onClick={() => setClaiming(true)}><Icon.plus /> Connect screen</button>;
+  const actions = (
+    <>
+      <button onClick={() => setAuditing(true)} title="What is every screen showing right now, and why?"><Icon.eye /> What's showing?</button>
+      <button class="primary" onClick={() => setClaiming(true)}><Icon.plus /> Connect screen</button>
+    </>
+  );
 
   return (
     <>
@@ -85,6 +138,9 @@ export function ScreensPage() {
 
         <Modal open={claiming} onClose={() => setClaiming(false)} title="Connect a screen">
           <ClaimForm onClaimed={onClaimed} initialCode={pendingClaim} />
+        </Modal>
+        <Modal open={auditing} onClose={() => setAuditing(false)} title="What's on my screens?">
+          {auditing && <ScreensAudit />}
         </Modal>
         {pickerFor && (
           <SetupPicker deviceId={pickerFor} setups={setups} onClose={() => setPickerFor(null)} onDone={refresh} />

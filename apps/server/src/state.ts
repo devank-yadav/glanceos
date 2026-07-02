@@ -24,18 +24,21 @@ function geoForDevice(device: DeviceRow): { latitude: number; longitude: number 
  *  → plain setup — then it falls back to its display group's: group schedule →
  *  group default. No group / no group settings → exactly the previous behavior.
  *  (Board rotation now lives inside a board as pages, not as device playlists.) */
-export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
+// #171 — every rung of the ladder is tagged with WHY it won, and currentLayoutId
+// delegates, so the screens audit reads the real resolution — never a parallel copy.
+export type LayoutReason = "lowBattery" | "deviceSchedule" | "deviceBoard" | "homeBoard" | "groupSchedule" | "groupBoard" | "none";
+export function resolveLayoutWithReason(device: DeviceRow, now = Date.now()): { layoutId: number | null; reason: LayoutReason } {
   // #58 — battery critically low → swap to the user's designated minimal board so a panel about
   // to die shows a calm low-battery screen instead of dying mid-content. Own-org only (no cross-
   // org leak even if the owner moved orgs or deleted the board). Wins over every normal board.
   const lb = deviceProfile(device).lowBattery;
-  if (lb && device.battery != null && device.battery <= lb.pct && getOwnedLayout(lb.layoutId, device.org_id ?? "")) return lb.layoutId;
+  if (lb && device.battery != null && device.battery <= lb.pct && getOwnedLayout(lb.layoutId, device.org_id ?? "")) return { layoutId: lb.layoutId, reason: "lowBattery" };
   // Wall-clock fallback: screen tz → account default tz → server tz.
   const accountTz = device.user_id ? getUser(device.user_id)?.defaultTimezone ?? null : null;
   const deviceTz = device.timezone ?? accountTz;
   const scheduled = activeScheduledLayout(device.id, now, deviceTz);
-  if (scheduled) return scheduled;
-  if (device.layout_id) return device.layout_id;
+  if (scheduled) return { layoutId: scheduled, reason: "deviceSchedule" };
+  if (device.layout_id) return { layoutId: device.layout_id, reason: "deviceBoard" };
 
   // #147 — a user's personal "home board" shows on any of their own screens that has no board
   // of its own, before the display-group fallback. Re-check org ownership here so the board is
@@ -43,7 +46,7 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
   // moved orgs or the board was deleted).
   if (device.user_id) {
     const homeId = getUser(device.user_id)?.homeLayoutId ?? null;
-    if (homeId && getOwnedLayout(homeId, device.org_id ?? "")) return homeId;
+    if (homeId && getOwnedLayout(homeId, device.org_id ?? "")) return { layoutId: homeId, reason: "homeBoard" };
   }
 
   if (device.group_id) {
@@ -51,11 +54,14 @@ export function currentLayoutId(device: DeviceRow, now = Date.now()): number | n
     if (group) {
       const tz = device.timezone ?? group.timezone ?? accountTz;
       const gSched = activeGroupScheduledLayout(group.id, now, tz);
-      if (gSched) return gSched;
-      if (group.layout_id) return group.layout_id;
+      if (gSched) return { layoutId: gSched, reason: "groupSchedule" };
+      if (group.layout_id) return { layoutId: group.layout_id, reason: "groupBoard" };
     }
   }
-  return null;
+  return { layoutId: null, reason: "none" };
+}
+export function currentLayoutId(device: DeviceRow, now = Date.now()): number | null {
+  return resolveLayoutWithReason(device, now).layoutId;
 }
 
 /** Pure: is the display awake at this wall-clock minute/weekday? Outside the wake
