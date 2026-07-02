@@ -26,6 +26,12 @@ const dayStr = (ms: number): string => { const d = new Date(ms); return `${d.get
 // #42 — minute-of-day ↔ the <input type="time"> value, for the daily-brief send time.
 const minToTime = (m: number): string => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const timeToMin = (t: string): number => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+
+// #173 — granular export: pick which sections the backup file carries (all = classic).
+const EXPORT_CHOICES: [string, string][] = [
+  ["boards", "Boards"], ["screens", "Screens"], ["connections", "Connections"], ["tasks", "Tasks"],
+  ["data", "Data values"], ["automations", "Automations"], ["scenes", "Scenes"], ["journal", "Journal"],
+];
 // #151 — a habit's streak = consecutive days done, ending today (or yesterday if today isn't done
 // yet, so the streak stays alive until midnight). Points come from the #27 metric history.
 function habitStreak(points: { at: number }[]): { doneToday: boolean; streak: number } {
@@ -194,6 +200,17 @@ export function AccountPage() {
     try { const u = await api.patch<UserInfo>("/api/account", { dailyBriefAt: at }); setUser(u); toast.success(at != null ? `Daily brief at ${minToTime(at)}` : "Daily brief off"); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
+
+  // #173 — which sections the backup download carries; all checked = the classic file.
+  const [exportSections, setExportSections] = useState<Set<string>>(() => new Set(EXPORT_CHOICES.map(([k]) => k)));
+  const toggleSection = (key: string) => setExportSections((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) { if (next.size > 1) next.delete(key); } else next.add(key); // never zero sections
+    return next;
+  });
+  const exportHref = exportSections.size === EXPORT_CHOICES.length
+    ? "/api/account/export"
+    : `/api/account/export?sections=${[...exportSections].join(",")}`;
 
   // #47 — the alert digest window (0/null = every alert interrupts as it happens).
   const saveDigest = async (min: number | null) => {
@@ -506,8 +523,15 @@ export function AccountPage() {
         <section class="card account-section">
           <h2>Sessions & data</h2>
           <div class="row wrap">
-            <a class="ghost" href="/api/account/export">Download backup (.json)</a>
+            <a class="ghost" href={exportHref}>Download backup (.json)</a>
             <button class="ghost" onClick={logoutEverywhere}>Log out everywhere</button>
+          </div>
+          <div class="row wrap" style={{ gap: "10px", marginTop: "8px" }}>
+            {EXPORT_CHOICES.map(([key, label]) => (
+              <label key={key} class="row" style={{ gap: "4px", fontSize: "13px" }}>
+                <input type="checkbox" checked={exportSections.has(key)} onChange={() => toggleSection(key)} /> {label}
+              </label>
+            ))}
           </div>
           <label class="field" style={{ maxWidth: "220px", marginTop: "12px" }}>
             <span>{t("settings.language")}</span>

@@ -16,7 +16,7 @@ import {
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
-import { dumpUser, importUser } from "./backup";
+import { dumpUser, EXPORT_SECTIONS, importUser, type ExportSection } from "./backup";
 import { injectAbsoluteOg } from "./ogmeta";
 import {
   createGroup, deleteGroup, getGroupRow, getOwnedGroup, listGroups, listGroupSchedules,
@@ -1715,8 +1715,11 @@ ${og}
     return c.json({ ok: true });
   });
   app.get("/api/account/export", (c) => {
-    c.header("content-disposition", 'attachment; filename="glanceos-backup.json"');
-    return c.json(dumpUser(c.get("userId"), c.get("orgId")));
+    // #173 — ?sections=boards,tasks picks what to export; absent/unknown-only = everything.
+    const asked = (c.req.query("sections") ?? "").split(",").map((s) => s.trim()).filter((s): s is ExportSection => (EXPORT_SECTIONS as readonly string[]).includes(s));
+    const partial = asked.length > 0 && asked.length < EXPORT_SECTIONS.length;
+    c.header("content-disposition", `attachment; filename="glanceos-${partial ? asked.join("-") : "backup"}.json"`);
+    return c.json(dumpUser(c.get("userId"), c.get("orgId"), asked));
   });
   app.post("/api/account/import", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { dump?: unknown; mode?: string } | null;

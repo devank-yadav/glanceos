@@ -6,17 +6,29 @@ import { createLayout } from "./layouts";
 // A plain-JSON export of a user's own data — boards, screens, connection config
 // (NO secrets), and tasks. Secrets are never exported; connections must be
 // reconnected after a restore.
-export function dumpUser(userId: string, orgId: string): Record<string, unknown> {
-  return {
-    format: "glanceos-backup",
-    version: 1,
-    exportedAt: Date.now(),
-    // Boards/screens are the active org's; connections/tasks remain user-namespaced.
-    layouts: db.prepare("SELECT id, name, version, document, created_at FROM layouts WHERE org_id = ?").all(orgId),
-    devices: db.prepare("SELECT id, name, profile, refresh_seconds, timezone, location_name, latitude, longitude, render_opts, created_at FROM devices WHERE org_id = ?").all(orgId),
-    connections: db.prepare("SELECT id, provider, label, auth_kind, config, status FROM connections WHERE user_id = ?").all(userId),
-    tasks: db.prepare("SELECT list_id, text, done, created_at FROM tasks WHERE user_id = ?").all(userId),
-  };
+// #173 — granular: callers pick sections ("just my boards", "just my data"). Absent /
+// empty = everything. The dump records which sections it carries, and replace-mode
+// import only wipes categories the file actually contains — a boards-only file can
+// never take your tasks with it.
+export const EXPORT_SECTIONS = ["boards", "screens", "connections", "tasks", "data", "automations", "scenes", "journal"] as const;
+export type ExportSection = (typeof EXPORT_SECTIONS)[number];
+
+export function dumpUser(userId: string, orgId: string, sections?: ExportSection[]): Record<string, unknown> {
+  const want = new Set<ExportSection>(sections?.length ? sections : EXPORT_SECTIONS);
+  const dump: Record<string, unknown> = { format: "glanceos-backup", version: 1, exportedAt: Date.now(), sections: [...want] };
+  // Boards/screens are the active org's; the rest stays user-namespaced.
+  if (want.has("boards")) dump.layouts = db.prepare("SELECT id, name, version, document, created_at FROM layouts WHERE org_id = ?").all(orgId);
+  if (want.has("screens")) dump.devices = db.prepare("SELECT id, name, profile, refresh_seconds, timezone, location_name, latitude, longitude, render_opts, created_at FROM devices WHERE org_id = ?").all(orgId);
+  if (want.has("connections")) dump.connections = db.prepare("SELECT id, provider, label, auth_kind, config, status FROM connections WHERE user_id = ?").all(userId);
+  if (want.has("tasks")) dump.tasks = db.prepare("SELECT list_id, text, done, created_at FROM tasks WHERE user_id = ?").all(userId);
+  // #173 — sections the old backup never carried. Export-only for now (import reads the
+  // arrays it knows and ignores the rest); `data` includes the privacy flag so a future
+  // import can restore #156 vault markings.
+  if (want.has("data")) dump.data = db.prepare("SELECT key, value, private, updated_at FROM custom_data WHERE user_id = ?").all(userId);
+  if (want.has("automations")) dump.automations = db.prepare("SELECT name, enabled, trigger, conditions, actions, cooldown_min, once_per_day, layout_id FROM automations WHERE user_id = ?").all(userId);
+  if (want.has("scenes")) dump.scenes = db.prepare("SELECT name, payload, created_at FROM scenes WHERE user_id = ?").all(userId);
+  if (want.has("journal")) dump.journal = db.prepare("SELECT day, text, updated_at FROM journal_entries WHERE user_id = ?").all(userId);
+  return dump;
 }
 
 export interface ImportResult { layouts: number; connections: number; tasks: number; skipped: number }
@@ -37,9 +49,11 @@ export function importUser(userId: string, orgId: string, dump: unknown, opts: {
 
   const tx = db.transaction(() => {
     if (opts.mode === "replace") {
-      db.prepare("DELETE FROM tasks WHERE user_id = ?").run(userId);
-      db.prepare("DELETE FROM connections WHERE user_id = ?").run(userId); // connection_secrets cascade
-      db.prepare("DELETE FROM layouts WHERE org_id = ? AND is_template = 0").run(orgId);
+      // #173 — only wipe what the file will restore: a granular (boards-only) backup
+      // replacing "everything" would otherwise silently destroy tasks + connections.
+      if (Array.isArray(d.tasks)) db.prepare("DELETE FROM tasks WHERE user_id = ?").run(userId);
+      if (Array.isArray(d.connections)) db.prepare("DELETE FROM connections WHERE user_id = ?").run(userId); // connection_secrets cascade
+      if (Array.isArray(d.layouts)) db.prepare("DELETE FROM layouts WHERE org_id = ? AND is_template = 0").run(orgId);
     }
 
     // Connections first (no secrets → needs_auth), remapping ids so board source
