@@ -10,8 +10,8 @@ import { clearMetric, logMetric, toMetricNumber } from "./metrics";
 export const MAX_VALUE_BYTES = 256 * 1024; // 256 KB per value
 export const MAX_KEYS_PER_USER = 500;
 
-export interface CustomDataRow { user_id: string; key: string; value: string; updated_at: number }
-export interface CustomDataEntry { key: string; value: unknown; updatedAt: number }
+export interface CustomDataRow { user_id: string; key: string; value: string; updated_at: number; private: number }
+export interface CustomDataEntry { key: string; value: unknown; updatedAt: number; private: boolean }
 
 const parse = (json: string): unknown => { try { return JSON.parse(json); } catch { return null; } };
 
@@ -23,8 +23,21 @@ export function getCustomData(userId: string, key: string): unknown {
 
 /** All of a user's entries, newest first. */
 export function listCustomData(userId: string): CustomDataEntry[] {
-  return (db.prepare("SELECT key, value, updated_at FROM custom_data WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC").all(userId) as CustomDataRow[])
-    .map((r) => ({ key: r.key, value: parse(r.value), updatedAt: r.updated_at }));
+  return (db.prepare("SELECT key, value, updated_at, private FROM custom_data WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC").all(userId) as CustomDataRow[])
+    .map((r) => ({ key: r.key, value: parse(r.value), updatedAt: r.updated_at, private: r.private === 1 }));
+}
+
+// ---- #156 private data vault ----
+
+/** Is this key marked private? (private = renders only for the owner's own screens). */
+export function isDataPrivate(userId: string, key: string): boolean {
+  const row = db.prepare("SELECT private FROM custom_data WHERE user_id = ? AND key = ?").get(userId, key) as { private: number } | undefined;
+  return row?.private === 1;
+}
+
+/** Mark a key private (or public again). false if the key doesn't exist. */
+export function setDataPrivacy(userId: string, key: string, priv: boolean): boolean {
+  return db.prepare("UPDATE custom_data SET private = ? WHERE user_id = ? AND key = ?").run(priv ? 1 : 0, userId, key).changes > 0;
 }
 
 export type SetResult = { ok: true; entry: CustomDataEntry } | { ok: false; error: "too_large" | "too_many_keys" | "bad_key" };
@@ -49,7 +62,8 @@ export function setCustomData(userId: string, key: string, value: unknown, now =
   // #27 — a numeric value also accumulates a time series (metric history) so it can be charted.
   const num = toMetricNumber(value);
   if (num != null) logMetric(userId, k, num, now);
-  return { ok: true, entry: { key: k, value: value ?? null, updatedAt: now } };
+  // #156 — an upsert keeps the key's existing privacy (the column is untouched); report it back.
+  return { ok: true, entry: { key: k, value: value ?? null, updatedAt: now, private: isDataPrivate(userId, k) } };
 }
 
 export function deleteCustomData(userId: string, key: string): boolean {
@@ -60,9 +74,13 @@ export function deleteCustomData(userId: string, key: string): boolean {
 
 /** Widget-facing resolver for a "customData" block. Returns null when no key is
  *  configured (screen falls back to its label), or {value}/{error} otherwise. */
-export function customDataWidget(props: { key: string }, userId: string): CustomDataT | null {
+export function customDataWidget(props: { key: string }, userId: string, publicView = false): CustomDataT | null {
   if (!props.key?.trim()) return null;
-  const v = getCustomData(userId, props.key.trim());
+  const key = props.key.trim();
+  // #156 — a private key never renders on a public share (null, not an error: the block falls
+  // back to its typed props/fallback, and the key's very existence isn't confirmed).
+  if (publicView && isDataPrivate(userId, key)) return null;
+  const v = getCustomData(userId, key);
   if (v === undefined) return { error: "no data" };
   return { value: v as CustomDataT["value"] };
 }

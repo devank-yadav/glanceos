@@ -8,7 +8,7 @@ import {
 } from "./fetchers/live";
 import { airQualityData, forecastData, marineData, pollenData, precipData, uvData, windData } from "./fetchers/openmeteo";
 import { weatherData } from "./fetchers/weather";
-import { customDataWidget } from "./customdata";
+import { customDataWidget, isDataPrivate } from "./customdata";
 import { metricSeries } from "./metrics";
 import { promptForDay, recentJournal } from "./journal";
 import { queueData } from "./queues";
@@ -70,7 +70,7 @@ export function lastResolved(blockId: string): { value: unknown; at: number } | 
   return lastGood.get(blockId);
 }
 
-export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string, commit = true): Promise<Record<string, unknown>> {
+export async function resolveWidgetData(layout: LayoutT, userId: string, connLookup?: ConnLookup, deviceGeo?: Geo, snapshotKey?: string, commit = true, publicView = false): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
   const staleAt: Record<string, number> = {}; // #21 — block ids served from the last-known cache
   const now = new Date();
@@ -109,15 +109,17 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
           if (dctx && b.props.showContext) data[b.id] = { contextualGreeting: composeContextualGreeting(dctx.calendar, dctx.weather, dctx.tz, b.props.maxContextLength, now.getTime()) };
           break;
         case "queue": data[b.id] = queueData(b.props, userId); break;
-        case "customData": { const cd = customDataWidget(b.props, userId); if (cd) data[b.id] = cd; break; }
+        case "customData": { const cd = customDataWidget(b.props, userId, publicView); if (cd) data[b.id] = cd; break; }
         // #27 — chart a numeric data key's recorded history as a series the sparkline draws.
         case "metricHistory": {
           const key = b.props.dataKey.trim();
+          if (publicView && key && isDataPrivate(userId, key)) break; // #156 — a private key's history stays private
           if (key) data[b.id] = metricSeries(userId, key, now.getTime() - b.props.days * 86_400_000).map((p) => p.value);
           break;
         }
         // #153 — a calm reflection: today's prompt + the latest journal entry.
         case "journal": {
+          if (publicView) break; // #156 — a reflection is inherently personal; never on a public share
           const latest = recentJournal(userId, 1)[0];
           const day = latest?.day ?? new Date(now.getTime()).toISOString().slice(0, 10);
           data[b.id] = { prompt: promptForDay(day), entry: latest?.text ?? "" };

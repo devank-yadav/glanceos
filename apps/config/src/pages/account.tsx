@@ -60,7 +60,7 @@ export function AccountPage() {
   const [scenes, setScenes] = useState<SceneSummary[]>([]);
   const [sceneName, setSceneName] = useState("");
   // #152 — personal metrics journal: numeric data keys you log over time (auto-tracked by #27).
-  const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[]; target?: number }[]>([]);
+  const [metrics, setMetrics] = useState<{ key: string; value: number; points: number[]; target?: number; priv: boolean }[]>([]);
   const [newMetric, setNewMetric] = useState("");
   const [newValue, setNewValue] = useState("");
   // #153 — reflection journal: today's prompt + entry, and recent entries.
@@ -127,14 +127,14 @@ export function AccountPage() {
   // #152 — the numeric data keys the user tracks, each with its recent history for a mini trend.
   const loadMetrics = async () => {
     try {
-      const all = await api.get<{ key: string; value: unknown }[]>("/api/data");
+      const all = await api.get<{ key: string; value: unknown; private?: boolean }[]>("/api/data");
       // #151 goals — a `target.<key>` value is the goal for that metric (shown as % progress).
       const targets: Record<string, number> = {};
       for (const d of all) { if (d.key.startsWith("target.")) { const n = toNum(d.value); if (n != null) targets[d.key.slice(7)] = n; } }
       const numeric = all.filter((d) => toNum(d.value) != null && !d.key.startsWith("habit.") && !d.key.startsWith("target.")); // habits + goals live elsewhere
       const withHist = await Promise.all(numeric.map(async (d) => {
         const h = await api.get<{ points: { value: number }[] }>(`/api/data/${encodeURIComponent(d.key)}/history?days=90`).catch(() => ({ points: [] as { value: number }[] }));
-        return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value), target: targets[d.key] };
+        return { key: d.key, value: toNum(d.value)!, points: h.points.map((p) => p.value), target: targets[d.key], priv: d.private === true };
       }));
       setMetrics(withHist);
     } catch { /* the card just stays empty */ }
@@ -148,6 +148,11 @@ export function AccountPage() {
     const name = newMetric.trim(); const value = Number(newValue);
     if (!name || !Number.isFinite(value)) { toast.error("Enter a name and a number"); return; }
     await logValue(name, value); setNewMetric(""); setNewValue("");
+  };
+  // #156 — flip a key's privacy: private keys render only on your own screens, never on shares.
+  const togglePrivacy = async (key: string, next: boolean) => {
+    try { await api.post(`/api/data/${encodeURIComponent(key)}/privacy`, { private: next }); toast.success(next ? `${key} is now private` : `${key} can show on shared boards`); await loadMetrics(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
   // #151 goals — set (or clear, with null) a metric's target, stored as `target.<key>`.
   const setTarget = async (key: string, target: number | null) => {
@@ -374,6 +379,9 @@ export function AccountPage() {
                     onKeyDown={(e) => { if (e.key === "Enter") { const el = e.currentTarget as HTMLInputElement; const v = Number(el.value); if (el.value.trim() && Number.isFinite(v)) { logValue(m.key, v); el.value = ""; } } }} />
                   <input class="metric-goal" type="number" step="any" placeholder="goal" title={`Goal for ${m.key}`} value={m.target ?? ""}
                     onChange={(e) => { const v = (e.currentTarget as HTMLInputElement).value.trim(); setTarget(m.key, v ? Number(v) : null); }} />
+                  <button class="ghost icon-btn" aria-label={m.priv ? `${m.key} is private` : `Make ${m.key} private`}
+                    title={m.priv ? "Private — never shown on a public share. Click to allow." : "Shown on shared boards. Click to keep it private."}
+                    onClick={() => togglePrivacy(m.key, !m.priv)}>{m.priv ? "🔒" : "🔓"}</button>
                 </li>
               ))}
             </ul>
@@ -408,7 +416,7 @@ export function AccountPage() {
 
         <section class="card account-section">
           <h2>Journal</h2>
-          <p class="muted">A calm end-of-day note.{journal?.prompt ? <> Today's prompt: <em>{journal.prompt}</em></> : ""}. Add a “Reflection” block to a board to show it on a screen.</p>
+          <p class="muted">A calm end-of-day note — private by design, never shown on a shared or public board.{journal?.prompt ? <> Today's prompt: <em>{journal.prompt}</em></> : ""}. Add a “Reflection” block to a board to show it on a screen.</p>
           <textarea class="journal-write" rows={3} placeholder="Write today's reflection…" value={journalText} onInput={(e) => setJournalText((e.currentTarget as HTMLTextAreaElement).value)} />
           <div class="row"><button class="ghost" onClick={saveJournal}>Save today's entry</button></div>
           {journal && journal.recent.length > 0 && (

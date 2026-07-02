@@ -56,7 +56,7 @@ import {
 import { publicUrl } from "./email";
 import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
-import { deleteCustomData, getCustomData, listCustomData, setCustomData } from "./customdata";
+import { deleteCustomData, getCustomData, listCustomData, setCustomData, setDataPrivacy } from "./customdata";
 import { metricSeries } from "./metrics";
 import { getJournal, promptForDay, recentJournal, setJournal } from "./journal";
 import { applyScene, captureScene, deleteScene, listScenes, renameScene } from "./scenes";
@@ -1075,7 +1075,7 @@ export function buildApp(): Hono<Env> {
       if (!cookie || !hmacVerify(`share-unlock:${token}`, cookie)) return c.json({ error: "password_required" }, 401);
     }
     const { record, ownerId } = found;
-    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined);
+    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined, undefined, undefined, true, true); // #156 — public view: private data omitted
     return c.json({ claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } });
   });
 
@@ -1092,7 +1092,7 @@ export function buildApp(): Hono<Env> {
     }
     if (!(await renderAvailable())) return c.json({ error: "render support not installed" }, 503);
     const { record, ownerId } = found;
-    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined);
+    const data = await resolveWidgetData(record.document, ownerId ?? "", record.orgId ? connLookupForOrg(record.orgId) : undefined, undefined, undefined, true, true); // #156 — public view: private data omitted
     const payload = { claimed: true, state: { layoutVersion: record.version, layout: record.document, data, deviceName: record.name } } as unknown as Parameters<typeof renderImage>[1];
     try {
       const { buf, contentType } = await renderImage(baseUrl(), payload, 1200, 630, "png", `pub:${token}:${record.version}`);
@@ -1240,6 +1240,12 @@ ${og}
   app.get("/api/data/:key", (c) => {
     const value = getCustomData(c.get("userId"), c.req.param("key"));
     return value === undefined ? c.json({ error: "not found" }, 404) : c.json({ key: c.req.param("key"), value });
+  });
+  // #156 — mark a data key private (renders only on your own screens; never on public shares).
+  app.post("/api/data/:key/privacy", async (c) => {
+    const { private: priv } = (await c.req.json().catch(() => ({}))) as { private?: boolean };
+    if (!setDataPrivacy(c.get("userId"), c.req.param("key"), priv === true)) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true, private: priv === true });
   });
   // #27 — the recorded history of a numeric data key (last N days, default 30) for charting.
   app.get("/api/data/:key/history", (c) => {
