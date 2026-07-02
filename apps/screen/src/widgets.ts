@@ -4,6 +4,7 @@ import type {
   QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
 } from "@glanceos/schema";
 import { isoWeek, moonAge, moonPhase, sunTimes, SYNODIC_DAYS } from "./astro";
+import { qrSvg } from "./qr"; // #70 — the agenda's scan-to-join QR (qr.ts is already in the bundle)
 import { renderInlineMarkdown } from "./markdown";
 import { barSvg, nums, ringSvg, romanTime, seasonOf, sparkSvg, zodiacOf } from "./viz";
 import { CHECK_OFF, CHECK_ON, moonGlyph, seasonGlyph, STAR_EMPTY, STAR_FULL, stars } from "./glyphs";
@@ -124,7 +125,7 @@ const weather: Render = (el, widget, data) => {
   }
 };
 
-const calendar: Render = (el, _w, data) => {
+const calendar: Render = (el, w, data) => {
   const d = data as CalendarDataT | undefined;
   el.appendChild(div("widget-heading", "Agenda"));
   if (!d || d.events.length === 0) {
@@ -139,7 +140,20 @@ const calendar: Render = (el, _w, data) => {
       : `${start.toLocaleDateString([], { weekday: "short" })} ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     row.appendChild(div("cal-time", when));
     row.appendChild(div("cal-title", event.location ? `${event.title} · ${event.location}` : event.title));
+    if (event.url) row.appendChild(div("cal-join", "video")); // #70 — this meeting has a join link
     el.appendChild(row);
+  }
+  // #70 — opt-in: a small QR for the next joinable call, so a phone scan of the wall joins it.
+  if (w.type === "calendar" && w.props.joinQr) {
+    const next = d.events.find((e) => e.url);
+    if (next) {
+      const wrap = div("cal-joinqr");
+      const q = div("cal-joinqr-code");
+      q.innerHTML = qrSvg(next.url!, { size: 88 });
+      wrap.appendChild(q);
+      wrap.appendChild(div("cal-joinqr-hint", `Scan to join · ${next.title}`));
+      el.appendChild(wrap);
+    }
   }
 };
 

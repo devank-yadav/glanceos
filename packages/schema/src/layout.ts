@@ -21,6 +21,9 @@ export const CalendarProps = z.object({
   source: z.literal("ics"),
   url: z.url(),
   maxEvents: z.number().int().min(1).max(20).default(5),
+  // #70 — show a small QR for the next event that has a join link, so you can scan the wall with
+  // your phone and jump straight into the call (the wall itself can't click).
+  joinQr: z.boolean().default(false),
 });
 export const TasksProps = z.object({
   listId: z.string().min(1).default("default"),

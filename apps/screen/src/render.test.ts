@@ -659,3 +659,23 @@ describe("#191 stale stamp (as-of badge for cache-served blocks)", () => {
     expect(document.querySelector(".stale-stamp")).toBeNull();
   });
 });
+
+describe("#70 agenda join affordance", () => {
+  const events = [
+    { start: "2026-06-19T09:00:00Z", title: "Standup", allDay: false },
+    { start: "2026-06-19T10:00:00Z", title: "Design sync", allDay: false, url: "https://meet.google.com/abc" },
+  ];
+  const board = (joinQr: boolean) => ({ ...baseLayout, rows: [{ id: "r1", h: 6, blocks: [{ id: "c1", type: "calendar", width: 1, props: { source: "ics", url: "https://e.com/c.ics", maxEvents: 5, joinQr } }] }] });
+  it("tags joinable events with a quiet 'video' marker (no QR unless opted in)", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout: board(false), data: { c1: { events } } } } as unknown as StreamPayloadT);
+    expect(document.querySelectorAll(".cal-join").length).toBe(1); // only the joinable event
+    expect(document.querySelector(".cal-joinqr")).toBeNull();
+  });
+  it("joinQr renders a scan-to-join QR for the next joinable call", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout: board(true), data: { c1: { events } } } } as unknown as StreamPayloadT);
+    const qr = document.querySelector(".cal-joinqr");
+    expect(qr).not.toBeNull();
+    expect(qr!.querySelector("svg")).not.toBeNull();
+    expect(qr!.textContent).toContain("Design sync");
+  });
+});

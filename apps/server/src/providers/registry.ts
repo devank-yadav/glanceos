@@ -240,11 +240,20 @@ reg({
 // ---- OAuth provider: Google Calendar (read-only). Needs a Google Cloud OAuth
 // app (the self-hoster's client id/secret in oauth_apps); ctx.secret is the
 // access token the resolver gets after connLookupFor refreshes it if expired.
-export interface GEvent { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }
-/** Shape Google Calendar API items into the {title,start,end} events the calendar renderer reads. */
-export function mapGoogleEvents(items: GEvent[]): { events: { title: string; start: string; end?: string }[] } {
+export interface GEvent {
+  summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string };
+  location?: string; hangoutLink?: string; // #70 — the Meet link (legacy shortcut, still populated)
+  conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] }; // #70 — Zoom/Teams add-ons land here
+}
+/** Shape Google Calendar API items into the {title,start,end,location,url} events the calendar
+ *  renderer + daycontext read. `url` is the join link (#70): hangoutLink, else the video entry point. */
+export function mapGoogleEvents(items: GEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string }[] } {
   const events = items
-    .map((e) => ({ title: e.summary || "(busy)", start: e.start?.dateTime || e.start?.date || "", end: e.end?.dateTime || e.end?.date }))
+    .map((e) => ({
+      title: e.summary || "(busy)", start: e.start?.dateTime || e.start?.date || "", end: e.end?.dateTime || e.end?.date,
+      location: e.location || undefined,
+      url: e.hangoutLink || e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri || undefined,
+    }))
     .filter((e) => e.start);
   return { events };
 }
@@ -297,11 +306,18 @@ reg({
 // ---- OAuth provider: Microsoft 365 / Outlook Calendar (read-only). Multi-tenant
 // 'common' endpoints; the self-hoster registers an Azure app. ctx.secret is the
 // access token (refreshed via offline_access).
-export interface GraphEvent { subject?: string; start?: { dateTime?: string }; end?: { dateTime?: string } }
-/** Shape Microsoft Graph calendar items into the {title,start,end} events the calendar renderer reads. */
-export function mapGraphEvents(items: GraphEvent[]): { events: { title: string; start: string; end?: string }[] } {
+export interface GraphEvent {
+  subject?: string; start?: { dateTime?: string }; end?: { dateTime?: string };
+  location?: { displayName?: string }; onlineMeeting?: { joinUrl?: string } | null; // #70 — Teams join link
+}
+/** Shape Microsoft Graph calendar items into the {title,start,end,location,url} events the
+ *  calendar renderer + daycontext read. `url` is the Teams join link (#70). */
+export function mapGraphEvents(items: GraphEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string }[] } {
   const events = items
-    .map((e) => ({ title: e.subject || "(busy)", start: e.start?.dateTime || "", end: e.end?.dateTime }))
+    .map((e) => ({
+      title: e.subject || "(busy)", start: e.start?.dateTime || "", end: e.end?.dateTime,
+      location: e.location?.displayName || undefined, url: e.onlineMeeting?.joinUrl || undefined,
+    }))
     .filter((e) => e.start);
   return { events };
 }
@@ -321,7 +337,7 @@ reg({
     const end = new Date(now.getTime() + 30 * 86_400_000);
     const url = "https://graph.microsoft.com/v1.0/me/calendarView"
       + `?startDateTime=${now.toISOString()}&endDateTime=${end.toISOString()}`
-      + `&$orderby=${encodeURIComponent("start/dateTime")}&$top=${max}&$select=subject,start,end`;
+      + `&$orderby=${encodeURIComponent("start/dateTime")}&$top=${max}&$select=subject,start,end,location,onlineMeeting`; // #70 — join link + place
     const raw = (await getJSON(url, { authorization: `Bearer ${ctx.secret}`, prefer: 'outlook.timezone="UTC"' })) as { value?: GraphEvent[] } | null;
     if (!raw?.value) return null;
     return mapGraphEvents(raw.value);

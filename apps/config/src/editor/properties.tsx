@@ -49,7 +49,7 @@ const Sel = (key: string, label: string, options: string[], numeric = false): Fi
 const PROP_FIELDS: Record<WidgetType, Field[]> = {
   clock: [B("showDate", "Show date")],
   weather: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
-  calendar: [S("url", "ICS URL"), N("maxEvents", "Max events")],
+  calendar: [S("url", "ICS URL"), N("maxEvents", "Max events"), B("joinQr", "Scan-to-join QR for the next video call")], // #70
   tasks: [S("listId", "List id"), N("maxItems", "Max items")],
   text: [T("content", "Text"), Sel("align", "Align", ["left", "center"])],
   queue: [S("queueId", "Queue id"), S("title", "Title")],

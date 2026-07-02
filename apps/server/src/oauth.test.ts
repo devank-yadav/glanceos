@@ -157,4 +157,26 @@ describe("mapGoogleEvents", () => {
     expect(events[1]).toMatchObject({ title: "Holiday", start: "2026-06-20" });
     expect(events[2]!.title).toBe("(busy)");
   });
+
+  it("#70 carries the join link (hangoutLink, else the video entry point) + location", () => {
+    const { events } = mapGoogleEvents([
+      { summary: "1:1", start: { dateTime: "2026-06-19T10:00:00Z" }, hangoutLink: "https://meet.google.com/abc", location: "Room 2" },
+      { summary: "Vendor", start: { dateTime: "2026-06-19T11:00:00Z" }, conferenceData: { entryPoints: [{ entryPointType: "phone", uri: "tel:+1" }, { entryPointType: "video", uri: "https://zoom.us/j/123" }] } },
+      { summary: "Lunch", start: { dateTime: "2026-06-19T12:00:00Z" } }, // no link → url absent
+    ]);
+    expect(events[0]).toMatchObject({ url: "https://meet.google.com/abc", location: "Room 2" });
+    expect(events[1]!.url).toBe("https://zoom.us/j/123"); // video entry point wins over phone
+    expect(events[2]!.url).toBeUndefined();
+  });
+});
+
+describe("mapGraphEvents (#70 join link)", () => {
+  it("carries the Teams joinUrl + the location display name", () => {
+    const { events } = mapGraphEvents([
+      { subject: "Sync", start: { dateTime: "2026-06-19T09:00:00Z" }, onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/x" }, location: { displayName: "HQ" } },
+      { subject: "Desk time", start: { dateTime: "2026-06-19T10:00:00Z" }, onlineMeeting: null },
+    ]);
+    expect(events[0]).toMatchObject({ url: "https://teams.microsoft.com/l/x", location: "HQ" });
+    expect(events[1]!.url).toBeUndefined();
+  });
 });
