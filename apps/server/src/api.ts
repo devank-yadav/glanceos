@@ -32,7 +32,7 @@ import {
 } from "./devices";
 import { geocodeSearch, reverseGeocode } from "./fetchers/geocode";
 import { listSchedules, setSchedules, type Schedule } from "./schedules";
-import { clearAll, listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, unreadCount } from "./notifications";
+import { archiveAll, listNotifications, markAllRead, markRead, notifyClaimed, notifyContentChanged, searchNotifications, unreadCount } from "./notifications";
 import { dataDir, db } from "./db";
 import { isAllowedMime, MAX_UPLOAD_BYTES, saveUpload, UPLOAD_QUOTA_BYTES, userUsage } from "./uploads";
 import { limiter } from "./ratelimit";
@@ -698,9 +698,17 @@ export function buildApp(): Hono<Env> {
     return c.json({ ok: true, unread: 0 });
   });
   app.post("/api/notifications/clear-all", (c) => {
-    clearAll(c.get("userId"));
+    archiveAll(c.get("userId")); // #43 — archives (history survives) instead of deleting
     return c.json({ ok: true, unread: 0 });
   });
+  // #43 — browse/search the history. ?all=1 spans active + archived (the archive view);
+  // ?q= substring-matches message/kind; ?before= (ms) pages older results.
+  app.get("/api/notifications/search", (c) =>
+    c.json(searchNotifications(c.get("userId"), {
+      q: c.req.query("q") ?? "",
+      all: c.req.query("all") === "1",
+      before: Number(c.req.query("before")) || undefined,
+    })));
 
   // Grayscale PNG preview of exactly what a screen would show on e-ink.
   app.get("/api/devices/:id/preview.png", async (c) => {

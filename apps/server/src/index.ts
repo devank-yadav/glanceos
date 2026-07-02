@@ -5,7 +5,7 @@ import { snapshotDatabase, pruneSnapshots } from "./backup-db";
 import { checkpoint, migrate } from "./db";
 import { emailConfigured } from "./email";
 import { runDailyBriefSweep, runLifecycleSweep } from "./lifecycle";
-import { runAlertChecks } from "./notifications";
+import { pruneNotifications, runAlertChecks } from "./notifications";
 import { hydrateEngineState, runAutomationTick } from "./automation/engine";
 import { pruneAutomationRuns } from "./automations";
 import { pruneProofOfPlay } from "./playlog";
@@ -70,10 +70,12 @@ setInterval(() => {
   runAutomationTick().catch(() => {}); // never let a bad automation crash the loop
 }, 60 * 1000);
 
-// Prune the automation run-log beyond its retention window (default 30 days).
+// Prune the automation run-log beyond its retention window (default 30 days), and
+// (#43) archived notifications older than 90 days.
 const AUTO_RUN_RETENTION_DAYS = Math.max(1, Number(process.env.GLANCEOS_AUTOMATION_LOG_RETENTION_DAYS) || 30);
 setInterval(() => {
   try { pruneAutomationRuns(Date.now() - AUTO_RUN_RETENTION_DAYS * 86_400_000); } catch { /* never crash the loop */ }
+  try { pruneNotifications(Date.now() - 90 * 86_400_000); } catch { /* never crash the loop */ }
 }, 6 * 60 * 60 * 1000);
 
 // Drop expired rate-limit windows so the map stays bounded.

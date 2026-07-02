@@ -7,7 +7,7 @@ import { IconButton } from "./IconButton";
 import { BANNER_CAP, freshSince } from "./notifyDiff";
 
 // (NotifRow, not "Notification" — that name would shadow the DOM banner API below.)
-interface NotifRow { id: number; deviceId: string | null; kind: string; message: string; createdAt: number; read: boolean }
+interface NotifRow { id: number; deviceId: string | null; kind: string; message: string; createdAt: number; read: boolean; archived?: boolean }
 interface Feed { notifications: NotifRow[]; unread: number }
 
 // A spoken label for the colour-coded dot, so the kind isn't conveyed by colour alone.
@@ -87,6 +87,20 @@ export function NotificationsBell() {
   };
   const markRead = async (id: number) => { await api.post(`/api/notifications/${id}/read`).catch(() => {}); load(); };
   const clearAll = async () => { await api.post("/api/notifications/clear-all").catch(() => {}); load(); };
+  // #43 — the history view: everything (active + archived), searchable. "Clear all"
+  // archives instead of deleting now, so nothing is ever silently destroyed.
+  const [mode, setMode] = useState<"live" | "history">("live");
+  const [q, setQ] = useState("");
+  const [history, setHistory] = useState<NotifRow[] | null>(null);
+  const searchHistory = (query: string) => {
+    setQ(query);
+    api.get<NotifRow[]>(`/api/notifications/search?all=1&q=${encodeURIComponent(query)}`).then(setHistory).catch(() => setHistory([]));
+  };
+  const flipMode = () => {
+    if (mode === "history") { setMode("live"); return; }
+    setMode("history");
+    searchHistory("");
+  };
   // #45 — flip desktop banners; the first turn-on asks the browser for permission.
   const toggleDesktop = async () => {
     if (!supported) return;
@@ -108,9 +122,9 @@ export function NotificationsBell() {
       {open && createPortal(
         <div ref={panelRef} class="notif-panel" role="dialog" aria-label="Notifications" style={{ position: "fixed", left: `${pos.left}px`, bottom: `${pos.bottom}px`, top: "auto" }}>
           <div class="row spread notif-head">
-            <strong>Notifications</strong>
+            <strong>{mode === "history" ? "History" : "Notifications"}</strong>
             <div class="row" style={{ gap: "4px" }}>
-              {supported && (
+              {supported && mode === "live" && (
                 <button
                   class="ghost"
                   onClick={toggleDesktop}
@@ -121,16 +135,28 @@ export function NotificationsBell() {
                   {denied ? "Banners blocked" : desktop ? "Banners: on" : "Banners: off"}
                 </button>
               )}
-              {feed.notifications.length > 0 && <button class="ghost" onClick={clearAll}>Clear all</button>}
+              <button class="ghost" onClick={flipMode} aria-pressed={mode === "history"} title={mode === "history" ? "Back to current notifications" : "Browse and search everything, including cleared alerts"}>
+                {mode === "history" ? "Current" : "History"}
+              </button>
+              {mode === "live" && feed.notifications.length > 0 && <button class="ghost" onClick={clearAll} title="Moves everything to History">Clear all</button>}
             </div>
           </div>
-          {feed.notifications.length === 0 ? (
-            <p class="muted notif-empty">You're all caught up.</p>
+          {mode === "history" && (
+            <input
+              class="notif-search"
+              type="search"
+              placeholder="Search alerts…"
+              value={q}
+              onInput={(e) => searchHistory((e.currentTarget as HTMLInputElement).value)}
+            />
+          )}
+          {(mode === "history" ? (history ?? []) : feed.notifications).length === 0 ? (
+            <p class="muted notif-empty">{mode === "history" ? (history === null ? "Loading…" : q ? "No alerts match." : "No history yet.") : "You're all caught up."}</p>
           ) : (
             <ul class="notif-list" aria-live="polite">
-              {feed.notifications.map((n) => (
+              {(mode === "history" ? (history ?? []) : feed.notifications).map((n) => (
                 <li key={n.id} class={`notif-item${n.read ? " read" : ""}`}>
-                  <button class="notif-item-btn" onClick={() => !n.read && markRead(n.id)} title={n.read ? "" : "Mark read"}>
+                  <button class="notif-item-btn" onClick={() => mode === "live" && !n.read && markRead(n.id)} title={mode === "live" && !n.read ? "Mark read" : ""}>
                     <span class={`notif-dot ${n.kind}`} aria-hidden="true" />
                     <span class="sr-only">{kindLabel(n.kind)}: </span>
                     <span class="notif-msg">{n.message}</span>

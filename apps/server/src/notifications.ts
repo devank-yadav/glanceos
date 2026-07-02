@@ -10,25 +10,49 @@ import { listMembers } from "./orgs";
 
 export interface NotificationRow {
   id: number; user_id: string; device_id: string | null; kind: string;
-  message: string; dedupe_key: string; created_at: number; read_at: number | null;
+  message: string; dedupe_key: string; created_at: number; read_at: number | null; archived_at: number | null;
 }
 export interface Notification {
-  id: number; deviceId: string | null; kind: string; message: string; createdAt: number; read: boolean;
+  id: number; deviceId: string | null; kind: string; message: string; createdAt: number; read: boolean; archived: boolean;
 }
 
 const toNotification = (r: NotificationRow): Notification => ({
-  id: r.id, deviceId: r.device_id, kind: r.kind, message: r.message, createdAt: r.created_at, read: r.read_at !== null,
+  id: r.id, deviceId: r.device_id, kind: r.kind, message: r.message, createdAt: r.created_at, read: r.read_at !== null, archived: r.archived_at !== null,
 });
 
+/** The bell feed: ACTIVE (un-archived) notifications only. */
 export function listNotifications(userId: string, unreadOnly = false): Notification[] {
   const rows = db.prepare(
-    `SELECT * FROM notifications WHERE user_id = ? ${unreadOnly ? "AND read_at IS NULL" : ""} ORDER BY created_at DESC LIMIT 50`,
+    `SELECT * FROM notifications WHERE user_id = ? AND archived_at IS NULL ${unreadOnly ? "AND read_at IS NULL" : ""} ORDER BY created_at DESC LIMIT 50`,
   ).all(userId) as NotificationRow[];
   return rows.map(toNotification);
 }
 
 export function unreadCount(userId: string): number {
-  return (db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").get(userId) as { n: number }).n;
+  return (db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL AND archived_at IS NULL").get(userId) as { n: number }).n;
+}
+
+// #43 — the archive: full-history browse + substring search. `all` spans active AND
+// archived rows (the archive view is the history, not just what was cleared); the
+// default stays bell-scoped (active only). LIKE special chars are escaped so a
+// literal "%" in a query can't wildcard. `before` (created_at) pages older results.
+export function searchNotifications(userId: string, opts: { q?: string; all?: boolean; before?: number; limit?: number } = {}): Notification[] {
+  const lim = Math.min(Math.max(1, opts.limit ?? 50), 200);
+  const q = (opts.q ?? "").trim();
+  const like = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  const rows = db.prepare(
+    `SELECT * FROM notifications WHERE user_id = ?
+       ${opts.all ? "" : "AND archived_at IS NULL"}
+       ${q ? "AND (message LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\')" : ""}
+       ${opts.before ? "AND created_at < ?" : ""}
+     ORDER BY created_at DESC LIMIT ?`,
+  ).all(userId, ...(q ? [like, like] : []), ...(opts.before ? [opts.before] : []), lim) as NotificationRow[];
+  return rows.map(toNotification);
+}
+
+/** #43 — retention: archived rows older than the cutoff are finally dropped. */
+export function pruneNotifications(cutoffMs: number): void {
+  db.prepare("DELETE FROM notifications WHERE archived_at IS NOT NULL AND archived_at < ?").run(cutoffMs);
 }
 
 export function markRead(id: number, userId: string): boolean {
@@ -38,9 +62,12 @@ export function markAllRead(userId: string): void {
   db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").run(Date.now(), userId);
 }
 
-/** Remove every notification for a user (the "Clear all" action). */
-export function clearAll(userId: string): void {
-  db.prepare("DELETE FROM notifications WHERE user_id = ?").run(userId);
+/** #43 — "Clear all" now archives: tucks every active notification away (and marks it
+ *  read) instead of destroying history. Dedupe keys keep working across the archive —
+ *  a same-day repeat stays quiet after a clear, which is calmer than delete-then-recreate. */
+export function archiveAll(userId: string): void {
+  const now = Date.now();
+  db.prepare("UPDATE notifications SET archived_at = ?, read_at = COALESCE(read_at, ?) WHERE user_id = ? AND archived_at IS NULL").run(now, now, userId);
 }
 
 /** Create unless one already exists for this (user, dedupe_key) (read or unread).
