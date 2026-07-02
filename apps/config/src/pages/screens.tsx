@@ -94,17 +94,25 @@ export function ScreensPage() {
   );
 }
 
+// #194 — the screen app's URL: served at /screen in production; its own Vite port in dev.
+const screenAppUrl = (): string =>
+  ["5174", "5175"].includes(location.port) ? `${location.protocol}//${location.hostname}:5173/` : `${location.origin}/screen/`;
+
 function FirstScreen({ onClaim }: { onClaim: () => void }) {
   return (
     <div class="empty-state first-screen">
       <span class="empty-icon"><Icon.monitor /></span>
       <h2 class="empty-title">Connect your first screen</h2>
       <ol class="steps-list">
-        <li><span class="step-n">1</span> Open <code>http://&lt;this-server&gt;/screen</code> on any display with a browser (or <code>localhost:5173</code> in dev).</li>
+        <li><span class="step-n">1</span> Open <code>http://&lt;this-server&gt;/screen</code> on any display with a browser — or try a <strong>virtual screen</strong> in a new tab right now, no hardware needed.</li>
         <li><span class="step-n">2</span> It registers itself and shows a short claim code.</li>
         <li><span class="step-n">3</span> Enter the code here and the screen becomes yours.</li>
       </ol>
-      <button class="primary" onClick={onClaim}><Icon.plus /> Enter a claim code</button>
+      <div class="row" style={{ gap: "8px", justifyContent: "center" }}>
+        {/* #194 — see the whole loop with zero hardware: a browser tab IS a screen. */}
+        <button class="ghost" onClick={() => window.open(screenAppUrl(), "_blank", "noopener")}><Icon.monitor /> Open a virtual screen</button>
+        <button class="primary" onClick={onClaim}><Icon.plus /> Enter a claim code</button>
+      </div>
     </div>
   );
 }
