@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "./db";
+import { createIfAbsent } from "./notifications";
 import { getOAuthAppCreds } from "./oauth-apps";
 import { PROVIDERS, type OAuthSpec } from "./providers/registry";
 import { currentKeyVersion, hmacSign, hmacVerify, open, seal } from "./secrets";
@@ -146,6 +147,39 @@ export async function completeOAuth(userId: string, providerId: string, code: st
 
 function markNeedsAuth(connectionId: string): void {
   db.prepare("UPDATE connections SET status = 'needs_auth' WHERE id = ?").run(connectionId);
+}
+
+// #32 — proactive token-expiry warnings. A connection whose tokens can't renew
+// themselves (no refresh token, finite expiry) breaks SILENTLY: nothing surfaces until
+// the next resolve fails. tokenExpiryInfo reads that fate off the sealed tokens, and a
+// slow sweep warns the owner days ahead instead of after the wall goes stale.
+export const TOKEN_WARN_MS = 3 * 86_400_000; // start warning ~3 days out
+
+/** A connection's non-renewable expiry timestamp — null when it auto-renews (has a
+ *  refresh token), never expires, or isn't an OAuth connection. */
+export function tokenExpiryInfo(connectionId: string): number | null {
+  const row = db.prepare("SELECT cipher FROM connection_secrets WHERE connection_id = ? AND kind = 'oauth'").get(connectionId) as { cipher: Buffer } | undefined;
+  const json = row ? open(row.cipher) : null;
+  if (!json) return null;
+  try {
+    const t = JSON.parse(json) as OAuthTokens;
+    return !t.refresh && t.expiresAt < Number.MAX_SAFE_INTEGER ? t.expiresAt : null;
+  } catch { return null; }
+}
+
+/** Warn (bell notification, once per issued token) for every healthy OAuth connection
+ *  that will expire inside the warn window and can't renew itself. Already-expired
+ *  ones are left to the needs_auth path — warning about the past helps nobody. */
+export function sweepTokenExpiry(now = Date.now()): void {
+  const rows = db.prepare("SELECT id, user_id, label FROM connections WHERE auth_kind = 'oauth2' AND status = 'ok'").all() as Array<{ id: string; user_id: string; label: string }>;
+  for (const r of rows) {
+    const exp = tokenExpiryInfo(r.id);
+    if (exp == null || exp <= now || exp - now > TOKEN_WARN_MS) continue;
+    const days = Math.max(1, Math.ceil((exp - now) / 86_400_000));
+    createIfAbsent(r.user_id, null, "conn",
+      `${r.label} access expires in ~${days} day${days > 1 ? "s" : ""} and can't renew itself — reconnect it in Settings before the wall goes stale`,
+      `tokexp:${r.id}:${exp}`);
+  }
 }
 
 // Dedup concurrent refreshes of the same connection (N blocks → one refresh).

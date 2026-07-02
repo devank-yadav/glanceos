@@ -42,6 +42,7 @@ interface Connection {
   status: string;
   lastError: string;
   config: Record<string, unknown>;
+  tokenExpiresAt?: number | null; // #32 — non-renewable token expiry; null = auto-renews
 }
 
 const CAT_ORDER = ["tasks", "issues", "docs", "dev", "calendar", "smart-home", "media", "place", "health", "mail", "generic"];
@@ -177,6 +178,12 @@ export function IntegrationsPage() {
                         <div class="row spread">
                           <h3 class="card-title">{c.label}</h3>
                           <span class={`chip conn-${c.status}`}>{c.status === "ok" ? "Connected" : c.status === "needs_auth" ? "Needs auth" : "Error"}</span>
+                          {c.status === "ok" && c.tokenExpiresAt != null && c.tokenExpiresAt - Date.now() < 7 * 86_400_000 && (
+                            // #32 — this token can't renew itself; reconnect before it dies
+                            <span class="chip conn-needs_auth" title="This connection can't renew itself — reconnect it before then to keep its blocks live">
+                              Expires {new Date(c.tokenExpiresAt).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                         <p class="muted">{c.provider} · {CAT_LABEL[c.category] ?? c.category}</p>
                         {c.lastError && <p class="conn-error-line">{c.lastError}</p>}

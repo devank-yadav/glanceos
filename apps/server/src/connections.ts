@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
 import { notifyConnectionIssue } from "./notifications";
-import { ensureFreshOAuthToken } from "./oauth";
+import { ensureFreshOAuthToken, tokenExpiryInfo } from "./oauth";
 import { PROVIDERS, type AuthKind } from "./providers/registry";
 import type { ConnContext, ConnLookup } from "./providers/resolve";
 import { currentKeyVersion, open, seal } from "./secrets";
@@ -33,6 +33,9 @@ export interface ConnectionSummary {
   status: string;
   lastError: string;
   config: Record<string, unknown>;
+  // #32 — a NON-RENEWABLE token's expiry (ms); null = auto-renews / never expires /
+  // not OAuth. The Settings page turns an imminent one into an "expires soon" chip.
+  tokenExpiresAt: number | null;
 }
 
 function summarize(row: ConnRow): ConnectionSummary {
@@ -46,6 +49,7 @@ function summarize(row: ConnRow): ConnectionSummary {
     status: row.status,
     lastError: row.last_error,
     config: safeJson(row.config),
+    tokenExpiresAt: row.auth_kind === "oauth2" ? tokenExpiryInfo(row.id) : null,
   };
 }
 

@@ -6,6 +6,7 @@ import { checkpoint, migrate } from "./db";
 import { emailConfigured } from "./email";
 import { runDailyBriefSweep, runLifecycleSweep } from "./lifecycle";
 import { pruneNotifications, runAlertChecks } from "./notifications";
+import { sweepTokenExpiry } from "./oauth";
 import { hydrateEngineState, runAutomationTick } from "./automation/engine";
 import { pruneAutomationRuns } from "./automations";
 import { pruneProofOfPlay } from "./playlog";
@@ -76,6 +77,7 @@ const AUTO_RUN_RETENTION_DAYS = Math.max(1, Number(process.env.GLANCEOS_AUTOMATI
 setInterval(() => {
   try { pruneAutomationRuns(Date.now() - AUTO_RUN_RETENTION_DAYS * 86_400_000); } catch { /* never crash the loop */ }
   try { pruneNotifications(Date.now() - 90 * 86_400_000); } catch { /* never crash the loop */ }
+  try { sweepTokenExpiry(); } catch { /* never crash the loop */ } // #32 — warn before tokens die
 }, 6 * 60 * 60 * 1000);
 
 // Drop expired rate-limit windows so the map stays bounded.
