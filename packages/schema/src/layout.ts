@@ -429,10 +429,9 @@ const TimeWindow = z.object({
 // screen last looked (the same per-device snapshot the digest uses). Opt-in per block.
 const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), schedule: TimeWindow.optional(), changeBadge: z.boolean().optional() };
 
-// #10 — a tappable button that fires one of the account's automations on demand (web/TV/touch);
-// on e-ink it renders as a static labelled control. `automationId` refs an automation (kind
-// "manual"); unbound buttons just show their label.
-export const ButtonProps = z.object({ label: line(60).default("Tap"), automationId: z.string().max(64).optional() });
+// #10 → read-only wall (owner's rule): a STATIC labelled chip — the screen never takes input.
+// (An earlier `automationId` binding is stripped on read; external buttons pair via the API.)
+export const ButtonProps = z.object({ label: line(60).default("Tap") });
 
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),

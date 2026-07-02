@@ -192,18 +192,12 @@ const divider: Render = (el) => {
   el.appendChild(div("divider-rule"));
 };
 
-// #10 — a tappable button that fires its bound automation (web/TV/touch). On e-ink it's just a
-// static labelled control (no tap). Fire is best-effort + dynamically imported so it costs nothing
-// until pressed. Unbound (no automationId) renders disabled.
+// #10 → the wall is READ-ONLY (owner's rule): the button block renders as a STATIC labelled chip —
+// the screen never takes input. Pair a physical button or your phone via the API instead (the
+// "manual" trigger + /api/automations/:id/run-now with a scoped key, or a webhook inlet).
 const button: Render = (el, widget) => {
   if (widget.type !== "button") return;
-  const p = widget.props;
-  const b = document.createElement("button");
-  b.className = "block-button";
-  b.textContent = p.label || "Tap";
-  if (p.automationId) b.addEventListener("click", () => { void import("./api").then((m) => m.fireAction(p.automationId)); });
-  else b.disabled = true;
-  el.appendChild(b);
+  el.appendChild(div("block-button", widget.props.label || "Tap"));
 };
 
 const image: Render = (el, widget) => {

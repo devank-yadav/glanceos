@@ -92,7 +92,7 @@ const TRIGGERS: { id: string; label: string }[] = [
   { id: "time", label: "At a time of day" },
   { id: "sun", label: "At sunrise / sunset" },
   { id: "presence", label: "When you arrive / leave home" },
-  { id: "manual", label: "On demand (a board button tap or Run now)" },
+  { id: "manual", label: "On demand (Run now, the API, or your phone)" },
 ];
 // Friendly one-tap "When…" scenarios — each seeds the trigger (and a starter
 // condition) so you don't have to assemble it by hand. Built on the existing

@@ -53,18 +53,19 @@ describe("layout schema (v3 document-flow with row heights)", () => {
     expect(Layout.safeParse({ schemaVersion: 3, name: "x", rows: [], pageSettings: Array.from({ length: 10 }, () => ({})) }).success).toBe(false);
   });
 
-  it("#10 button block round-trips (label + optional automationId)", () => {
+  it("#10 chip block: read-only — a legacy automationId is STRIPPED on read (the wall never acts)", () => {
     const doc = Layout.parse({
       schemaVersion: 3,
-      name: "Buttons",
+      name: "Chips",
       rows: [{ id: "r", blocks: [
-        { id: "b1", type: "button", props: { label: "Start focus", automationId: "auto-123" } },
-        { id: "b2", type: "button", props: {} }, // unbound — label defaults, no automation
+        { id: "b1", type: "button", props: { label: "Focus", automationId: "auto-123" } }, // legacy binding
+        { id: "b2", type: "button", props: {} },
       ] }],
     });
     const blocks = doc.rows[0]!.blocks;
     expect(blocks[0]!.type).toBe("button");
-    expect((blocks[0]!.props as { label: string; automationId?: string }).automationId).toBe("auto-123");
+    expect((blocks[0]!.props as { label: string }).label).toBe("Focus");
+    expect((blocks[0]!.props as Record<string, unknown>).automationId).toBeUndefined(); // stripped
     expect((blocks[1]!.props as { label: string }).label).toBe("Tap"); // default
   });
 
