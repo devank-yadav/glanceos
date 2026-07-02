@@ -423,7 +423,9 @@ const TimeWindow = z.object({
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 // #80 — show a block only inside this window (else it's hidden, like a failing visibleWhen).
-const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), schedule: TimeWindow.optional() };
+// #79 — changeBadge: stamp the block "↑ changed" on the render where its value moved since this
+// screen last looked (the same per-device snapshot the digest uses). Opt-in per block.
+const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean().optional(), locked: z.boolean().optional(), width: z.number().min(0.2).max(5).default(1), style: BlockStyle.prefault({}), source: BlockSource.optional(), visibility: z.enum(["always", "whenData"]).optional(), visibleWhen: VisibleWhen.optional(), fallback: line(120).optional(), focusHide: z.boolean().optional(), schedule: TimeWindow.optional(), changeBadge: z.boolean().optional() };
 
 // #10 — a tappable button that fires one of the account's automations on demand (web/TV/touch);
 // on e-ink it renders as a static labelled control. `automationId` refs an automation (kind

@@ -679,3 +679,16 @@ describe("#70 agenda join affordance", () => {
     expect(qr!.textContent).toContain("Design sync");
   });
 });
+
+describe("#79 changed badge (since you looked)", () => {
+  const layout = { ...baseLayout, rows: [{ id: "r1", h: 6, blocks: [{ id: "s1", type: "stat", width: 1, props: { label: "PRs", value: "7" }, changeBadge: true }] }] };
+  it("stamps a flagged block, then clears once the flag is gone (same data)", () => {
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout, data: { __changed: ["s1"] } } } as unknown as StreamPayloadT);
+    const stamp = document.querySelector(".change-stamp");
+    expect(stamp).not.toBeNull();
+    expect(stamp!.textContent).toContain("changed");
+    // Next delivered render: identical data, flag cleared → the stamp must not linger.
+    renderPayload({ claimed: true, state: { layoutVersion: 1, layout, data: {} } } as unknown as StreamPayloadT);
+    expect(document.querySelector(".change-stamp")).toBeNull();
+  });
+});

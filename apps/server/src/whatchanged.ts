@@ -6,7 +6,7 @@ import type { WidgetT } from "@glanceos/schema";
 // re-baselines on restart, exactly like the automation engine's trend/prev history —
 // and is keyed per device, so it reflects "since THIS screen last refreshed".
 
-export interface Change { label: string; from: string; to: string }
+export interface Change { id: string; label: string; from: string; to: string } // id = the block (#79 badge matches on it)
 type Snap = Record<string, { label: string; value: string }>;
 const snapshots = new Map<string, Snap>();
 
@@ -53,7 +53,7 @@ export function computeChanges(blocks: WidgetT[], data: Record<string, unknown>,
   const changes: Change[] = [];
   for (const id of Object.keys(cur)) {
     const p = prev[id];
-    if (p && p.value !== cur[id]!.value) changes.push({ label: cur[id]!.label, from: p.value, to: cur[id]!.value });
+    if (p && p.value !== cur[id]!.value) changes.push({ id, label: cur[id]!.label, from: p.value, to: cur[id]!.value });
     if (changes.length >= max) break;
   }
   return changes;

@@ -349,6 +349,12 @@ export function BlockFields({
       const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
       if (target) target.focusHide = on || undefined;
     });
+  // #79 — badge the block "↑ changed" on the render where its value moved since this screen looked.
+  const editChangeBadge = (on: boolean) =>
+    stageEdit((d) => {
+      const target = d.rows.flatMap((r) => r.blocks).find((b) => b.id === block.id);
+      if (target) target.changeBadge = on || undefined;
+    });
   // #80 — per-block schedule: show the block only inside a time/day/date window. Merge a patch
   // (a null/"" field clears it); an all-blank schedule prunes back to undefined (= always shown).
   const sched = block.schedule;
@@ -484,6 +490,10 @@ export function BlockFields({
       <label class="field checkbox">
         <input type="checkbox" checked={!!block.focusHide} onChange={(e) => editFocusHide((e.currentTarget as HTMLInputElement).checked)} />
         <span>Hide in Focus mode</span>
+      </label>
+      <label class="field checkbox">
+        <input type="checkbox" checked={!!block.changeBadge} onChange={(e) => editChangeBadge((e.currentTarget as HTMLInputElement).checked)} />
+        <span>Badge “↑ changed” since you looked</span>
       </label>
       <label class="field checkbox">
         <input type="checkbox" checked={!!sched} onChange={(e) => editSchedule((e.currentTarget as HTMLInputElement).checked ? {} : null)} />

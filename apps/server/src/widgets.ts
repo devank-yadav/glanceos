@@ -156,9 +156,11 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
   // Only runs when a key is supplied (the device display) AND a digest block exists.
   if (snapshotKey) {
     const digests = blocks.filter((b) => b.type === "sinceYouLooked");
-    if (digests.length) {
-      const max = Math.max(...digests.map((b) => (b.props as { max?: number }).max ?? 5));
-      const changes = computeChanges(blocks, data, snapshotKey, max, commit);
+    const badged = new Set(blocks.filter((b) => b.changeBadge).map((b) => b.id)); // #79 — opt-in badges
+    if (digests.length || badged.size) {
+      const max = digests.length ? Math.max(...digests.map((b) => (b.props as { max?: number }).max ?? 5)) : 0;
+      // Badges need the whole board diffed (any badged block may have moved), so lift the cap.
+      const changes = computeChanges(blocks, data, snapshotKey, badged.size ? 200 : max, commit);
       // Only write when there's something to show, so a `whenData` digest hides until a
       // delta appears (matching the renderer's gate); always-visible blocks still paint
       // their "nothing new" placeholder from undefined data.
@@ -166,6 +168,9 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
         const slice = changes.slice(0, (b.props as { max?: number }).max ?? 5);
         if (slice.length) data[b.id] = { changes: slice };
       }
+      // #79 — reserved key: which badged blocks moved since this screen last looked.
+      const flipped = changes.filter((ch) => badged.has(ch.id)).map((ch) => ch.id);
+      if (flipped.length) data["__changed"] = flipped;
     }
   }
   // #21 — set AFTER the digest diff (a reserved metadata key, not block data) so a stale-served

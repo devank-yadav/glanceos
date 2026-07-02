@@ -220,7 +220,10 @@ function structuralSig(layout: LayoutT, data: Record<string, unknown>): string {
     : base + rowsSig(layout.rows);
 }
 // Per-block content signature — re-render the cell only when its props/style/width/data change.
-const blockSig = (block: RowT["blocks"][number], datum: unknown) => JSON.stringify([block.props, block.style, block.width, datum]);
+// The stale (#191) + changed (#79) stamps are part of the painted output, so they're in the sig
+// too — otherwise a stamp could linger after its flag clears with identical data.
+const blockSig = (block: RowT["blocks"][number], datum: unknown, staleAt?: number, changed?: boolean) =>
+  JSON.stringify([block.props, block.style, block.width, datum, staleAt ?? 0, changed ? 1 : 0]);
 
 // #191 — "as of Nm ago" for a block served from the last-known cache (#21). staleAt = when that
 // cached value was last fresh; the calm stamp is a quiet "this isn't live right now" trust signal.
@@ -233,9 +236,12 @@ function agoLabel(ms: number): string {
 }
 const staleAtOf = (data: Record<string, unknown>, id: string): number | undefined =>
   (data["__stale"] as Record<string, number> | undefined)?.[id];
+// #79 — did this block's value move since this screen last looked? (reserved key from the server)
+const changedOf = (data: Record<string, unknown>, id: string): boolean =>
+  Array.isArray(data["__changed"]) && (data["__changed"] as unknown[]).includes(id);
 
 // (Re)paint a widget into a cell, applying its chrome (alignment/invert/flex weight).
-function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown, staleAt?: number): (() => void) | undefined {
+function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unknown, staleAt?: number, changed?: boolean): (() => void) | undefined {
   const st = block.style ?? { invert: false, align: "start", valign: "top" };
   // #22 — authored fallback: when a block's bound data is missing/empty, show the author's
   // fallback text instead of an empty or stale widget. Reuses the calm placeholder styling.
@@ -260,6 +266,7 @@ function paintCell(cell: HTMLElement, block: RowT["blocks"][number], datum: unkn
   try {
     const cleanup = render(cell, block, datum) || undefined;
     if (staleAt) cell.appendChild(el("stale-stamp", `as of ${agoLabel(Date.now() - staleAt)}`)); // #191
+    if (changed) cell.appendChild(el("change-stamp", "↑ changed")); // #79 — since this screen last looked
     return cleanup;
   } catch (err) {
     // A single throwing widget must NEVER blank the whole wall (e.g. malformed live
@@ -280,11 +287,12 @@ function updateCells(layout: LayoutT, data: Record<string, unknown>): void {
       const c = cells.get(block.id);
       if (!c) continue; // structuralSig guarantees a cell exists for every visible block
       if (editingIds.has(block.id)) continue; // being typed into in place — repainting would kill the caret
-      const sig = blockSig(block, data[block.id]);
+      const stale = staleAtOf(data, block.id), moved = changedOf(data, block.id);
+      const sig = blockSig(block, data[block.id], stale, moved);
       if (c.sig === sig) continue; // unchanged → leave it (and its running interval) alone
       c.cleanup?.();
       c.el.replaceChildren();
-      c.cleanup = paintCell(c.el, block, data[block.id], staleAtOf(data, block.id));
+      c.cleanup = paintCell(c.el, block, data[block.id], stale, moved);
       c.sig = sig;
       c.el.classList.remove("swap"); void c.el.offsetWidth; c.el.classList.add("swap"); // retrigger the fade
     }
@@ -404,8 +412,9 @@ function buildPage(rows: RowT[], layout: LayoutT, data: Record<string, unknown>)
       // A cached bundle older than the document may not know this type — skip, don't blank.
       if (!(WIDGETS as Record<string, unknown>)[block.type]) continue;
       const cell = document.createElement("div");
-      const cleanup = paintCell(cell, block, data[block.id], staleAtOf(data, block.id)); // sets className + flex weight + paints
-      cells.set(block.id, { el: cell, sig: blockSig(block, data[block.id]), cleanup }); // registered for in-place diff updates
+      const stale = staleAtOf(data, block.id), moved = changedOf(data, block.id);
+      const cleanup = paintCell(cell, block, data[block.id], stale, moved); // sets className + flex weight + paints
+      cells.set(block.id, { el: cell, sig: blockSig(block, data[block.id], stale, moved), cleanup }); // registered for in-place diff updates
       rowEl.appendChild(cell);
     }
     page.appendChild(rowEl);
