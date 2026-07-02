@@ -85,6 +85,36 @@ function parseCsv(text: string): { rows: Record<string, string>[]; columns: stri
 
 // ---- works-today providers (no OAuth app registration needed) ----
 
+// #29 — an uploaded CSV as a data source. The "fetch" is a lookup: the parsed table
+// lives in the connection's config (written by POST /api/connections/csv and
+// PUT /api/connections/:id/csv), so resolve never touches the network — and replacing
+// the file keeps the connection id, so every board bound to it updates in place.
+reg({
+  id: "csv", label: "CSV file", category: "generic", authKind: "none",
+  defaultTtlMs: TTL.min, minRefreshMs: 30_000,
+  resources: [
+    { id: "csv.rows", label: "Rows", shape: "list" },
+    { id: "csv.column", label: "One column (numbers)", shape: "series" },
+  ],
+  async resolve(ctx) {
+    const rows = Array.isArray(ctx.config.rows) ? (ctx.config.rows as Record<string, string | number>[]) : [];
+    const columns = Array.isArray(ctx.config.columns) ? (ctx.config.columns as string[]) : [];
+    if (ctx.resource === "csv.column") {
+      // The asked-for column, else the first column that actually holds numbers.
+      const col = ctx.query.column || columns.find((c) => rows.some((r) => typeof r[c] === "number")) || columns[0] || "";
+      return { column: col, values: rows.map((r) => r[col]).filter((v): v is number => typeof v === "number") };
+    }
+    const max = Math.min(Number(ctx.query.max) || 25, 200);
+    // List-friendly items: title = the first column, value = the row's first numeric
+    // cell — so bulletList / label|value charts bind with zero configuration.
+    const items = rows.slice(0, max).map((r) => {
+      const numCol = columns.find((c) => typeof r[c] === "number");
+      return { ...r, title: String(r[columns[0] ?? ""] ?? ""), value: numCol !== undefined ? r[numCol]! : "" };
+    });
+    return { items, columns, rowCount: rows.length };
+  },
+});
+
 reg({
   id: "rest", label: "REST / JSON", category: "generic", authKind: "apiKey",
   defaultTtlMs: TTL.m10, minRefreshMs: 30_000,

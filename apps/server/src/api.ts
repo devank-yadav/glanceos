@@ -71,6 +71,7 @@ import { dryRunAutomation, fireDataChanged, runAutomationById } from "./automati
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import { boardSnapshotPng, snapshotFilename } from "./snapshot";
+import { CSV_MAX_CHARS, parseCsv } from "./csvparse";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
   pushGroupDevices, pushUserDevices, resolveLayoutWithReason, scheduledSig, wakePower, windowActive,
@@ -875,6 +876,38 @@ export function buildApp(): Hono<Env> {
     }))));
 
   app.get("/api/connections", (c) => c.json(listConnections(c.get("orgId"))));
+
+  // #29 — upload a CSV as a data source. The client sends the file's TEXT (it reads
+  // the file locally); the parsed table is stored in the connection's config.
+  app.post("/api/connections/csv", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; csv?: string };
+    if (typeof body.csv !== "string" || !body.csv.trim()) return c.json({ error: "csv text required" }, 400);
+    if (body.csv.length > CSV_MAX_CHARS) return c.json({ error: "file too large (512 KB max)" }, 400);
+    const parsed = parseCsv(body.csv);
+    if (!parsed.columns.length || !parsed.rows.length) return c.json({ error: "no rows found — is the first line a header?" }, 400);
+    const conn = createConnection(c.get("userId"), c.get("orgId"), {
+      provider: "csv",
+      label: body.name?.trim() || "CSV file",
+      config: { columns: parsed.columns, rows: parsed.rows, rowCount: parsed.rows.length, truncated: parsed.truncated, uploadedAt: Date.now() },
+    });
+    return conn ? c.json(conn, 201) : c.json({ error: "csv provider unavailable" }, 500);
+  });
+  // Replace the file behind an existing CSV connection — same id, so every bound
+  // block picks up the new rows (within the ~1 min resolve cache).
+  app.put("/api/connections/:id/csv", async (c) => {
+    const existing = getConnectionSummary(c.req.param("id"), c.get("orgId"));
+    if (!existing || existing.provider !== "csv") return c.json({ error: "not a CSV connection" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { csv?: string };
+    if (typeof body.csv !== "string" || !body.csv.trim()) return c.json({ error: "csv text required" }, 400);
+    if (body.csv.length > CSV_MAX_CHARS) return c.json({ error: "file too large (512 KB max)" }, 400);
+    const parsed = parseCsv(body.csv);
+    if (!parsed.columns.length || !parsed.rows.length) return c.json({ error: "no rows found — is the first line a header?" }, 400);
+    const updated = updateConnection(existing.id, c.get("orgId"), {
+      config: { columns: parsed.columns, rows: parsed.rows, rowCount: parsed.rows.length, truncated: parsed.truncated, uploadedAt: Date.now() },
+    });
+    await pushUserDevices(c.get("userId")); // nudge live screens toward the new rows
+    return c.json(updated);
+  });
 
   app.post("/api/connections", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { provider?: string; label?: string; config?: Record<string, unknown>; secret?: string };

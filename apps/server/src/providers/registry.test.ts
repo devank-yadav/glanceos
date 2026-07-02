@@ -4,7 +4,7 @@ import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fi
 
 describe("provider registry", () => {
   it("registers the providers (incl. v5.0 smart-life + B1-B7 integrations)", () => {
-    expect(PROVIDERS.size).toBe(188);
+    expect(PROVIDERS.size).toBe(189); // +csv (#29)
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     // E1 — more keyless public-data providers
     for (const id of ["hackernews", "wikipedia", "frankfurter", "iss", "spaceflightnews", "nager", "gutendex", "dictionary", "quotable", "xkcd", "freetogame", "binance"]) expect(PROVIDERS.has(id)).toBe(true);

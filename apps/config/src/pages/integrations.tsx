@@ -137,6 +137,28 @@ export function IntegrationsPage() {
     refresh();
   };
 
+  // #29 — upload (or replace) a CSV data source. The browser reads the file's text;
+  // the server parses + stores the table in the connection's config.
+  const pickCsv = (onText: (name: string, text: string) => void) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".csv,text/csv,text/tab-separated-values";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      onText(f.name.replace(/\.\w+$/, ""), await f.text());
+    };
+    input.click();
+  };
+  const uploadCsv = () => pickCsv(async (name, text) => {
+    try { await api.post("/api/connections/csv", { name, csv: text }); toast.success("CSV connected — bind blocks to it in the Studio"); refresh(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  });
+  const replaceCsv = (id: string) => pickCsv(async (_name, text) => {
+    try { await api.put(`/api/connections/${id}/csv`, { csv: text }); toast.success("File replaced — bound blocks update in place"); refresh(); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  });
+
   const cats = [...new Set((providers ?? []).map((p) => p.category))]
     .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
 
@@ -154,9 +176,12 @@ export function IntegrationsPage() {
           <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
         ) : (
           <>
-            <h2>Connected</h2>
+            <div class="row spread">
+              <h2>Connected</h2>
+              <button onClick={uploadCsv} title="Turn a spreadsheet export into a data source — lists and charts can bind to its rows and columns"><Icon.upload /> Upload CSV…</button>
+            </div>
             {conns.length === 0 ? (
-              <EmptyState icon={<Icon.link />} title="No connections yet" body="Pick an app below to connect it." />
+              <EmptyState icon={<Icon.link />} title="No connections yet" body="Pick an app below to connect it — or upload a CSV." />
             ) : (() => {
               // #31 — connection-health summary: one glance at how many are working vs.
               // need attention; at-risk connections sort to the front so problems surface.
@@ -187,7 +212,13 @@ export function IntegrationsPage() {
                         </div>
                         <p class="muted">{c.provider} · {CAT_LABEL[c.category] ?? c.category}</p>
                         {c.lastError && <p class="conn-error-line">{c.lastError}</p>}
-                        <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
+                        {c.provider === "csv" && (
+                          <p class="muted">{Number(c.config.rowCount) || 0} rows{c.config.truncated ? " (truncated)" : ""}</p>
+                        )}
+                        <div class="row" style={{ gap: "6px" }}>
+                          {c.provider === "csv" && <button class="ghost" onClick={() => replaceCsv(c.id)}>Replace file…</button>}
+                          <button class="ghost" onClick={() => remove(c.id)}>Disconnect</button>
+                        </div>
                       </div>
                     ))}
                   </div>
