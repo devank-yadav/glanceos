@@ -10,6 +10,7 @@ export interface UserInfo {
   homeLongitude: number | null;
   homeLayoutId: number | null;
   boardDefaults: { mode?: "light" | "dark" | "auto"; fontScale?: "s" | "m" | "l"; look?: string } | null; // #155
+  dailyBriefAt: number | null; // #42 — minute of local day the emailed daily brief goes out; null = off
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
@@ -59,6 +60,7 @@ export interface AuthStatus {
   authed: boolean;
   user: UserInfo | null;
   registrationOpen: boolean;
+  emailReady?: boolean; // #42 — whether the server has a mail backend (briefs/invites actually send)
   activeOrg: { id: string; name: string; slug: string; personal: boolean; plan: string } | null;
   role: OrgRole | null;
   orgs: OrgSummary[];

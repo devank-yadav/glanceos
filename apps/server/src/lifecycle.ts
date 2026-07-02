@@ -1,7 +1,11 @@
 import { db } from "./db";
+import { tzMinuteOfDay } from "./astro";
+import { composeDailyBrief, dayContext, type DailyBriefDataT } from "./daycontext";
 import { emailConfigured } from "./email";
-import { sendDay3Email, sendDigestEmail } from "./emails";
+import { sendDailyBriefEmail, sendDay3Email, sendDigestEmail } from "./emails";
 import { isConnected } from "./hub";
+import { dayIn } from "./metrics";
+import { listTasks } from "./tasks";
 
 // Lifecycle email sweep (run on a slow timer). Two nudges, both deduped via marker rows
 // in the events table so each fires at most once per user per period — no extra table.
@@ -14,6 +18,33 @@ const alreadySent = (userId: string, marker: string): boolean =>
 const markSent = (userId: string, marker: string): void => {
   db.prepare("INSERT INTO events (user_id, name, props, created_at) VALUES (?, ?, '{}', ?)").run(userId, marker, Date.now());
 };
+
+// #42 — the emailed daily brief. Runs on a ~60s timer (the 6h lifecycle sweep is far too
+// coarse for a "7:00 sharp" send). A subscriber gets the brief once per LOCAL day, inside
+// a 2h grace window after their chosen minute — so a server restart at 07:05 still sends,
+// but a server that was down all day doesn't say "Good morning" at 23:00. The window is
+// clamped at midnight (a 23:30 brief gets a shorter window) so the day marker can't flip
+// mid-window and double-send. Deduped like the other lifecycle mails: a marker event row.
+const BRIEF_GRACE_MIN = 120;
+interface BriefUser { id: string; name: string; email: string; at: number; tz: string }
+const defaultBriefSend = (u: BriefUser, brief: DailyBriefDataT): Promise<void> => sendDailyBriefEmail(u.email, u.name, brief);
+
+export async function runDailyBriefSweep(now = Date.now(), send: (u: BriefUser, brief: DailyBriefDataT) => Promise<void> = defaultBriefSend): Promise<void> {
+  if (send === defaultBriefSend && !emailConfigured()) return; // nothing to send without a backend (tests inject)
+  const subs = db.prepare(
+    "SELECT id, name, email, daily_brief_at AS at, COALESCE(default_timezone, 'UTC') AS tz FROM users WHERE daily_brief_at IS NOT NULL",
+  ).all() as BriefUser[];
+  for (const u of subs) {
+    const mod = tzMinuteOfDay(new Date(now), u.tz);
+    if (mod < u.at || mod >= Math.min(u.at + BRIEF_GRACE_MIN, 1440)) continue;
+    const marker = `brief:${dayIn(now, u.tz)}`;
+    if (alreadySent(u.id, marker)) continue;
+    markSent(u.id, marker);
+    const dctx = await dayContext(u.id);
+    const tasks = listTasks(u.id, "default").map((t) => ({ text: t.text, done: t.done }));
+    await send(u, composeDailyBrief(dctx, tasks, { maxEvents: 5, maxTasks: 5, showWeather: true, showDate: true }, now));
+  }
+}
 
 export async function runLifecycleSweep(now = Date.now()): Promise<void> {
   if (!emailConfigured()) return; // nothing to send without a mail backend

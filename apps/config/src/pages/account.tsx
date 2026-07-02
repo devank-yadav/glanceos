@@ -23,6 +23,9 @@ function miniSpark(values: number[]): string {
 }
 
 const dayStr = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+// #42 — minute-of-day ↔ the <input type="time"> value, for the daily-brief send time.
+const minToTime = (m: number): string => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const timeToMin = (t: string): number => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 // #151 — a habit's streak = consecutive days done, ending today (or yesterday if today isn't done
 // yet, so the streak stays alive until midnight). Points come from the #27 metric history.
 function habitStreak(points: { at: number }[]): { doneToday: boolean; streak: number } {
@@ -53,6 +56,9 @@ export function AccountPage() {
   // #149 — Focus mode: a personal toggle (stored as the `focusMode` data key) that hides
   // every block marked "Hide in Focus mode" across the user's screens.
   const [focus, setFocus] = useState(false);
+  // #42 — whether the server can send mail at all (true until told otherwise, so the
+  // warning never flashes during load).
+  const [emailReady, setEmailReady] = useState(true);
   // #147 — Home board: the user's boards, to pick a personal "home" shown on any of their
   // screens with no board of its own.
   const [boards, setBoards] = useState<SetupSummary[]>([]);
@@ -74,8 +80,8 @@ export function AccountPage() {
   const confirm = useConfirm();
 
   useEffect(() => {
-    api.get<{ user: UserInfo | null }>("/api/auth/status")
-      .then((s) => { if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); setHomeName(s.user.homeLocationName ?? null); } })
+    api.get<{ user: UserInfo | null; emailReady?: boolean }>("/api/auth/status")
+      .then((s) => { setEmailReady(s.emailReady !== false); if (s.user) { setUser(s.user); setName(s.user.name); setTz(s.user.defaultTimezone ?? ""); setHomeName(s.user.homeLocationName ?? null); } })
       .catch(() => {});
     api.get<NonNullable<typeof data>>("/api/account/data-summary").then(setData).catch(() => {});
     api.get<{ value?: unknown }>("/api/data/focusMode").then((r) => setFocus(r.value === true || r.value === "true" || r.value === "on")).catch(() => {});
@@ -180,6 +186,12 @@ export function AccountPage() {
 
   const saveHomeBoard = async (id: number | null) => {
     try { const u = await api.patch<UserInfo>("/api/account", { homeLayoutId: id }); setUser(u); toast.success(id ? "Home board set" : "Home board cleared"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+
+  // #42 — schedule (or switch off with null) the emailed daily brief.
+  const saveBrief = async (at: number | null) => {
+    try { const u = await api.patch<UserInfo>("/api/account", { dailyBriefAt: at }); setUser(u); toast.success(at != null ? `Daily brief at ${minToTime(at)}` : "Daily brief off"); }
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
@@ -340,6 +352,22 @@ export function AccountPage() {
               {focus ? "Focus is on — turn off" : "Turn Focus on"}
             </button>
           </div>
+        </section>
+
+        <section class="card account-section">
+          <h2>Daily brief by email</h2>
+          <p class="muted">The wall's calm morning brief — today's meetings, tasks and weather — in your inbox. Sent once a day at your chosen time, in your timezone.</p>
+          <div class="row">
+            <button class={user?.dailyBriefAt != null ? "primary" : "ghost"} aria-pressed={user?.dailyBriefAt != null} onClick={() => saveBrief(user?.dailyBriefAt != null ? null : 420)}>
+              {user?.dailyBriefAt != null ? "On — turn off" : "Turn on"}
+            </button>
+            {user?.dailyBriefAt != null && (
+              <label class="field"><span>Send at</span>
+                <input type="time" value={minToTime(user.dailyBriefAt)} onChange={(e) => saveBrief(timeToMin((e.currentTarget as HTMLInputElement).value))} />
+              </label>
+            )}
+          </div>
+          {!emailReady && <p class="muted">This server has no mail backend (RESEND_API_KEY or SMTP) — briefs are skipped until one is configured.</p>}
         </section>
 
         <section class="card account-section">

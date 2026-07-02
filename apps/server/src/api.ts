@@ -12,7 +12,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, consumeAuthToken, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser, getUserByEmail,
-  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserBoardDefaults, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserBoardDefaults, setUserDailyBrief, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
@@ -53,7 +53,7 @@ import {
   listInvites, listMembers, listOrgsForUser, memberRole, removeMember, renameOrg, resolveOrgForRequest, revokeInvite,
   ROLE_RANK, type Role, getOrg, isRole, setSessionActiveOrg,
 } from "./orgs";
-import { publicUrl } from "./email";
+import { emailConfigured, publicUrl } from "./email";
 import { billingSummary, canAddScreen } from "./billing";
 import { createCheckout, createPortal, handleWebhook, stripeConfigured } from "./stripe";
 import { deleteCustomData, getCustomData, listCustomData, setCustomData, setDataPrivacy } from "./customdata";
@@ -365,7 +365,9 @@ export function buildApp(): Hono<Env> {
       const o = getOrg(r.orgId);
       if (o) activeOrg = { id: o.id, name: o.name, slug: o.slug, personal: o.personal === 1, plan: o.plan };
     }
-    return c.json({ authed: !!user, user, activeOrg, role, orgs, registrationOpen: registrationOpen(), castAppId: CAST_APP_ID || null });
+    // emailReady (#42): whether the server can actually send mail, so the config can warn
+    // before someone subscribes to a brief that would silently no-op.
+    return c.json({ authed: !!user, user, activeOrg, role, orgs, registrationOpen: registrationOpen(), castAppId: CAST_APP_ID || null, emailReady: emailConfigured() });
   });
 
   app.post("/api/auth/register", async (c) => {
@@ -1541,7 +1543,7 @@ ${og}
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null; boardDefaults?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null; boardDefaults?: unknown; dailyBriefAt?: number | null };
     const userId = c.get("userId");
     let u = getUser(userId);
     if (typeof body.name === "string") {
@@ -1569,6 +1571,13 @@ ${og}
     }
     if (body.boardDefaults !== undefined) {
       u = setUserBoardDefaults(userId, body.boardDefaults); // #155 — sanitized; null/{} clears
+    }
+    if (body.dailyBriefAt !== undefined) {
+      // #42 — minute of local day the emailed brief goes out; null switches it off.
+      if (body.dailyBriefAt !== null && (!Number.isInteger(body.dailyBriefAt) || body.dailyBriefAt < 0 || body.dailyBriefAt > 1439)) {
+        return c.json({ error: "invalid time" }, 400);
+      }
+      u = setUserDailyBrief(userId, body.dailyBriefAt);
     }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });

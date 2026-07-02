@@ -36,6 +36,8 @@ export interface PublicUser {
   homeLayoutId: number | null;
   // #155 — the default theme applied to every NEW board (existing boards untouched). null = stock.
   boardDefaults: BoardDefaults | null;
+  // #42 — minute of the user's LOCAL day the emailed daily brief goes out. null = off.
+  dailyBriefAt: number | null;
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
@@ -54,6 +56,7 @@ interface UserRow {
   home_longitude: number | null;
   home_layout_id: number | null;
   board_defaults: string | null;
+  daily_brief_at: number | null;
   is_admin: number;
   onboarded_at: number | null;
   activated_at: number | null;
@@ -81,6 +84,7 @@ function toPublic(row: UserRow): PublicUser {
     homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
     homeLayoutId: row.home_layout_id ?? null,
     boardDefaults,
+    dailyBriefAt: row.daily_brief_at ?? null,
     isAdmin: (row.is_admin ?? 0) === 1,
     onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
     emailVerified: (row.email_verified ?? 0) === 1,
@@ -168,6 +172,7 @@ export function createUser(name: string, email: string, password: string): Publi
     home_longitude: null,
     home_layout_id: null,
     board_defaults: null,
+    daily_brief_at: null,
     is_admin: firstUser ? 1 : 0,
     onboarded_at: null,
     activated_at: null,
@@ -264,6 +269,12 @@ export function setUserHome(userId: string, home: { name: string; latitude: numb
  *  layouts dependency). currentLayoutId re-checks org ownership at resolve time too. */
 export function setUserHomeLayout(userId: string, layoutId: number | null): PublicUser | null {
   db.prepare("UPDATE users SET home_layout_id = ? WHERE id = ?").run(layoutId, userId);
+  return getUser(userId);
+}
+
+/** #42 — set (or clear with null) when the emailed daily brief goes out (minute of local day). */
+export function setUserDailyBrief(userId: string, atMinute: number | null): PublicUser | null {
+  db.prepare("UPDATE users SET daily_brief_at = ? WHERE id = ?").run(atMinute, userId);
   return getUser(userId);
 }
 

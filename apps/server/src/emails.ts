@@ -68,3 +68,35 @@ export async function sendDigestEmail(to: string, name: string, summary: { board
     html: html("Your week on GlanceOS", [`Hi ${name}, here's your workspace at a glance:`, `<strong>${summary.boards}</strong> boards · <strong>${summary.screens}</strong> screens (<strong>${summary.online}</strong> online right now).`], { label: "Open GlanceOS", url: publicUrl("/") }),
   });
 }
+
+// #42 — the calm morning brief, mirrored to the inbox: the same rule-based composer the
+// wall's dailyBrief block uses (NO AI). Structural param type so this file stays a thin
+// content leaf over sendEmail (no daycontext import).
+export async function sendDailyBriefEmail(
+  to: string,
+  name: string,
+  b: { greeting: string; dateLabel: string; weatherLine: string | null; events: { time: string; title: string; location?: string }[]; tasks: string[] },
+): Promise<void> {
+  const eventLines = b.events.length
+    ? b.events.map((e) => `${e.time} — ${e.title}${e.location ? ` (${e.location})` : ""}`)
+    : ["No events today."];
+  const taskLines = b.tasks.map((t) => `• ${t}`);
+  const text = [
+    `${b.greeting}, ${name}.`,
+    b.dateLabel,
+    b.weatherLine ?? "",
+    "",
+    "Today:",
+    ...eventLines,
+    ...(taskLines.length ? ["", "Tasks:", ...taskLines] : []),
+  ].filter((l, i) => l !== "" || i > 2).join("\n") + FOOT;
+  const lines: string[] = [];
+  if (b.dateLabel) lines.push(`<strong>${b.dateLabel}</strong>${b.weatherLine ? ` — ${b.weatherLine}` : ""}`);
+  else if (b.weatherLine) lines.push(b.weatherLine);
+  lines.push(`<strong>Today</strong><br>${eventLines.join("<br>")}`);
+  if (taskLines.length) lines.push(`<strong>Tasks</strong><br>${taskLines.join("<br>")}`);
+  await sendEmail(to, `${b.greeting} — ${b.dateLabel || "your day at a glance"}`, {
+    text,
+    html: html(`${b.greeting}, ${name}`, lines, { label: "Open GlanceOS", url: publicUrl("/") }),
+  });
+}
