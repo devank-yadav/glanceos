@@ -24,7 +24,7 @@ type Cond =
   | { type: "not"; condition: Cond }
   | { type: "sustained"; minutes: number; condition: Cond } // v7.0 — engine-supported; preserved on round-trip
   | { type: "timeWindow"; startMin: number; endMin: number; daysMask?: number } // gate to a daily time window
-  | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
+  | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown; valueField?: string };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string; key?: string }
 interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number; snoozedUntil?: number | null; oncePerDay?: boolean }
@@ -818,7 +818,7 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
     );
   }
   const leaf = node;
-  const patch = (p: Partial<Extract<Cond, { type: "field" }>>): Cond => ({ type: "field", field: leaf.field, op: leaf.op, value: leaf.value, value2: leaf.value2, ...p });
+  const patch = (p: Partial<Extract<Cond, { type: "field" }>>): Cond => ({ type: "field", field: leaf.field, op: leaf.op, value: leaf.value, value2: leaf.value2, valueField: leaf.valueField, ...p });
   // The left side is a single grouped picker: an object on this board, a built-in
   // sense (weather/sun/time/presence/screen/webhook), or "Custom field…" for a raw
   // dotted path. A known field then drives the op list + a matching value control.
@@ -836,6 +836,18 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
   };
   const opChoices = def?.control === "number" ? NUM_OPS : def?.control === "select" ? ["eq", "ne", "changed"] : def?.control === "text" ? TEXT_OPS : OPS;
   const valType = def?.control === "number" ? "number" : "text";
+  // #5 — the comparison side can be another field ("indoor > outdoor"). Not offered for
+  // matches (a regex) or stale (a duration), where a field on the right makes no sense.
+  const canVsField = !NO_VALUE_OPS.has(leaf.op) && leaf.op !== "matches" && leaf.op !== "stale";
+  const vsField = canVsField && leaf.valueField != null;
+  const vfMatch = objects?.find((o) => leaf.valueField === `objects.${o.id}.value`);
+  const vfDef = leaf.valueField ? fieldDef(leaf.valueField) : undefined;
+  const vfValue = vfMatch ? `obj:${vfMatch.id}` : vfDef ? `cat:${vfDef.field}` : "__custom";
+  const onVfChange = (v: string) => {
+    if (v === "__custom") return onChange(patch({ valueField: "data." }));
+    if (v.startsWith("obj:")) return onChange(patch({ valueField: `objects.${v.slice(4)}.value` }));
+    onChange(patch({ valueField: fieldDef(v.slice(4))!.field }));
+  };
   return (
     <div class="cond-row">
       <select class="cond-field" value={fieldValue} onChange={(e) => onFieldChange((e.currentTarget as HTMLSelectElement).value)}>
@@ -876,13 +888,38 @@ function ConditionNode({ node, objects, onChange, onRemove }: { node: Cond; obje
               <option value="43200">over the last 30 days</option>
             </select>
           )}
-          {!NO_VALUE_OPS.has(leaf.op) && (
+          {canVsField && (
+            <select class="cond-vs" title="Compare against a typed value or another field" value={vsField ? "field" : "value"} onChange={(e) => onChange((e.currentTarget as HTMLSelectElement).value === "field" ? patch({ valueField: "data." }) : patch({ valueField: undefined }))}>
+              <option value="value">a value</option>
+              <option value="field">another field</option>
+            </select>
+          )}
+          {vsField ? (
+            <>
+              <select class="cond-field" value={vfValue} onChange={(e) => onVfChange((e.currentTarget as HTMLSelectElement).value)}>
+                {objects && objects.length > 0 && (
+                  <optgroup label="Objects on this board">
+                    {objects.map((o) => <option key={o.id} value={`obj:${o.id}`}>{o.name}’s value</option>)}
+                  </optgroup>
+                )}
+                {CATALOG_GROUPS.map((g) => (
+                  <optgroup key={g} label={g}>
+                    {FIELD_CATALOG.filter((f) => f.group === g).map((f) => <option key={f.field} value={`cat:${f.field}`}>{f.label}</option>)}
+                  </optgroup>
+                ))}
+                <option value="__custom">Custom field…</option>
+              </select>
+              {!vfMatch && !vfDef && (
+                <input class="cond-field" value={leaf.valueField ?? ""} placeholder="data.other" onInput={(e) => onChange(patch({ valueField: (e.currentTarget as HTMLInputElement).value }))} />
+              )}
+            </>
+          ) : (!NO_VALUE_OPS.has(leaf.op) && (
             def?.control === "select"
               ? <select class="cond-val" value={String(leaf.value ?? def.options?.[0]?.value ?? "")} onChange={(e) => onChange(patch({ value: (e.currentTarget as HTMLSelectElement).value }))}>
                   {def.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               : <input class="cond-val" type={valType} value={String(leaf.value ?? "")} placeholder={leaf.op === "between" ? "min" : leaf.op === "matches" ? "regex" : "value"} onInput={(e) => onChange(patch({ value: (e.currentTarget as HTMLInputElement).value }))} />
-          )}
+          ))}
           {leaf.op === "between" && (
             <input class="cond-val" type={valType} value={String(leaf.value2 ?? "")} placeholder="max" onInput={(e) => onChange(patch({ value2: (e.currentTarget as HTMLInputElement).value }))} />
           )}

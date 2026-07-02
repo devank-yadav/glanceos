@@ -189,15 +189,20 @@ export function evaluate(
       const actual = resolvePath(ctx, cond.field);
       if (cond.op === "exists") return actual !== undefined && actual !== null;
       if (cond.op === "changed") return safeStringify(actual) !== safeStringify(prev ? resolvePath(prev, cond.field) : undefined);
-      if (cond.op === "between") { const a = num(actual), lo = num(cond.value), hi = num(cond.value2); return a !== null && lo !== null && hi !== null && a >= Math.min(lo, hi) && a <= Math.max(lo, hi); }
+      // #5 — the comparison side may be ANOTHER field ("indoor > outdoor"): `valueField`
+      // resolves from the same context and stands in for the literal wherever `value`
+      // would be read. Both sides move together each pass; a crosses* threshold reads the
+      // CURRENT context (the edge is on the watched field, not on the threshold).
+      const expected = cond.valueField ? resolvePath(ctx, cond.valueField) : cond.value;
+      if (cond.op === "between") { const a = num(actual), lo = num(expected), hi = num(cond.value2); return a !== null && lo !== null && hi !== null && a >= Math.min(lo, hi) && a <= Math.max(lo, hi); }
       // Edge comparators: fire only on the transition tick. Need both the current and the
       // prior sample (no prev → no crossing detectable → false, like "changed").
       if (cond.op === "crossesAbove" || cond.op === "crossesBelow") {
-        const a = num(actual), t = num(cond.value), p = prev ? num(resolvePath(prev, cond.field)) : null;
+        const a = num(actual), t = num(expected), p = prev ? num(resolvePath(prev, cond.field)) : null;
         if (a === null || t === null || p === null) return false;
         return cond.op === "crossesAbove" ? p <= t && a > t : p >= t && a < t;
       }
-      return compare(cond.op, actual, cond.value);
+      return compare(cond.op, actual, expected);
     }
   }
 }

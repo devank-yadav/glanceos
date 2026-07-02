@@ -21,7 +21,7 @@ export type ComparatorT = (typeof COMPARATORS)[number];
 
 // ---- Condition (recursive boolean tree) ----
 export type ConditionT =
-  | { type: "field"; field: string; op: ComparatorT; value?: unknown; value2?: unknown }
+  | { type: "field"; field: string; op: ComparatorT; value?: unknown; value2?: unknown; valueField?: string }
   | { type: "all"; conditions: ConditionT[] }
   | { type: "any"; conditions: ConditionT[] }
   | { type: "not"; condition: ConditionT }
@@ -40,6 +40,10 @@ const FieldCondition = z.object({
   op: Comparator,
   value: z.unknown().optional(),
   value2: z.unknown().optional(), // upper bound for "between"
+  // #5 — compare against ANOTHER context field instead of a literal: when set, the engine
+  // resolves this dotted path in the same context and uses it as the comparison value
+  // ("data.indoor" gt → valueField "data.outdoor"). Ignored by ops that take no value.
+  valueField: z.string().min(1).max(200).optional(),
 });
 
 export const Condition: z.ZodType<ConditionT> = z.lazy(() =>

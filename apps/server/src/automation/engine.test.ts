@@ -775,3 +775,37 @@ describe("#6 lookback windows (trend over persistent metric history)", () => {
     expect(dryRunAutomation(live, u.id).matched).toBe(false);
   });
 });
+
+describe("#5 field-to-field conditions (valueField)", () => {
+  it("compares one context field against another, in both directions", () => {
+    const vs = (indoor: number, outdoor: number) =>
+      evaluate({ type: "field", field: "data.indoor", op: "gt", valueField: "data.outdoor" }, ctx({ data: { indoor, outdoor } }));
+    expect(vs(24, 18)).toBe(true);
+    expect(vs(16, 18)).toBe(false);
+  });
+
+  it("crossesAbove takes a FIELD threshold — edge fires when the watched side overtakes it", () => {
+    const cond: ConditionT = { type: "field", field: "data.power", op: "crossesAbove", valueField: "data.solar" };
+    const before = ctx({ data: { power: 900, solar: 1000 } });
+    const after = ctx({ data: { power: 1100, solar: 1000 } });
+    expect(evaluate(cond, after, before)).toBe(true); // crossed the (field) threshold
+    expect(evaluate(cond, after, after)).toBe(false); // already above → no edge
+  });
+
+  it("fires end-to-end from two custom-data keys", async () => {
+    const u = createUser("Vs", "vsfield@example.com", "password123")!;
+    setCustomData(u.id, "indoor", 26);
+    setCustomData(u.id, "outdoor", 19);
+    createAutomation(u.id, {
+      name: "Warmer inside", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "field", field: "data.indoor", op: "gt", valueField: "data.outdoor" },
+      actions: [{ kind: "setData", key: "vs_hit", value: "yes" }],
+    });
+    await fireAutomations(u.id, "tick", { now: new Date(Date.UTC(2026, 5, 11, 8, 0)), usePrev: true });
+    expect(getCustomData(u.id, "vs_hit")).toBe("yes");
+  });
+
+  it("stays total when the referenced field is missing (no throw, no match)", () => {
+    expect(evaluate({ type: "field", field: "data.temp", op: "gt", valueField: "data.nope.deep" }, ctx())).toBe(false);
+  });
+});
