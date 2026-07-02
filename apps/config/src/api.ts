@@ -11,6 +11,7 @@ export interface UserInfo {
   homeLayoutId: number | null;
   boardDefaults: { mode?: "light" | "dark" | "auto"; fontScale?: "s" | "m" | "l"; look?: string } | null; // #155
   dailyBriefAt: number | null; // #42 — minute of local day the emailed daily brief goes out; null = off
+  alertDigestMin: number | null; // #47 — alert digest window in minutes; null = off
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;

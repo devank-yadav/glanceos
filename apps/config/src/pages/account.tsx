@@ -195,6 +195,12 @@ export function AccountPage() {
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
+  // #47 — the alert digest window (0/null = every alert interrupts as it happens).
+  const saveDigest = async (min: number | null) => {
+    try { const u = await api.patch<UserInfo>("/api/account", { alertDigestMin: min }); setUser(u); toast.success(min ? `Alerts digest every ${min} min` : "Alerts interrupt as they happen"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+
   // #155 — merge one field into the new-board defaults (stock values fall out server-side).
   const saveBoardDefaults = async (patch: Record<string, unknown>) => {
     try { const u = await api.patch<UserInfo>("/api/account", { boardDefaults: { ...(user?.boardDefaults ?? {}), ...patch } }); setUser(u); toast.success("New-board defaults saved"); }
@@ -368,6 +374,20 @@ export function AccountPage() {
             )}
           </div>
           {!emailReady && <p class="muted">This server has no mail backend (RESEND_API_KEY or SMTP) — briefs are skipped until one is configured.</p>}
+        </section>
+
+        <section class="card account-section">
+          <h2>Alert digest</h2>
+          <p class="muted">Keep the wall calm during alert-heavy stretches: hold non-critical alerts and show one combined summary on a rhythm you choose. Critical alerts always break through immediately.</p>
+          <label class="field"><span>Deliver held alerts</span>
+            <select value={String(user?.alertDigestMin ?? 0)} onChange={(e) => saveDigest(Number((e.currentTarget as HTMLSelectElement).value) || null)}>
+              <option value="0">Immediately (digest off)</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every hour</option>
+              <option value="120">Every 2 hours</option>
+            </select>
+          </label>
         </section>
 
         <section class="card account-section">

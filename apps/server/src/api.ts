@@ -12,7 +12,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, consumeAuthToken, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser, getUserByEmail,
-  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserBoardDefaults, setUserDailyBrief, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserAlertDigest, setUserBoardDefaults, setUserDailyBrief, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
@@ -1572,7 +1572,7 @@ ${og}
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null; boardDefaults?: unknown; dailyBriefAt?: number | null };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null; boardDefaults?: unknown; dailyBriefAt?: number | null; alertDigestMin?: number | null };
     const userId = c.get("userId");
     let u = getUser(userId);
     if (typeof body.name === "string") {
@@ -1607,6 +1607,13 @@ ${og}
         return c.json({ error: "invalid time" }, 400);
       }
       u = setUserDailyBrief(userId, body.dailyBriefAt);
+    }
+    if (body.alertDigestMin !== undefined) {
+      // #47 — digest window in minutes; null/0 switches digest mode off.
+      if (body.alertDigestMin !== null && (!Number.isInteger(body.alertDigestMin) || body.alertDigestMin < 0 || body.alertDigestMin > 1440)) {
+        return c.json({ error: "invalid digest window" }, 400);
+      }
+      u = setUserAlertDigest(userId, body.alertDigestMin || null);
     }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });

@@ -458,7 +458,51 @@ export function alertStorm(userId: string, now: number): "deliver" | "summarize"
   return "summarize";
 }
 
+// #47 — alert digest mode. When the user sets a digest window, non-critical alert
+// interruptions are HELD in a per-user buffer instead of hitting the wall, and the tick
+// delivers them as ONE calm summary once the window has passed. `critical` always
+// breaks through (a safety valve). The buffer + clock persist with the rest of the
+// engine's history, so a restart loses nothing.
+interface DigestEntry { severity: "info" | "warn"; title: string; body?: string; at: number }
+const digestBuffer = new Map<string, DigestEntry[]>();
+const digestLast = new Map<string, number>();
+const DIGEST_CAP = 50; // a runaway rule can't grow the buffer without bound
+export const pendingDigest = (userId: string): number => digestBuffer.get(userId)?.length ?? 0;
+
 async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
+  const every = getUser(userId)?.alertDigestMin ?? 0;
+  if (every > 0 && a.severity !== "critical") {
+    let buf = digestBuffer.get(userId);
+    if (!buf) { buf = []; digestBuffer.set(userId, buf); }
+    if (!digestLast.has(userId)) digestLast.set(userId, Date.now()); // the clock starts at the first held alert
+    buf.push({ severity: a.severity, title: a.title, body: a.body, at: Date.now() });
+    if (buf.length > DIGEST_CAP) buf.splice(0, buf.length - DIGEST_CAP);
+    return;
+  }
+  await deliverAlert(userId, a);
+}
+
+/** #47 — deliver the held alerts as one summary once the window has passed (or right
+ *  away if digest mode was switched off with alerts still held). Returns the composed
+ *  summary, or null when nothing was due. Called by the ~60s tick per user. */
+export async function flushAlertDigest(userId: string, nowMs = Date.now()): Promise<{ count: number; severity: "info" | "warn"; title: string; body: string } | null> {
+  const buf = digestBuffer.get(userId);
+  if (!buf || buf.length === 0) return null;
+  const every = getUser(userId)?.alertDigestMin ?? 0;
+  if (every > 0 && nowMs - (digestLast.get(userId) ?? 0) < every * 60_000) return null;
+  digestBuffer.delete(userId);
+  digestLast.set(userId, nowMs);
+  const severity = buf.some((e) => e.severity === "warn") ? "warn" : "info";
+  const count = buf.length;
+  // One held alert arrives verbatim — a digest of one shouldn't sound like a digest.
+  const titles = [...new Set(buf.map((e) => e.title))];
+  const title = count === 1 ? buf[0]!.title : `${count} alerts while the wall stayed calm`;
+  const body = count === 1 ? (buf[0]!.body ?? "") : titles.slice(0, 3).join(" · ") + (titles.length > 3 ? ` · +${titles.length - 3} more` : "");
+  await deliverAlert(userId, { kind: "alert", severity, title, body, target: "all" });
+  return { count, severity, title, body };
+}
+
+async function deliverAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
   // #14 — grouping: inside a storm, replace the flood with one calm summary (or stay silent).
   const verdict = alertStorm(userId, Date.now());
   if (verdict === "silent") return;
@@ -825,6 +869,7 @@ export async function runAutomationTick(now = new Date()): Promise<void> {
       await fireAutomations(userId, "presence", { ctx, now, presenceEvent: homeNow ? "enter" : "leave" });
     }
     lastPresence.set(userId, homeNow);
+    await flushAlertDigest(userId, now.getTime()); // #47 — deliver a due alert digest
     // v7.0 — per-person lanes (presence.<name>): one edge per household member.
     for (const [name, here] of Object.entries(ctx.presence?.people ?? {})) {
       const pk = `${userId}:${name}`;
@@ -850,6 +895,8 @@ const ENGINE_STATE_MAPS: Array<[string, Map<string, unknown>]> = [
   ["presence", lastPresence as Map<string, unknown>],
   ["presencePerson", lastPresencePerson as Map<string, unknown>],
   ["timeFire", lastTimeFire as Map<string, unknown>],
+  ["digestBuf", digestBuffer as Map<string, unknown>], // #47 — held alerts survive a restart
+  ["digestLast", digestLast as Map<string, unknown>],
 ];
 export function persistEngineState(): void {
   try {

@@ -38,6 +38,9 @@ export interface PublicUser {
   boardDefaults: BoardDefaults | null;
   // #42 — minute of the user's LOCAL day the emailed daily brief goes out. null = off.
   dailyBriefAt: number | null;
+  // #47 — alert digest: hold non-critical wall alerts and deliver one summary every N
+  // minutes. null/0 = off (alerts interrupt as they happen).
+  alertDigestMin: number | null;
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
@@ -57,6 +60,7 @@ interface UserRow {
   home_layout_id: number | null;
   board_defaults: string | null;
   daily_brief_at: number | null;
+  alert_digest_min: number | null;
   is_admin: number;
   onboarded_at: number | null;
   activated_at: number | null;
@@ -85,6 +89,7 @@ function toPublic(row: UserRow): PublicUser {
     homeLayoutId: row.home_layout_id ?? null,
     boardDefaults,
     dailyBriefAt: row.daily_brief_at ?? null,
+    alertDigestMin: row.alert_digest_min ?? null,
     isAdmin: (row.is_admin ?? 0) === 1,
     onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
     emailVerified: (row.email_verified ?? 0) === 1,
@@ -173,6 +178,7 @@ export function createUser(name: string, email: string, password: string): Publi
     home_layout_id: null,
     board_defaults: null,
     daily_brief_at: null,
+    alert_digest_min: null,
     is_admin: firstUser ? 1 : 0,
     onboarded_at: null,
     activated_at: null,
@@ -275,6 +281,12 @@ export function setUserHomeLayout(userId: string, layoutId: number | null): Publ
 /** #42 — set (or clear with null) when the emailed daily brief goes out (minute of local day). */
 export function setUserDailyBrief(userId: string, atMinute: number | null): PublicUser | null {
   db.prepare("UPDATE users SET daily_brief_at = ? WHERE id = ?").run(atMinute, userId);
+  return getUser(userId);
+}
+
+/** #47 — set (or clear with null) the alert digest window in minutes. */
+export function setUserAlertDigest(userId: string, minutes: number | null): PublicUser | null {
+  db.prepare("UPDATE users SET alert_digest_min = ? WHERE id = ?").run(minutes, userId);
   return getUser(userId);
 }
 

@@ -831,3 +831,37 @@ describe("#44 emailSnapshot action", () => {
     expect(snapshotFilename("")).toBe("board.png");
   });
 });
+
+describe("#47 alert digest mode", () => {
+  it("holds non-critical alerts, critical breaks through, one summary after the window", async () => {
+    const { pendingDigest, flushAlertDigest } = await import("./engine");
+    const { setUserAlertDigest } = await import("../auth");
+    const u = createUser("Digest", "digest@example.com", "password123")!;
+    setUserAlertDigest(u.id, 30);
+    const ctx0 = buildContext(u.id);
+    await runActions([{ kind: "alert", severity: "info", title: "CPU high", target: "all" }], u.id, ctx0);
+    await runActions([{ kind: "alert", severity: "warn", title: "Disk low", body: "under 5%", target: "all" }], u.id, ctx0);
+    expect(pendingDigest(u.id)).toBe(2); // held, not delivered
+    await runActions([{ kind: "alert", severity: "critical", title: "Fire", target: "all" }], u.id, ctx0);
+    expect(pendingDigest(u.id)).toBe(2); // critical bypassed the buffer entirely
+    expect(await flushAlertDigest(u.id, Date.now())).toBeNull(); // window not passed yet
+    const s = await flushAlertDigest(u.id, Date.now() + 31 * 60_000);
+    expect(s).toMatchObject({ count: 2, severity: "warn" }); // highest held severity wins
+    expect(s!.title).toContain("2 alerts");
+    expect(s!.body).toContain("CPU high");
+    expect(pendingDigest(u.id)).toBe(0); // buffer drained
+    expect(await flushAlertDigest(u.id, Date.now() + 62 * 60_000)).toBeNull(); // nothing new → quiet
+  });
+
+  it("a digest of one arrives verbatim; switching digest off flushes immediately", async () => {
+    const { pendingDigest, flushAlertDigest } = await import("./engine");
+    const { setUserAlertDigest } = await import("../auth");
+    const u = createUser("Digest2", "digest2@example.com", "password123")!;
+    setUserAlertDigest(u.id, 60);
+    await runActions([{ kind: "alert", severity: "info", title: "Backup finished", body: "42 GB", target: "all" }], u.id, buildContext(u.id));
+    expect(pendingDigest(u.id)).toBe(1);
+    setUserAlertDigest(u.id, null); // turned off with one alert still held
+    const s = await flushAlertDigest(u.id, Date.now()); // no window check when off → immediate
+    expect(s).toMatchObject({ count: 1, severity: "info", title: "Backup finished", body: "42 GB" });
+  });
+});
