@@ -9,6 +9,7 @@ export interface UserInfo {
   homeLatitude: number | null;
   homeLongitude: number | null;
   homeLayoutId: number | null;
+  boardDefaults: { mode?: "light" | "dark" | "auto"; fontScale?: "s" | "m" | "l"; look?: string } | null; // #155
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;

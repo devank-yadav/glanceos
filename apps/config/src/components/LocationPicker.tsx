@@ -12,6 +12,16 @@ export interface ChosenLocation { name: string; latitude: number; longitude: num
 const labelFor = (h: GeoHit): string => [h.name, h.admin1, h.country].filter(Boolean).join(", ");
 const browserTz = (): string | null => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 
+// #155 — your recent places: the last few picked locations (this device), shown as one-tap pills
+// so setting a second screen to "Kitchen, Delhi" doesn't mean re-searching it.
+const RECENTS_KEY = "glanceos.recentLocations";
+const loadRecents = (): ChosenLocation[] => { try { const v = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); return Array.isArray(v) ? (v as ChosenLocation[]).filter((l) => l && typeof l.name === "string").slice(0, 5) : []; } catch { return []; } };
+const saveRecent = (loc: ChosenLocation): ChosenLocation[] => {
+  const next = [loc, ...loadRecents().filter((l) => l.name !== loc.name)].slice(0, 5);
+  try { localStorage.setItem(RECENTS_KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
+  return next;
+};
+
 export function LocationPicker({
   current,
   onPick,
@@ -26,7 +36,9 @@ export function LocationPicker({
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState("");
+  const [recents, setRecents] = useState<ChosenLocation[]>(loadRecents); // #155
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pick = (loc: ChosenLocation) => { setRecents(saveRecent(loc)); onPick(loc); }; // remember, then report up
 
   useEffect(() => {
     clearTimeout(timer.current);
@@ -43,7 +55,7 @@ export function LocationPicker({
   }, [q]);
 
   const choose = (h: GeoHit) => {
-    onPick({ name: labelFor(h), latitude: h.latitude, longitude: h.longitude, timezone: h.timezone });
+    pick({ name: labelFor(h), latitude: h.latitude, longitude: h.longitude, timezone: h.timezone });
     setQ("");
     setHits([]);
   };
@@ -60,7 +72,7 @@ export function LocationPicker({
         const { latitude, longitude } = pos.coords;
         let name = "My location";
         try { name = (await api.get<{ name: string }>(`/api/reverse-geocode?lat=${latitude}&lon=${longitude}`)).name || name; } catch { /* keep fallback */ }
-        onPick({ name, latitude, longitude, timezone: browserTz() });
+        pick({ name, latitude, longitude, timezone: browserTz() });
         setLocating(false);
       },
       (err) => { setLocating(false); setGeoError(err.code === err.PERMISSION_DENIED ? "Location permission denied — search a city, or allow it in your browser settings." : "Couldn't get your location — search a city instead."); },
@@ -90,6 +102,13 @@ export function LocationPicker({
         <button class="ghost" disabled={locating} onClick={useMyLocation}>{locating ? "Locating…" : "Use my location"}</button>
       </div>
       {geoError && <p class="muted location-hint" style={{ color: "var(--bad)" }}>{geoError}</p>}
+      {recents.length > 0 && !q.trim() && (
+        <div class="row wrap location-recents" style={{ gap: "4px", marginTop: "6px" }}>
+          {recents.filter((r) => r.name !== current).map((r) => (
+            <button key={r.name} class="ghost tiny" title={`Use ${r.name}`} onClick={() => pick(r)}>{r.name}</button>
+          ))}
+        </div>
+      )}
       {busy && <p class="muted location-hint">Searching…</p>}
       {hits.length > 0 && (
         <ul class="location-results">

@@ -12,7 +12,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import {
   changePassword, consumeAuthToken, createSession, createUser, deleteUser, destroyAllSessions, destroySession, getUser, getUserByEmail,
-  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
+  isUserAdmin, markActivated, markEmailVerified, markOnboarded, mintAuthToken, registrationOpen, sessionUserId, setPassword, setUserBoardDefaults, setUserHome, setUserHomeLayout, updateUserName, updateUserTimezone, verifyLogin,
 } from "./auth";
 import { dauWau, funnelCounts, retentionD1D7, track } from "./analytics";
 import { sendDay3Email, sendInviteEmail, sendResetEmail, sendVerifyEmail, sendWelcomeEmail } from "./emails";
@@ -811,7 +811,7 @@ export function buildApp(): Hono<Env> {
       if (!parsed.success) return c.json({ error: "validation", issues: parsed.issues }, 400);
       document = { ...parsed.data, name };
     } else {
-      document = blankDocument(name);
+      document = blankDocument(name, getUser(c.get("userId"))?.boardDefaults); // #155 — the user's new-board theme
     }
     const orgId = c.get("orgId");
     const firstBoard = listSetups(orgId).length === 0;
@@ -1549,7 +1549,7 @@ ${og}
 
   // ---- account management ----
   app.patch("/api/account", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; defaultTimezone?: string | null; home?: { name: string; latitude: number; longitude: number } | null; homeLayoutId?: number | null; boardDefaults?: unknown };
     const userId = c.get("userId");
     let u = getUser(userId);
     if (typeof body.name === "string") {
@@ -1574,6 +1574,9 @@ ${og}
       }
       u = setUserHomeLayout(userId, body.homeLayoutId);
       await pushUserDevices(userId); // unassigned screens pick up the new (or cleared) home live
+    }
+    if (body.boardDefaults !== undefined) {
+      u = setUserBoardDefaults(userId, body.boardDefaults); // #155 — sanitized; null/{} clears
     }
     return u ? c.json(u) : c.json({ error: "not found" }, 404);
   });

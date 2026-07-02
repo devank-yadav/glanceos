@@ -7,6 +7,20 @@ import { isValidTimezone } from "./devices";
 
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 
+// #155 — a user's default theme for every NEW board. Values mirror the schema's theme enums;
+// sanitize() keeps only known values so a bad payload can never produce an unparseable board.
+export interface BoardDefaults { mode?: "light" | "dark" | "auto"; fontScale?: "s" | "m" | "l"; look?: "editorial" | "terminal" | "grotesk" | "stencil" }
+const BD_MODES = ["light", "dark", "auto"], BD_SCALES = ["s", "m", "l"], BD_LOOKS = ["editorial", "terminal", "grotesk", "stencil"];
+export function sanitizeBoardDefaults(v: unknown): BoardDefaults | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const out: BoardDefaults = {};
+  if (BD_MODES.includes(o.mode as string)) out.mode = o.mode as BoardDefaults["mode"];
+  if (BD_SCALES.includes(o.fontScale as string)) out.fontScale = o.fontScale as BoardDefaults["fontScale"];
+  if (BD_LOOKS.includes(o.look as string)) out.look = o.look as BoardDefaults["look"];
+  return Object.keys(out).length ? out : null;
+}
+
 export interface PublicUser {
   id: string;
   name: string;
@@ -20,6 +34,8 @@ export interface PublicUser {
   // #147 — the user's personal "home board": shows on any of their screens with no board of
   // its own (and only when that board belongs to the screen's org). null = no home board.
   homeLayoutId: number | null;
+  // #155 — the default theme applied to every NEW board (existing boards untouched). null = stock.
+  boardDefaults: BoardDefaults | null;
   isAdmin: boolean;
   onboardedAt: number | null;
   activatedAt: number | null;
@@ -37,6 +53,7 @@ interface UserRow {
   home_latitude: number | null;
   home_longitude: number | null;
   home_layout_id: number | null;
+  board_defaults: string | null;
   is_admin: number;
   onboarded_at: number | null;
   activated_at: number | null;
@@ -57,10 +74,13 @@ export function verifyHash(password: string, stored: string): boolean {
 }
 
 function toPublic(row: UserRow): PublicUser {
+  let boardDefaults: BoardDefaults | null = null;
+  if (row.board_defaults) { try { boardDefaults = sanitizeBoardDefaults(JSON.parse(row.board_defaults)); } catch { /* malformed → stock */ } }
   return {
     id: row.id, name: row.name, email: row.email, defaultTimezone: row.default_timezone ?? null,
     homeLocationName: row.home_location_name ?? null, homeLatitude: row.home_latitude ?? null, homeLongitude: row.home_longitude ?? null,
     homeLayoutId: row.home_layout_id ?? null,
+    boardDefaults,
     isAdmin: (row.is_admin ?? 0) === 1,
     onboardedAt: row.onboarded_at ?? null, activatedAt: row.activated_at ?? null,
     emailVerified: (row.email_verified ?? 0) === 1,
@@ -147,6 +167,7 @@ export function createUser(name: string, email: string, password: string): Publi
     home_latitude: null,
     home_longitude: null,
     home_layout_id: null,
+    board_defaults: null,
     is_admin: firstUser ? 1 : 0,
     onboarded_at: null,
     activated_at: null,
@@ -243,6 +264,13 @@ export function setUserHome(userId: string, home: { name: string; latitude: numb
  *  layouts dependency). currentLayoutId re-checks org ownership at resolve time too. */
 export function setUserHomeLayout(userId: string, layoutId: number | null): PublicUser | null {
   db.prepare("UPDATE users SET home_layout_id = ? WHERE id = ?").run(layoutId, userId);
+  return getUser(userId);
+}
+
+/** #155 — set (or clear with null) the default theme for the user's NEW boards. Sanitized. */
+export function setUserBoardDefaults(userId: string, defaults: unknown): PublicUser | null {
+  const clean = sanitizeBoardDefaults(defaults);
+  db.prepare("UPDATE users SET board_defaults = ? WHERE id = ?").run(clean ? JSON.stringify(clean) : null, userId);
   return getUser(userId);
 }
 

@@ -178,6 +178,12 @@ export function AccountPage() {
     catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
   };
 
+  // #155 — merge one field into the new-board defaults (stock values fall out server-side).
+  const saveBoardDefaults = async (patch: Record<string, unknown>) => {
+    try { const u = await api.patch<UserInfo>("/api/account", { boardDefaults: { ...(user?.boardDefaults ?? {}), ...patch } }); setUser(u); toast.success("New-board defaults saved"); }
+    catch (e) { toast.error(String(e instanceof Error ? e.message : e)); }
+  };
+
   const toggleFocus = async () => {
     const nextOn = !focus;
     setFocus(nextOn);
@@ -295,6 +301,30 @@ export function AccountPage() {
               {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </label>
+        </section>
+
+        <section class="card account-section">
+          <h2>New-board defaults</h2>
+          <p class="muted">Your taste, applied to every board you create from now on — theme, type size, and look. Existing boards are untouched.</p>
+          <div class="row wrap" style={{ gap: "10px" }}>
+            <label class="field"><span>Theme</span>
+              <select value={user?.boardDefaults?.mode ?? "light"} onChange={(e) => saveBoardDefaults({ mode: (e.currentTarget as HTMLSelectElement).value })}>
+                <option value="light">Light</option><option value="dark">Dark</option><option value="auto">Auto (day / night)</option>
+              </select>
+            </label>
+            <label class="field"><span>Type size</span>
+              <select value={user?.boardDefaults?.fontScale ?? "m"} onChange={(e) => saveBoardDefaults({ fontScale: (e.currentTarget as HTMLSelectElement).value })}>
+                <option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option>
+              </select>
+            </label>
+            <label class="field"><span>Look</span>
+              <select value={user?.boardDefaults?.look ?? ""} onChange={(e) => saveBoardDefaults({ look: (e.currentTarget as HTMLSelectElement).value || undefined })}>
+                <option value="">Default (calm sans)</option>
+                <option value="editorial">Editorial</option><option value="terminal">Terminal</option>
+                <option value="grotesk">Grotesk</option><option value="stencil">Stencil</option>
+              </select>
+            </label>
+          </div>
         </section>
 
         <section class="card account-section">

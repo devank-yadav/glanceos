@@ -161,12 +161,15 @@ export function listSetups(orgId: string, opts: { archived?: boolean } = {}): Se
   }));
 }
 
-export function blankDocument(name: string): LayoutT {
+export function blankDocument(name: string, defaults?: { mode?: string; fontScale?: string; look?: string } | null): LayoutT {
   return Layout.parse({
     schemaVersion: 3,
     name,
     gap: 2,
     rows: [],
+    // #155 — the user's new-board theme defaults (absent = stock light/m/no-look). Values are
+    // sanitized at write time (auth.sanitizeBoardDefaults), so parse can't fail on them.
+    ...(defaults ? { theme: { mode: defaults.mode ?? "light", fontScale: defaults.fontScale ?? "m", ...(defaults.look ? { look: defaults.look } : {}) } } : {}),
   });
 }
 
