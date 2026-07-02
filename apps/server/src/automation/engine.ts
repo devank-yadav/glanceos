@@ -2,7 +2,7 @@ import type { ActionT, AutomationT, ComparatorT, ConditionT, LayoutT, TriggerT, 
 import { getUser, userHomeGeo } from "../auth";
 import { getCustomData, listCustomData, setCustomData } from "../customdata";
 import { applyScene } from "../scenes";
-import { getOwnedLayout, updateLayout } from "../layouts";
+import { getLayout, getOwnedLayout, updateLayout } from "../layouts";
 import { addTask } from "../tasks";
 import { advanceQueue } from "../queues";
 import { deviceProfile, devicesOwnedBy, getDevice, updateDevice, type DeviceRow } from "../devices";
@@ -19,6 +19,9 @@ import { resolveSource } from "../providers/resolve";
 import { allBlocks } from "../widgets";
 import { db } from "../db";
 import { metricSeries } from "../metrics";
+import { emailConfigured } from "../email";
+import { sendSnapshotEmail } from "../emails";
+import { boardSnapshotPng, snapshotFilename } from "../snapshot";
 import { calendarContext, resolveUserCalendar, resolveUserWeather, type DayCalendar, type DayWeather } from "../daycontext";
 // Re-export the day-context helpers from their new leaf home so existing call sites
 // (the tick below, engine.test) keep importing them from "./engine".
@@ -495,6 +498,22 @@ async function execAction(a: ActionT, userId: string, ctx: Ctx, board?: { id: nu
       await pushDevice(a.deviceId);
       break;
     }
+    // #44 — render the board and mail it to the rule's OWNER. Checks ordered cheap-first:
+    // access, then backend, then the headless render (the slow part). Data resolves under
+    // the RULE OWNER with the board org's connections — what their wall shows; a shared
+    // board never renders its owner's private-marked data into someone else's inbox.
+    case "emailSnapshot": {
+      // Direct ownership first (covers org-less/legacy boards), else org/share access.
+      const cand = getLayout(a.layoutId);
+      const rec = cand && cand.userId === userId ? cand : getWritableLayout(a.layoutId, userId);
+      if (!rec) throw new Error("board not found or not yours");
+      if (!emailConfigured()) throw new Error("no mail backend configured");
+      const user = getUser(userId);
+      if (!user) throw new Error("user missing");
+      const png = await boardSnapshotPng({ document: rec.document, name: rec.name, version: rec.version }, userId, rec.orgId ?? undefined);
+      if (!(await sendSnapshotEmail(user.email, rec.name, png, snapshotFilename(rec.name)))) throw new Error("send failed");
+      break;
+    }
     case "notify": createIfAbsent(userId, null, "automation", a.message, `auto:${a.message}:${dayOf(ctx)}`); break;
     case "alert": await emitAlert(userId, a); break;
     // assertSafeUrl inside; the marker header lets our own inlet handler skip
@@ -856,6 +875,7 @@ const describeAction = (a: ActionT): string => {
   switch (a.kind) {
     case "setData": return `set data "${a.key}"`;
     case "applyScene": return `apply scene #${a.sceneId}`;
+    case "emailSnapshot": return `email me a snapshot of board #${a.layoutId}`;
     case "addTask": return `add task "${a.text}"`;
     case "advanceQueue": return `advance queue "${a.queueId}" by ${a.delta ?? 1}`;
     case "switchBoard": return `switch a screen to board #${a.layoutId}`;

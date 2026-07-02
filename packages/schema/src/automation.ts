@@ -130,11 +130,14 @@ export const Action = z.discriminatedUnion("kind", [
   // #150 Routines — apply a saved scene (#3): one step writes a whole named set of data values.
   // Chaining these with `afterMinutes` makes a "routine" (a morning / evening sequence).
   act({ kind: z.literal("applyScene"), sceneId: z.number().int() }),
+  // #44 — email a live PNG snapshot of a board to the rule's OWNER (no recipient field, by
+  // design: a rule can never mail anyone else). "Every Friday 17:00, send me the metrics wall."
+  act({ kind: z.literal("emailSnapshot"), layoutId: z.number().int() }),
   // Pause between actions (a Shortcuts "Wait").
   act({ kind: z.literal("delay"), ms: z.number().int().min(50).max(5_000) }), // bounded: a delay blocks the shared automation tick
 ]);
 export type ActionT = z.infer<typeof Action>;
-export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp", "showObject", "hideObject", "incrementData", "toggleData", "applyScene", "delay"] as const;
+export const ACTION_KINDS = ["setData", "addTask", "advanceQueue", "switchBoard", "notify", "alert", "webhook", "setObjectText", "setObjectProp", "showObject", "hideObject", "incrementData", "toggleData", "applyScene", "emailSnapshot", "delay"] as const;
 
 // ---- Automation ----
 export const MAX_CONDITION_DEPTH = 12; // the UI builder never needs more; bounds recursion

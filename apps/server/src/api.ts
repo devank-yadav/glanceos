@@ -70,6 +70,7 @@ import {
 import { dryRunAutomation, fireDataChanged, runAutomationById } from "./automation/engine";
 import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
+import { boardSnapshotPng, snapshotFilename } from "./snapshot";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
   pushGroupDevices, pushUserDevices, scheduledSig,
@@ -936,6 +937,26 @@ export function buildApp(): Hono<Env> {
     const copy = duplicateLayout(Number(c.req.param("id")), c.get("orgId"), c.get("userId"));
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
+  });
+
+  // #44 — download a board as a full-color PNG snapshot: the real screen runtime, rendered
+  // headlessly with the requester's live data (org connections; #156 private data stays —
+  // it's going to the requester's own disk). ?w/?h pick the size (bounded).
+  app.get("/api/layouts/:id/snapshot.png", async (c) => {
+    const rec = getOwnedLayout(Number(c.req.param("id")), c.get("orgId"));
+    if (!rec) return c.json({ error: "not found" }, 404);
+    if (!(await renderAvailable())) return c.json({ error: "render support not installed" }, 503);
+    const w = Math.min(Math.max(Number(c.req.query("w")) || 1280, 320), 3840);
+    const h = Math.min(Math.max(Number(c.req.query("h")) || 800, 240), 2160);
+    try {
+      const buf = await boardSnapshotPng({ document: rec.document, name: rec.name, version: rec.version }, c.get("userId"), c.get("orgId"), w, h);
+      return new Response(Uint8Array.from(buf), {
+        status: 200,
+        headers: { "content-type": "image/png", "cache-control": "no-store", "content-disposition": `attachment; filename="${snapshotFilename(rec.name)}"` },
+      });
+    } catch (e) {
+      return serverError(c, e);
+    }
   });
 
   // ---- board version history (browse + restore past states) ----

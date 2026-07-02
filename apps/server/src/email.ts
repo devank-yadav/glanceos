@@ -7,7 +7,10 @@
 //   • SMTP_HOST (+ SMTP_PORT/SMTP_USER/SMTP_PASS) → nodemailer, imported dynamically
 //     so it stays an OPTIONAL dependency (same trick as the opt-in `ioredis` scale path)
 
-export interface EmailMessage { text?: string; html?: string }
+// #44 — optional attachments (board snapshots). Kept tiny: filename + raw bytes; each
+// backend maps to its own wire shape (Resend wants base64, nodemailer takes a Buffer).
+export interface EmailAttachment { filename: string; content: Buffer; contentType?: string }
+export interface EmailMessage { text?: string; html?: string; attachments?: EmailAttachment[] }
 
 type Backend = "resend" | "smtp" | null;
 
@@ -53,7 +56,10 @@ async function sendViaResend(to: string, subject: string, msg: EmailMessage): Pr
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ from: fromAddress(), to, subject, text: msg.text, html: msg.html }),
+    body: JSON.stringify({
+      from: fromAddress(), to, subject, text: msg.text, html: msg.html,
+      attachments: msg.attachments?.map((a) => ({ filename: a.filename, content: a.content.toString("base64") })),
+    }),
   });
   if (!res.ok) {
     console.error(`[email] Resend ${res.status}: ${await res.text().catch(() => "")}`);
@@ -83,6 +89,9 @@ async function sendViaSmtp(to: string, subject: string, msg: EmailMessage): Prom
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
     });
   }
-  await transport.sendMail({ from: fromAddress(), to, subject, text: msg.text, html: msg.html });
+  await transport.sendMail({
+    from: fromAddress(), to, subject, text: msg.text, html: msg.html,
+    attachments: msg.attachments?.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
+  });
   return true;
 }

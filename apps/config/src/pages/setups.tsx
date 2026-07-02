@@ -256,6 +256,9 @@ function SetupCard({ setup, folders, onChanged, isFav, onToggleFav }: { setup: S
               { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
               { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
               { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
+              // #44 — a live full-color PNG of the board (rendered server-side; same-origin
+              // GET so the session cookie rides along and the browser saves the download).
+              { label: "Download snapshot", icon: <Icon.download />, onClick: () => { window.location.href = `/api/layouts/${setup.id}/snapshot.png`; } },
               ...folders.filter((f) => f !== setup.folder).map((f) => ({ label: `Move to "${f}"`, icon: <Icon.layers />, onClick: () => moveTo(f) })),
               { label: "Move to new folder…", icon: <Icon.plus />, onClick: newFolder },
               ...(setup.folder ? [{ label: "Remove from folder", icon: <Icon.x />, onClick: () => moveTo(null) }] : []),

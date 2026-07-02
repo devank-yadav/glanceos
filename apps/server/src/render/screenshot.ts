@@ -33,33 +33,45 @@ export async function renderAvailable(): Promise<boolean> {
   }
 }
 
-async function attemptRender(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Uint8Array> {
+async function attemptShot(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Buffer> {
   const page = await (await browser()).newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   try {
     await page.goto(`${baseUrl}/screen/?preview=1`, { waitUntil: "load", timeout: 12_000 });
     await page.evaluate((p) => window.postMessage({ type: "glanceos:state", payload: p }, "*"), payload as unknown);
     await page.waitForTimeout(500); // let the DOM paint and ticking widgets settle
-    const png = await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: w, height: h } });
-    const { data } = await sharp(png).greyscale().raw().toBuffer({ resolveWithObject: true });
-    return new Uint8Array(data);
+    return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: w, height: h } });
   } finally {
     await page.close().catch(() => {});
   }
 }
 
-/** Screenshot the board at w×h and return an 8-bit grayscale buffer. One retry
- *  (resetting the browser) so a crashed/zombie Chromium self-heals. */
-export async function renderGray(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Uint8Array> {
+/** One retry (resetting the browser) so a crashed/zombie Chromium self-heals. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await attemptRender(baseUrl, payload, w, h);
+      return await fn();
     } catch (e) {
       lastErr = e;
       browserPromise = null; // force a fresh browser on the retry
     }
   }
   throw lastErr;
+}
+
+/** Screenshot the board at w×h and return an 8-bit grayscale buffer (the e-ink path). */
+export function renderGray(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Uint8Array> {
+  return withRetry(async () => {
+    const png = await attemptShot(baseUrl, payload, w, h);
+    const { data } = await sharp(png).greyscale().raw().toBuffer({ resolveWithObject: true });
+    return new Uint8Array(data);
+  });
+}
+
+/** #44 — the same screenshot before the grayscale pass: a full-color PNG of what a
+ *  web/TV wall shows. Uncached (snapshots are on-demand and should be current). */
+export function renderColorPng(baseUrl: string, payload: StreamPayloadT, w: number, h: number): Promise<Buffer> {
+  return withRetry(() => attemptShot(baseUrl, payload, w, h));
 }
 
 /** Expand a 1-bit buffer back to a grayscale PNG (for the dashboard preview). */

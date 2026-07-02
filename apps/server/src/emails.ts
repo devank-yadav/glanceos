@@ -100,3 +100,13 @@ export async function sendDailyBriefEmail(
     html: html(`${b.greeting}, ${name}`, lines, { label: "Open GlanceOS", url: publicUrl("/") }),
   });
 }
+
+// #44 — a live board snapshot, attached. Only ever sent to the automation owner's own
+// address (the action takes no recipient), so a rule can't be turned into a spam cannon.
+export async function sendSnapshotEmail(to: string, boardName: string, png: Buffer, filename: string): Promise<boolean> {
+  return sendEmail(to, `Snapshot: ${boardName}`, {
+    text: `A live snapshot of "${boardName}" is attached.${FOOT}`,
+    html: html(`Snapshot of ${boardName}`, ["A live snapshot of your board is attached, exactly as a screen shows it right now."], { label: "Open GlanceOS", url: publicUrl("/") }),
+    attachments: [{ filename, content: png, contentType: "image/png" }],
+  });
+}

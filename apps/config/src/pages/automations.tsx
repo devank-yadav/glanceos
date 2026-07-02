@@ -161,6 +161,7 @@ const ACTION_KINDS: { id: string; label: string }[] = [
   { id: "advanceQueue", label: "Advance a queue" },
   { id: "switchBoard", label: "Switch a screen's board" },
   { id: "applyScene", label: "Apply a scene" },
+  { id: "emailSnapshot", label: "Email me a board snapshot" },
   { id: "notify", label: "Send a notification" },
   { id: "alert", label: "Show an on-screen alert" },
   { id: "webhook", label: "Call a webhook (outbound)" },
@@ -187,6 +188,7 @@ const defaultAction = (kind: string, objects?: ObjOption[]): Action => {
     case "advanceQueue": return { kind, queueId: "", delta: 1 };
     case "switchBoard": return { kind, deviceId: "", layoutId: 0 };
     case "applyScene": return { kind, sceneId: 0 };
+    case "emailSnapshot": return { kind, layoutId: 0 };
     case "notify": return { kind, message: "" };
     case "alert": return { kind, severity: "info", title: "", target: "all" };
     case "delay": return { kind, ms: 1000 };
@@ -498,6 +500,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     if (act.kind === "setObjectText" || act.kind === "showObject" || act.kind === "hideObject") return !!act.objectId;
     if (act.kind === "switchBoard") return !!String(act.deviceId ?? "").trim() && Number(act.layoutId) > 0; // recipe seeds blanks → must pick a screen + board
     if (act.kind === "applyScene") return Number(act.sceneId) > 0; // must pick a scene
+    if (act.kind === "emailSnapshot") return Number(act.layoutId) > 0; // must pick a board
     if (act.kind === "advanceQueue") return !!String(act.queueId ?? "").trim();
     if (act.kind === "addTask") return !!String(act.text ?? "").trim();
     return true;
@@ -508,7 +511,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
   // server scopes the rule to this board.
   const normalize = (): Automation => {
     const norm = (c: Cond): Cond => {
-      if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value), value2: coerce(c.value2) };
+      if (c.type === "field") return { type: "field", field: c.field, op: c.op, value: coerce(c.value), value2: coerce(c.value2), valueField: c.valueField?.trim() || undefined }; // #5 — keep the field-to-field side
       if (c.type === "not") return { type: "not", condition: norm(c.condition) };
       if (c.type === "sustained") return { type: "sustained", minutes: c.minutes, condition: norm(c.condition) }; // preserve engine sustained nodes
       if (c.type === "timeWindow") return { type: "timeWindow", startMin: c.startMin, endMin: c.endMin, daysMask: c.daysMask ?? 127 };
@@ -519,7 +522,7 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
     // (accepts undefined, not null); sending null fails validation.
     const conditions = root && (root.type === "all" || root.type === "any") && root.conditions.length === 0 ? undefined : root ? norm(root) : undefined;
     const actions = a.actions.map((act) =>
-      act.kind === "switchBoard" ? { ...act, layoutId: Number(act.layoutId) || 0 }
+      act.kind === "switchBoard" || act.kind === "emailSnapshot" ? { ...act, layoutId: Number(act.layoutId) || 0 }
         : act.kind === "applyScene" ? { ...act, sceneId: Number(act.sceneId) || 0 }
         : act.kind === "advanceQueue" ? { ...act, delta: Number(act.delta) || 1 }
           : act.kind === "incrementData" ? { ...act, delta: Number(act.delta) || 1 }
@@ -1010,6 +1013,20 @@ function ActionFields({ action, objects, devices, boards, scenes, loaded, onChan
             {boardList.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </>
+      );
+    }
+    case "emailSnapshot": {
+      // #44 — one dropdown: which board to photograph. It always mails the rule's owner.
+      const lay = action.layoutId != null ? Number(action.layoutId) : 0;
+      const boardList = boards ?? [];
+      const layMissing = !!lay && !boardList.some((b) => b.id === lay);
+      const emptyLabel = !loaded ? "Loading boards…" : "No boards yet — create one first";
+      return (
+        <select class="grow" value={lay ? String(lay) : ""} disabled={boardList.length === 0} onChange={(e) => f("layoutId", Number((e.currentTarget as HTMLSelectElement).value) || 0)}>
+          <option value="" disabled>{boardList.length ? "Pick a board to snapshot…" : emptyLabel}</option>
+          {layMissing && <option value={String(lay)}>{`⚠ board #${lay} (missing)`}</option>}
+          {boardList.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
       );
     }
     case "applyScene": {

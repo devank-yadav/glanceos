@@ -809,3 +809,25 @@ describe("#5 field-to-field conditions (valueField)", () => {
     expect(evaluate({ type: "field", field: "data.temp", op: "gt", valueField: "data.nope.deep" }, ctx())).toBe(false);
   });
 });
+
+describe("#44 emailSnapshot action", () => {
+  it("errors cleanly (run survives) on a missing board, and on a missing mail backend BEFORE any render", async () => {
+    const u = createUser("Snap", "snap@example.com", "password123")!;
+    const noBoard = await runActions([{ kind: "emailSnapshot", layoutId: 999_999 }], u.id, buildContext(u.id));
+    expect(noBoard.errors.join()).toContain("board not found");
+    const board = createLayout("Snappable", {
+      schemaVersion: 3, name: "Snappable",
+      rows: [{ id: "r1", blocks: [{ id: "h1", type: "heading", props: { content: "Hi" } }] }],
+    } as Parameters<typeof createLayout>[1], { userId: u.id });
+    // access passes → the next (cheap) gate is the mail backend; the slow headless
+    // render must never start on a backend-less install.
+    const noMail = await runActions([{ kind: "emailSnapshot", layoutId: board.id }], u.id, buildContext(u.id));
+    expect(noMail.errors.join()).toContain("no mail backend");
+  });
+
+  it("snapshotFilename yields a safe download name", async () => {
+    const { snapshotFilename } = await import("../snapshot");
+    expect(snapshotFilename("Team Wall (Q3) — Metrics!")).toBe("team-wall-q3-metrics.png");
+    expect(snapshotFilename("")).toBe("board.png");
+  });
+});
