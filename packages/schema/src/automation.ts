@@ -143,6 +143,8 @@ export const Automation = z.object({
   // v6.1 — "at most once per N minutes": after a run, stay quiet for the cooldown so a
   // condition that holds for a while (rain, low battery) doesn't re-fire every tick. 0 = off.
   cooldownMinutes: z.number().int().min(0).max(1440).optional(),
+  // #7 — fire at most once per LOCAL day (resets at the user's midnight, unlike a rolling cooldown).
+  oncePerDay: z.boolean().optional(),
 }).superRefine((a, ctx) => {
   if (a.conditions && conditionDepth(a.conditions) > MAX_CONDITION_DEPTH) {
     ctx.addIssue({ code: "custom", message: `conditions nested deeper than ${MAX_CONDITION_DEPTH}`, path: ["conditions"] });

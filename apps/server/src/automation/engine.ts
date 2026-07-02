@@ -40,6 +40,7 @@ export interface Ctx {
   webhook: unknown; // inlet payload (webhook trigger)
   device: Record<string, unknown>; // the device that transitioned (online/offline triggers)
   time: { hour: number; minute: number; minuteOfDay: number; weekday: number; ts: number; isWeekend: boolean; isWorkday: boolean };
+  tz: string; // #7 — the timezone the wall-clock fields were computed in (for local-day math)
   // v5.0 substrate — today's sun, in the user's location/timezone (undefined if no
   // screen has a location set). Lets boards react to daylight: `sun.isDaytime`,
   // `sun.minsToSunset`, etc. Also powers the "sun" trigger.
@@ -210,6 +211,12 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // daysMask. Weekend = Sat/Sun in the user's own timezone; workday = Mon–Fri.
 const withDayType = (t: Omit<Ctx["time"], "isWeekend" | "isWorkday">): Ctx["time"] =>
   ({ ...t, isWeekend: t.weekday === 0 || t.weekday === 6, isWorkday: t.weekday >= 1 && t.weekday <= 5 });
+// #7 — a timestamp's LOCAL date (YYYY-MM-DD) in a timezone; the once-per-day latch compares these
+// so a rule that fired at 23:55 can fire again at 00:05 (unlike a rolling 24 h cooldown).
+export function dayKeyIn(ts: number, tz: string): string {
+  try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts)); }
+  catch { return new Date(ts).toISOString().slice(0, 10); }
+}
 // Wall-clock parts in the user's timezone — the "time" trigger means *their* 09:00,
 // not the server's (containers commonly run UTC). Falls back to server local time.
 function zonedTime(now: Date, tz: string): Ctx["time"] {
@@ -265,6 +272,7 @@ export function buildContext(userId: string, opts: { webhook?: unknown; device?:
     webhook: opts.webhook ?? {},
     device: opts.device ?? {},
     time,
+    tz,
     sun: sunContext(userId, now, tz, time.minuteOfDay),
     weather: opts.live?.weather,
     presence: presenceFromData(data),
@@ -395,8 +403,33 @@ function alertTargets(userId: string, a: Extract<ActionT, { kind: "alert" }>): D
   return devicesOwnedBy(userId).filter((d) => isConnected(d.id));
 }
 
+// #14 — alert grouping: a storm of full-screen alerts collapses into ONE calm summary. Per-user
+// in-memory timestamps (re-baselines on restart like the rest of the engine's history): from the
+// (N+1)th alert inside the window, each delivery is replaced by a single once-per-window summary
+// banner. The notification bell still records every underlying event via its own action.
+const ALERT_WINDOW_MS = 10 * 60_000;
+const ALERT_STORM_AFTER = 3; // alerts within the window before grouping kicks in
+const recentAlerts = new Map<string, number[]>();
+const stormSummaryAt = new Map<string, number>();
+/** Record an alert and decide: deliver normally, summarize (first grouped one), or stay silent. */
+export function alertStorm(userId: string, now: number): "deliver" | "summarize" | "silent" {
+  const times = (recentAlerts.get(userId) ?? []).filter((t) => now - t < ALERT_WINDOW_MS);
+  times.push(now);
+  recentAlerts.set(userId, times);
+  if (times.length <= ALERT_STORM_AFTER) return "deliver";
+  const lastSummary = stormSummaryAt.get(userId) ?? 0;
+  if (now - lastSummary < ALERT_WINDOW_MS) return "silent"; // this storm was already summarized
+  stormSummaryAt.set(userId, now);
+  return "summarize";
+}
+
 async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
-  const payload = { severity: a.severity, title: a.title, body: a.body, ttl: a.ttlSeconds };
+  // #14 — grouping: inside a storm, replace the flood with one calm summary (or stay silent).
+  const verdict = alertStorm(userId, Date.now());
+  if (verdict === "silent") return;
+  const payload = verdict === "summarize"
+    ? { severity: "info" as const, title: "Several alerts in the last few minutes", body: "Grouped to keep the wall calm — see Notifications for the details.", ttl: a.ttlSeconds }
+    : { severity: a.severity, title: a.title, body: a.body, ttl: a.ttlSeconds };
   const mode = a.respectQuiet ?? "off";
   for (const d of alertTargets(userId, a)) {
     if (mode !== "off" && mode !== "hold" && deviceQuiet(d).quiet) {
@@ -685,6 +718,9 @@ export async function fireAutomations(
       // #14 — snooze: a user muted this rule until snoozedUntil. Skip silently (don't record a
       // run) while snoozed, so a noisy alert rule can be paused without deleting or disabling it.
       if (a.snoozedUntil != null && ctx.time.ts < a.snoozedUntil) continue;
+      // #7 — "at most once per day": the last matched fire was on the same LOCAL day → skip
+      // silently (resets at the user's midnight, so a morning rule greets each new day).
+      if (a.oncePerDay && a.lastRun != null && dayKeyIn(a.lastRun, ctx.tz) === dayKeyIn(ctx.time.ts, ctx.tz)) continue;
       // Cooldown: stay quiet for N minutes after a run so a long-held condition
       // (rain, low battery) doesn't re-fire every tick. lastRun is the persisted
       // last *matched* fire; we skip silently (keep lastRun) until it expires.

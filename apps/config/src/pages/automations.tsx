@@ -27,7 +27,7 @@ type Cond =
   | { type: "field"; field: string; op: string; value?: unknown; value2?: unknown };
 interface Action { kind: string; [k: string]: unknown }
 interface Trigger { kind: string; atMinute?: number; daysMask?: number; event?: string; offsetMin?: number; everyMinutes?: number; person?: string }
-interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number; snoozedUntil?: number | null }
+interface Automation { id?: string; name: string; enabled: boolean; trigger: Trigger; conditions?: Cond | null; actions: Action[]; layoutId?: number | null; lastRun?: number | null; runCount?: number; cooldownMinutes?: number; snoozedUntil?: number | null; oncePerDay?: boolean }
 
 // One of the current board's named objects, offered in the pickers. `settable` is
 // false for live-data blocks (they're read-only). `prop` is the primary text prop.
@@ -652,6 +652,10 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
           <input type="number" min="0" max="1440" step="1" style={{ width: "5.5rem" }} value={a.cooldownMinutes ?? 0} onInput={(e) => set({ cooldownMinutes: Math.round(Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0))) })} />
           <span class="muted">minutes — 0 means every time it matches. Keeps a long-held condition (rain, low battery) from re-firing each tick.</span>
         </span>
+      </label>
+      <label class="field checkbox">
+        <input type="checkbox" checked={!!a.oncePerDay} onChange={(e) => set({ oncePerDay: (e.currentTarget as HTMLInputElement).checked || undefined })} />
+        <span>At most once per day <span class="muted">— resets at your midnight (a morning rule greets each new day once)</span></span>
       </label>
 
       <div class="field"><span>Then do</span>

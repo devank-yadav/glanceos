@@ -645,3 +645,44 @@ describe("#14 per-rule snooze", () => {
     expect(getCustomData(user.id, "snz_ran")).toBe("yes"); // now it runs
   });
 });
+
+const { alertStorm, dayKeyIn } = await import("./engine");
+
+describe("#7 once-per-day latch", () => {
+  it("dayKeyIn is the LOCAL date (tz-aware, midnight-boundary correct)", () => {
+    const ts = Date.parse("2026-07-01T23:30:00Z");
+    expect(dayKeyIn(ts, "UTC")).toBe("2026-07-01");
+    expect(dayKeyIn(ts, "Asia/Kolkata")).toBe("2026-07-02"); // 05:00 next day in IST
+    expect(dayKeyIn(ts, "not-a-tz")).toBe("2026-07-01"); // bad tz → ISO fallback
+  });
+
+  it("fires once, stays quiet the rest of the day, fires again the next day", async () => {
+    const a = createAutomation(user.id, {
+      name: "Daily once", enabled: true, trigger: { kind: "tick" }, oncePerDay: true,
+      actions: [{ kind: "setData", key: "opd_ran", value: "yes" }],
+    });
+    await fireAutomations(user.id, "tick", { now: new Date() });
+    expect(getCustomData(user.id, "opd_ran")).toBe("yes"); // first fire of the day
+    setCustomData(user.id, "opd_ran", "cleared");
+    await fireAutomations(user.id, "tick", { now: new Date() });
+    expect(getCustomData(user.id, "opd_ran")).toBe("cleared"); // same day → latched
+    // rewind the last matched fire to yesterday → a new local day → fires again
+    db.prepare("UPDATE automations SET last_run = ? WHERE id = ?").run(Date.now() - 26 * 3_600_000, a.id);
+    await fireAutomations(user.id, "tick", { now: new Date() });
+    expect(getCustomData(user.id, "opd_ran")).toBe("yes");
+  });
+});
+
+describe("#14 alert grouping (storm → one calm summary)", () => {
+  it("delivers the first N, summarizes once, then stays silent until the window passes", () => {
+    const u = "storm-user";
+    const t0 = 1_700_000_000_000;
+    expect(alertStorm(u, t0)).toBe("deliver");
+    expect(alertStorm(u, t0 + 1_000)).toBe("deliver");
+    expect(alertStorm(u, t0 + 2_000)).toBe("deliver");
+    expect(alertStorm(u, t0 + 3_000)).toBe("summarize"); // the 4th inside 10 min → one summary
+    expect(alertStorm(u, t0 + 4_000)).toBe("silent"); // the flood stays quiet
+    expect(alertStorm(u, t0 + 5_000)).toBe("silent");
+    expect(alertStorm(u, t0 + 11 * 60_000)).toBe("deliver"); // window passed → normal again
+  });
+});

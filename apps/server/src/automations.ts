@@ -13,6 +13,7 @@ interface AutomationRow {
   created_at: number; last_run: number | null; run_count: number;
   cooldown_min: number | null;
   snoozed_until: number | null;
+  once_per_day: number;
 }
 export interface AutomationRecord {
   id: string; name: string; enabled: boolean;
@@ -21,6 +22,7 @@ export interface AutomationRecord {
   createdAt: number; lastRun: number | null; runCount: number;
   cooldownMinutes: number; // v6.1 "at most once per N minutes"; 0 = off
   snoozedUntil: number | null; // #14 — muted until this ms timestamp; null = active
+  oncePerDay: boolean; // #7 — at most once per local day
 }
 
 const hydrate = (r: AutomationRow): AutomationRecord => ({
@@ -32,6 +34,7 @@ const hydrate = (r: AutomationRow): AutomationRecord => ({
   createdAt: r.created_at, lastRun: r.last_run, runCount: r.run_count,
   cooldownMinutes: r.cooldown_min ?? 0,
   snoozedUntil: r.snoozed_until ?? null,
+  oncePerDay: (r.once_per_day ?? 0) === 1,
 });
 
 /** #14 — mute an automation until `until` (ms), or clear the snooze with null. Org-scoped via userId. */
@@ -59,16 +62,16 @@ export const MAX_AUTOMATIONS_PER_USER = 200; // bounds the per-minute tick cost
 
 export function createAutomation(userId: string, a: AutomationT, layoutId: number | null = null): AutomationRecord {
   const id = randomUUID();
-  db.prepare("INSERT INTO automations (id, user_id, name, enabled, trigger, conditions, actions, layout_id, created_at, cooldown_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, userId, a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, Date.now(), a.cooldownMinutes ?? 0);
+  db.prepare("INSERT INTO automations (id, user_id, name, enabled, trigger, conditions, actions, layout_id, created_at, cooldown_min, once_per_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, userId, a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, Date.now(), a.cooldownMinutes ?? 0, a.oncePerDay ? 1 : 0);
   return getAutomation(id, userId)!;
 }
 
 export function updateAutomation(id: string, userId: string, a: AutomationT, layoutId: number | null = null): AutomationRecord | null {
   const existing = db.prepare("SELECT 1 FROM automations WHERE id = ? AND user_id = ?").get(id, userId);
   if (!existing) return null;
-  db.prepare("UPDATE automations SET name = ?, enabled = ?, trigger = ?, conditions = ?, actions = ?, layout_id = ?, cooldown_min = ? WHERE id = ?")
-    .run(a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, a.cooldownMinutes ?? 0, id);
+  db.prepare("UPDATE automations SET name = ?, enabled = ?, trigger = ?, conditions = ?, actions = ?, layout_id = ?, cooldown_min = ?, once_per_day = ? WHERE id = ?")
+    .run(a.name, a.enabled ? 1 : 0, JSON.stringify(a.trigger), a.conditions ? JSON.stringify(a.conditions) : null, JSON.stringify(a.actions), layoutId, a.cooldownMinutes ?? 0, a.oncePerDay ? 1 : 0, id);
   return getAutomation(id, userId);
 }
 
