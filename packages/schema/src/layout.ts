@@ -170,8 +170,10 @@ export const SeasonClockProps = z.object({ hemisphere: z.enum(["north", "south"]
 export const ZodiacProps = z.object({ date: z.string().default("2000-08-15"), label: line(40).default("") });
 
 // ===== v0.6 blocks: trackers & cards =====
-export const HabitTrackerProps = z.object({ label: line(60).default("This week"), days: line(40).default("x x x . x . .") });
-export const StreakProps = z.object({ value: z.number().int().min(0).max(99999).default(42), label: line(60).default("day streak") });
+// #74 — set `habit` to a name from Account → Habits and the block draws the REAL week/streak/month
+// from its recorded history (display-only; marking done stays in the config app). Empty = static.
+export const HabitTrackerProps = z.object({ label: line(60).default("This week"), days: line(40).default("x x x . x . ."), habit: line(60).default("") });
+export const StreakProps = z.object({ value: z.number().int().min(0).max(99999).default(42), label: line(60).default("day streak"), habit: line(60).default("") }); // #74
 export const WaterTrackerProps = z.object({ value: z.number().int().min(0).max(20).default(5), total: z.number().int().min(1).max(20).default(8), label: line(60).default("Water") });
 export const WifiCardProps = z.object({ ssid: line(60).default("Café Guest"), password: line(60).default("staycalm"), label: line(40).default("Wi-Fi") });
 
@@ -256,7 +258,7 @@ export const ShiftStatusProps = z.object({ open: z.number().int().min(0).max(23)
 export const PomodoroProps = z.object({ workMin: z.number().int().min(1).max(180).default(25), breakMin: z.number().int().min(1).max(60).default(5), label: line(40).default("") });
 
 // ===== v0.8 blocks: trackers =====
-export const MonthHabitProps = z.object({ label: line(60).default("This month"), days: line(200).default("x x . x x . . x x x . x") });
+export const MonthHabitProps = z.object({ label: line(60).default("This month"), days: line(200).default("x x . x x . . x x x . x"), habit: line(60).default("") }); // #74
 export const SavingsGoalProps = z.object({ saved: z.number().default(6500), target: z.number().default(10000), unit: line(8).default("₹"), label: line(60).default("Savings") });
 export const ReadingNowProps = z.object({ title: line(80).default("A Calm Book"), author: line(60).default("Anon"), percent: z.number().min(0).max(100).default(45) });
 export const WeightTrendProps = z.object({ values: line(400).default("72,71.6,71.4,71,70.8"), unit: line(8).default("kg"), label: line(60).default("Weight") });

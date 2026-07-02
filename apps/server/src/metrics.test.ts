@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-metrics-"));
 const { migrate } = await import("./db");
 migrate();
-const { logMetric, metricSeries, toMetricNumber } = await import("./metrics");
+const { logMetric, metricSeries, toMetricNumber, habitShape } = await import("./metrics");
 const { createUser } = await import("./auth");
 const { setCustomData, deleteCustomData } = await import("./customdata");
 
@@ -59,5 +59,32 @@ describe("#27 metric history", () => {
     expect(metricSeries(user.id, "steps", 0).length).toBe(1);
     deleteCustomData(user.id, "steps");
     expect(metricSeries(user.id, "steps", 0).length).toBe(0);
+  });
+});
+
+describe("#74 habitShape (pure wall shapes from done-days)", () => {
+  // 2026-07-01 is a Wednesday; its Monday-start week is Jun 29 – Jul 5.
+  const T = "2026-07-01";
+  it("week / month / streak for a 3-day run ending today", () => {
+    const s = habitShape(new Set(["2026-06-29", "2026-06-30", "2026-07-01"]), T);
+    expect(s.week).toBe("x x x . . . .");
+    expect(s.month.split(" ")).toHaveLength(31); // July grid
+    expect(s.month.startsWith("x .")).toBe(true); // only Jul 1 done this month
+    expect(s.streak).toBe(3);
+  });
+  it("today not marked yet → the streak ends yesterday and survives", () => {
+    const s = habitShape(new Set(["2026-06-29", "2026-06-30"]), T);
+    expect(s.streak).toBe(2);
+    expect(s.week).toBe("x x . . . . .");
+  });
+  it("a gap breaks the streak; last week's days stay out of this week's row", () => {
+    const s = habitShape(new Set(["2026-06-28", "2026-07-01"]), T); // Sun (prev week) + Wed
+    expect(s.streak).toBe(1);
+    expect(s.week).toBe(". . x . . . .");
+  });
+  it("empty history → all dots, streak 0", () => {
+    const s = habitShape(new Set(), T);
+    expect(s.week).toBe(". . . . . . .");
+    expect(s.streak).toBe(0);
   });
 });

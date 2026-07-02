@@ -42,3 +42,36 @@ export function metricSeries(userId: string, key: string, sinceMs = 0, maxPoints
   return db.prepare("SELECT at, value FROM metric_history WHERE user_id = ? AND key = ? AND at >= ? ORDER BY at ASC LIMIT ?")
     .all(userId, key, sinceMs, lim) as MetricPoint[];
 }
+
+// ---- #74 live habit blocks ----
+
+/** A timestamp's LOCAL date (YYYY-MM-DD) in a timezone (bad tz → UTC ISO fallback). */
+export function dayIn(ts: number, tz: string): string {
+  try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts)); }
+  catch { return new Date(ts).toISOString().slice(0, 10); }
+}
+
+const DAY_MS = 86_400_000;
+const utcOf = (day: string): number => Date.parse(`${day}T00:00:00Z`);
+const keyOf = (utc: number): string => new Date(utc).toISOString().slice(0, 10);
+
+/** Pure: shape a habit's done-days into what the wall blocks draw — the Monday-start week
+ *  containing `today` ("x . x …", 7 tokens), the current month's grid (daysInMonth tokens), and
+ *  the streak (consecutive days ending today, or yesterday if today isn't marked yet). */
+export function habitShape(done: Set<string>, today: string): { week: string; month: string; streak: number } {
+  const t = utcOf(today);
+  const tok = (day: string) => (done.has(day) ? "x" : ".");
+  // Week: Monday-start (matches the habitTracker's fixed M T W T F S S labels).
+  const monday = t - ((new Date(t).getUTCDay() + 6) % 7) * DAY_MS;
+  const week = Array.from({ length: 7 }, (_, i) => tok(keyOf(monday + i * DAY_MS))).join(" ");
+  // Month: day 1 .. last day of `today`'s month.
+  const d = new Date(t);
+  const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  const first = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const month = Array.from({ length: dim }, (_, i) => tok(keyOf(first + i * DAY_MS))).join(" ");
+  // Streak: consecutive days done, ending today (or yesterday, so it survives until midnight).
+  let cur = done.has(today) ? t : t - DAY_MS;
+  let streak = 0;
+  while (done.has(keyOf(cur))) { streak++; cur -= DAY_MS; }
+  return { week, month, streak };
+}

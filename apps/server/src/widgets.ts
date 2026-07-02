@@ -9,7 +9,8 @@ import {
 import { airQualityData, forecastData, marineData, pollenData, precipData, uvData, windData } from "./fetchers/openmeteo";
 import { weatherData } from "./fetchers/weather";
 import { customDataWidget, isDataPrivate } from "./customdata";
-import { metricSeries } from "./metrics";
+import { dayIn, habitShape, metricSeries } from "./metrics";
+import { getUser } from "./auth";
 import { promptForDay, recentJournal } from "./journal";
 import { queueData } from "./queues";
 import { listTasks, tasksData } from "./tasks";
@@ -115,6 +116,17 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
           const key = b.props.dataKey.trim();
           if (publicView && key && isDataPrivate(userId, key)) break; // #156 — a private key's history stays private
           if (key) data[b.id] = metricSeries(userId, key, now.getTime() - b.props.days * 86_400_000).map((p) => p.value);
+          break;
+        }
+        // #74 — a habit-bound tracker/streak/month block draws the REAL history of `habit.<name>`
+        // (the #151 store), shaped server-side into the exact strings/values the renderers parse.
+        case "habitTracker": case "streak": case "monthHabit": {
+          const name = (b.props as { habit?: string }).habit?.trim();
+          if (!name) break; // unbound → static props, exactly as before
+          const tz = getUser(userId)?.defaultTimezone || "UTC";
+          const doneDays = new Set(metricSeries(userId, `habit.${name}`, now.getTime() - 370 * 86_400_000).map((p) => dayIn(p.at, tz)));
+          const shaped = habitShape(doneDays, dayIn(now.getTime(), tz));
+          data[b.id] = b.type === "streak" ? { value: shaped.streak } : { days: b.type === "habitTracker" ? shaped.week : shaped.month };
           break;
         }
         // #153 — a calm reflection: today's prompt + the latest journal entry.

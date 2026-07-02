@@ -131,8 +131,8 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   seasonClock: [Sel("hemisphere", "Hemisphere", ["north", "south"]), S("label", "Label")],
   zodiac: [S("date", "Date (YYYY-MM-DD)"), S("label", "Label")],
   // v0.6 trackers
-  habitTracker: [S("label", "Label"), S("days", "Days (x or . per day)")],
-  streak: [N("value", "Count"), S("label", "Label")],
+  habitTracker: [S("habit", "Live habit (name from Account → Habits)"), S("label", "Label"), S("days", "Days (x or . per day)")],
+  streak: [S("habit", "Live habit (name from Account → Habits)"), N("value", "Count"), S("label", "Label")],
   waterTracker: [N("value", "Done"), N("total", "Goal"), S("label", "Label")],
   wifiCard: [S("ssid", "Network"), S("password", "Password"), S("label", "Label")],
   // v0.6 live
@@ -205,7 +205,7 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   sunArc: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
   nextFullMoon: [S("label", "Label")],
   // v0.8 trackers
-  monthHabit: [S("label", "Label"), T("days", "Days (x or . each)")],
+  monthHabit: [S("habit", "Live habit (name from Account → Habits)"), S("label", "Label"), T("days", "Days (x or . each)")],
   savingsGoal: [N("saved", "Saved"), N("target", "Target"), S("unit", "Unit"), S("label", "Label")],
   readingNow: [S("title", "Title"), S("author", "Author"), N("percent", "Percent")],
   weightTrend: [T("values", "Numbers (comma-separated)"), S("unit", "Unit"), S("label", "Label")],

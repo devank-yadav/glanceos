@@ -1003,12 +1003,13 @@ const zodiac: Render = (el, w) => {
 
 // ---- trackers & cards ----
 
-const habitTracker: Render = (el, w) => {
+const habitTracker: Render = (el, w, data) => {
   if (w.type !== "habitTracker") return;
   heading2(el, w.props.label);
   const wrap = div("habit");
   const days = ["M", "T", "W", "T", "F", "S", "S"];
-  w.props.days.trim().split(/\s+/).slice(0, 7).forEach((t, i) => {
+  const src = (data as { days?: string } | undefined)?.days ?? w.props.days; // #74 — live habit history wins
+  src.trim().split(/\s+/).slice(0, 7).forEach((t, i) => {
     const col = div("habit-col");
     col.appendChild(div(`habit-dot ${/^(x|1|✓)$/i.test(t) ? "on" : ""}`));
     col.appendChild(div("habit-day", days[i] ?? ""));
@@ -1017,9 +1018,10 @@ const habitTracker: Render = (el, w) => {
   el.appendChild(wrap);
 };
 
-const streak: Render = (el, w) => {
+const streak: Render = (el, w, data) => {
   if (w.type !== "streak") return;
-  el.appendChild(div("stat-value", String(w.props.value)));
+  const v = (data as { value?: number } | undefined)?.value ?? w.props.value; // #74
+  el.appendChild(div("stat-value", String(v)));
   el.appendChild(div("stat-label", w.props.label));
 };
 
@@ -1682,11 +1684,12 @@ const liveCounter: Render = (el, w) => {
 };
 
 // ---- trackers ----
-const monthHabit: Render = (el, w) => {
+const monthHabit: Render = (el, w, data) => {
   if (w.type !== "monthHabit") return;
   if (w.props.label) el.appendChild(div("widget-heading", w.props.label));
   const grid = div("monthhabit");
-  w.props.days.trim().split(/\s+/).slice(0, 31).forEach((t) => grid.appendChild(div(`mh-dot${/^(x|1|✓)$/i.test(t) ? " on" : ""}`)));
+  const src = (data as { days?: string } | undefined)?.days ?? w.props.days; // #74 — live habit history wins
+  src.trim().split(/\s+/).slice(0, 31).forEach((t) => grid.appendChild(div(`mh-dot${/^(x|1|✓)$/i.test(t) ? " on" : ""}`)));
   el.appendChild(grid);
 };
 const savingsGoal: Render = (el, w) => {
