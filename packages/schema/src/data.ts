@@ -70,6 +70,21 @@ export interface PrecipDataT {
   probability: number;
   summary: string;
 }
+// #87 — pollen (grains/m³ by family; null where the model has no coverage) + an overall level.
+export interface PollenDataT {
+  grass: number | null;
+  tree: number | null;
+  weed: number | null;
+  level: string;
+}
+// #87 — sea state for a coastal spot: wave/swell height (m), water °C, period (s), wave direction.
+export interface MarineDataT {
+  waveM: number;
+  swellM: number | null;
+  waterC: number | null;
+  periodS: number | null;
+  dir: string;
+}
 export interface HeadlinesDataT {
   items: string[];
   error?: string;

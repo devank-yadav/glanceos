@@ -1,5 +1,5 @@
 import type {
-  AirQualityDataT, ForecastDataT, PrecipDataT, UvDataT, WindDataT,
+  AirQualityDataT, ForecastDataT, MarineDataT, PollenDataT, PrecipDataT, UvDataT, WindDataT,
 } from "@glanceos/schema";
 import { cached, FAIL, getJSON, TTL } from "./cache";
 
@@ -79,5 +79,53 @@ export function precipData(p: { latitude: number; longitude: number }): Promise<
     );
     const prob = Math.round(j.daily.precipitation_probability_max[0] ?? 0);
     return { probability: prob, summary: prob < 20 ? "dry" : prob < 50 ? "some chance" : prob < 80 ? "likely" : "very likely" };
+  });
+}
+
+// #87 — pollen: the same Open-Meteo air-quality API (CAMS model). Family values are grains/m³;
+// outside the model's coverage every field is null → we return null so the block shows its
+// authored fallback instead of a fake zero.
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const maxOf = (...vs: (number | null)[]): number | null => {
+  const nn = vs.filter((v): v is number => v != null);
+  return nn.length ? Math.max(...nn) : null;
+};
+export const pollenLevel = (v: number): string => (v < 20 ? "Low" : v < 80 ? "Moderate" : v < 200 ? "High" : "Very high");
+
+export function pollenData(p: { latitude: number; longitude: number }): Promise<PollenDataT | null> {
+  return cached(key("pollen", p), TTL.m30, FAIL, async () => {
+    const j = await getJSON<{ current: Record<string, unknown> }>(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${p.latitude}&longitude=${p.longitude}` +
+        `&current=grass_pollen,birch_pollen,alder_pollen,olive_pollen,mugwort_pollen,ragweed_pollen`,
+    );
+    const c = j.current;
+    const grass = num(c.grass_pollen);
+    const tree = maxOf(num(c.birch_pollen), num(c.alder_pollen), num(c.olive_pollen));
+    const weed = maxOf(num(c.mugwort_pollen), num(c.ragweed_pollen));
+    const worst = maxOf(grass, tree, weed);
+    if (worst == null) return null; // no coverage here → calm fallback, not a fake reading
+    return { grass, tree, weed, level: pollenLevel(worst) };
+  });
+}
+
+// #87 — sea state from the Open-Meteo marine API. Inland coordinates error out → cached FAIL →
+// null → the block's fallback.
+export function marineData(p: { latitude: number; longitude: number }): Promise<MarineDataT | null> {
+  return cached(key("marine", p), TTL.m30, FAIL, async () => {
+    const j = await getJSON<{ current: Record<string, unknown> }>(
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${p.latitude}&longitude=${p.longitude}` +
+        `&current=wave_height,wave_direction,wave_period,swell_wave_height,sea_surface_temperature`,
+    );
+    const c = j.current;
+    const wave = num(c.wave_height);
+    if (wave == null) return null;
+    const deg = num(c.wave_direction);
+    return {
+      waveM: Math.round(wave * 10) / 10,
+      swellM: num(c.swell_wave_height) != null ? Math.round((num(c.swell_wave_height) as number) * 10) / 10 : null,
+      waterC: num(c.sea_surface_temperature) != null ? Math.round(num(c.sea_surface_temperature) as number) : null,
+      periodS: num(c.wave_period) != null ? Math.round(num(c.wave_period) as number) : null,
+      dir: deg != null ? compass(deg) : "—",
+    };
   });
 }

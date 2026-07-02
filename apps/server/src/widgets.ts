@@ -6,7 +6,7 @@ import {
   cryptoData, currencyData, factData, githubData, hackerNewsData, headlinesData,
   holidayData, issData, onThisDayData, quoteData, wikiData,
 } from "./fetchers/live";
-import { airQualityData, forecastData, precipData, uvData, windData } from "./fetchers/openmeteo";
+import { airQualityData, forecastData, marineData, pollenData, precipData, uvData, windData } from "./fetchers/openmeteo";
 import { weatherData } from "./fetchers/weather";
 import { customDataWidget } from "./customdata";
 import { metricSeries } from "./metrics";
@@ -135,6 +135,8 @@ export async function resolveWidgetData(layout: LayoutT, userId: string, connLoo
         case "uvIndex": data[b.id] = await uvData(g(b.props)); break;
         case "airQuality": data[b.id] = await airQualityData(g(b.props)); break;
         case "precip": data[b.id] = await precipData(g(b.props)); break;
+        case "pollen": data[b.id] = await pollenData(g(b.props)); break; // #87
+        case "marine": data[b.id] = await marineData(g(b.props)); break; // #87
         case "headlines": data[b.id] = await headlinesData(b.props); break;
         case "currencyRate": data[b.id] = await currencyData(b.props); break;
         case "cryptoPrice": data[b.id] = await cryptoData(b.props); break;

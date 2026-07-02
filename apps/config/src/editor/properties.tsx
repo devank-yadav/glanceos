@@ -140,6 +140,8 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   windCompass: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
   uvIndex: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
   airQuality: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
+  pollen: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")], // #87
+  marine: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")], // #87
   precip: [N("latitude", "Latitude"), N("longitude", "Longitude"), S("label", "Label")],
   headlines: [S("url", "RSS/Atom URL"), N("max", "Max items"), S("label", "Label")],
   currencyRate: [S("from", "From (e.g. USD)"), S("to", "To (e.g. INR)"), S("label", "Label")],

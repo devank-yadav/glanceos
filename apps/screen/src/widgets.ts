@@ -1,7 +1,7 @@
 import type {
   AirQualityDataT, CalendarDataT, CryptoDataT, CurrencyDataT, CustomDataT, FactDataT, ForecastDataT,
   GithubDataT, HeadlinesDataT, HolidayDataT, IssDataT, OnThisDayDataT, PrecipDataT,
-  QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
+  MarineDataT, PollenDataT, QueueDataT, QuoteLiveDataT, TasksDataT, UvDataT, WeatherDataT, WidgetT, WikiDataT, WindDataT,
 } from "@glanceos/schema";
 import { isoWeek, moonAge, moonPhase, sunTimes, SYNODIC_DAYS } from "./astro";
 import { qrSvg } from "./qr"; // #70 — the agenda's scan-to-join QR (qr.ts is already in the bundle)
@@ -1103,6 +1103,28 @@ const airQuality: Render = (el, w, data) => {
   el.appendChild(div("stat-value", String(d.aqi)));
   el.appendChild(div("stat-label", `AQI · ${d.level}`));
   el.appendChild(div("metric-label", `PM2.5 ${d.pm25}`));
+};
+
+// #87 — pollen by family (grains/m³) with an overall level; null family = no coverage there.
+const pollen: Render = (el, w, data) => {
+  if (w.type !== "pollen") return;
+  heading2(el, w.props.label);
+  const d = data as PollenDataT | null;
+  if (!d) return placeholder(el, "Pollen unavailable");
+  el.appendChild(div("stat-value", d.level));
+  const parts = [d.grass != null ? `grass ${Math.round(d.grass)}` : "", d.tree != null ? `tree ${Math.round(d.tree)}` : "", d.weed != null ? `weed ${Math.round(d.weed)}` : ""].filter(Boolean);
+  if (parts.length) el.appendChild(div("stat-label", parts.join(" · ")));
+};
+
+// #87 — sea state for a coastal spot: wave height big, swell/water/period as the detail line.
+const marine: Render = (el, w, data) => {
+  if (w.type !== "marine") return;
+  heading2(el, w.props.label);
+  const d = data as MarineDataT | null;
+  if (!d) return placeholder(el, "Sea state unavailable");
+  el.appendChild(div("stat-value", `${d.waveM} m`));
+  const parts = [`waves ${d.dir}`, d.swellM != null ? `swell ${d.swellM} m` : "", d.periodS != null ? `${d.periodS} s` : "", d.waterC != null ? `water ${d.waterC}°` : ""].filter(Boolean);
+  el.appendChild(div("stat-label", parts.join(" · ")));
 };
 
 const precip: Render = (el, w, data) => {
@@ -2677,4 +2699,6 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   metricHistory,
   // #153 reflection
   journal,
+  // #87 weather detail
+  pollen, marine,
 };

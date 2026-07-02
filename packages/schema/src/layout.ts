@@ -186,6 +186,8 @@ export const WindCompassProps = z.object({ ...geo });
 export const UvIndexProps = z.object({ ...geo });
 export const AirQualityProps = z.object({ ...geo });
 export const PrecipProps = z.object({ ...geo });
+export const PollenProps = z.object({ ...geo }); // #87 — geo-inherited like uv/airQuality
+export const MarineProps = z.object({ ...geo }); // #87 — a coastal spot (waves/swell/water temp)
 export const HeadlinesProps = z.object({ url: httpUrl, max: z.number().int().min(1).max(12).default(5), label: line(40).default("Headlines") });
 export const CurrencyRateProps = z.object({ from: line(6).default("USD"), to: line(6).default("INR"), label: line(40).default("") });
 export const CryptoPriceProps = z.object({ coin: line(40).default("bitcoin"), vs: line(6).default("usd"), label: line(40).default("") });
@@ -525,6 +527,8 @@ export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("uvIndex"), props: UvIndexProps }),
   z.object({ ...b, type: z.literal("airQuality"), props: AirQualityProps }),
   z.object({ ...b, type: z.literal("precip"), props: PrecipProps }),
+  z.object({ ...b, type: z.literal("pollen"), props: PollenProps }), // #87
+  z.object({ ...b, type: z.literal("marine"), props: MarineProps }), // #87
   z.object({ ...b, type: z.literal("headlines"), props: HeadlinesProps }),
   z.object({ ...b, type: z.literal("currencyRate"), props: CurrencyRateProps }),
   z.object({ ...b, type: z.literal("cryptoPrice"), props: CryptoPriceProps }),
