@@ -3471,6 +3471,15 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-head { margin-bottom: 6px; }
 .notif-head .ghost { font-size: 12px; padding: 3px 7px; }
 .notif-search { width: 100%; margin: 0 0 6px; font-size: 13px; } /* #43 — history search */
+/* #122 — the first-run checklist on Boards */
+.onboard-card { margin-bottom: 14px; }
+.onboard-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.onboard-steps li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.onboard-steps li.done { opacity: 0.6; }
+.onboard-steps li.done span:first-of-type { text-decoration: line-through; }
+.onboard-steps svg { width: 15px; height: 15px; color: var(--indigo); flex: none; }
+.onboard-dot { width: 9px; height: 9px; border: 1.5px solid var(--fg); opacity: 0.4; border-radius: 50%; flex: none; margin: 0 3px; }
+
 /* #171 — the screens audit list */
 .audit-list { list-style: none; margin: 0; padding: 0; }
 .audit-row { padding: 10px 2px; border-top: 1px solid var(--rule); }

@@ -4,6 +4,7 @@ import { BoardPreviewById } from "../components/BoardPreview";
 import { useConfirm } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Menu } from "../components/Menu";
+import { OnboardChecklist } from "../components/OnboardChecklist";
 import { ShareDialog } from "../components/ShareDialog";
 import { PageHeader } from "../components/PageHeader";
 import { StatChip } from "../components/StatChip";
@@ -113,6 +114,7 @@ export function SetupsPage() {
                 ? "Archived boards are tucked away here — hidden from your board list and from screen pickers, but kept safe. Restore one anytime from its ⋯ menu."
                 : "A board is a dashboard you design once and show on any screen — disconnect a screen and its board survives; show one board on many screens and they stay in step."}
             </p>
+            {!showArchived && <OnboardChecklist />}
             {setups === null ? (
               <div class="cards">{[0, 1, 2].map((i) => <div key={i} class="skeleton skeleton-card" />)}</div>
             ) : filtered.length === 0 ? (
