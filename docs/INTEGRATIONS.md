@@ -1,6 +1,6 @@
 # Integrations
 
-GlanceOS connects to **188 data sources**. Each is a server-side *provider* — it knows how
+GlanceOS connects to **190 data sources**. Each is a server-side *provider* — it knows how
 to fetch a *resource* and return a raw payload, which a block's **SourceMap** then shapes to
 fit. Binding happens in the Studio's **⟿ Data** tab (or one-click via a provider's preset
 "objects" on **Settings → Connections**). Tokens and secret URLs are encrypted on the server
@@ -276,3 +276,10 @@ clipboard, then paste it onto any board with ⌘V and pick the connection in the
 ### Transit (2)
 - **CityBikes** `citybikes` · keyless · citybikes.networks
 - **Transport for London** `tfl` · keyless · tfl.status
+
+## Local network (#28)
+
+- **Home Assistant** `homeassistant` · token · entity state + entity history — set the HA URL and a long-lived access token.
+- **Prometheus** `prometheus` · keyless · instant query (number) + range query (series) — set the server URL; `query` is any PromQL expression, `minutes` picks the range window.
+- Private/LAN addresses (`192.168.…`, `.local`) require `GLANCEOS_ALLOW_PRIVATE_EGRESS=1` on the server — the SSRF guard blocks them by default.
+- **MQTT** is deliberately *not* a provider: providers pull on render, brokers push. Bridge it instead — an automation in Node-RED / Home Assistant (or a tiny `mosquitto_sub` script) that POSTs topic changes to a **webhook inlet** with the *"Write many data values"* sink keeps a whole wall of MQTT topics live, with HMAC signing if you want it. A native broker subscription (new dependency + connection lifecycle) is open for discussion.

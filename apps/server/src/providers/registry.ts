@@ -333,6 +333,40 @@ reg({
   },
 });
 
+// #28 — Prometheus on the LAN: point a block at your own metrics server and chart any
+// instant or range query. Typically keyless inside a home network; a private address
+// needs GLANCEOS_ALLOW_PRIVATE_EGRESS=1 (same rule as Home Assistant / Plex). The
+// response mappers are pure and exported for tests. (MQTT deliberately isn't a
+// provider: resolve() pulls, brokers push — bridge MQTT into a `values` inlet instead.)
+export interface PromResp { status?: string; data?: { result?: { value?: [number, string]; values?: [number, string][] }[] } }
+export const promScalar = (r: PromResp | null): { value: number } | null => {
+  const v = r?.data?.result?.[0]?.value;
+  return v ? { value: Number(v[1]) } : null;
+};
+export const promSeries = (r: PromResp | null): { values: number[] } => ({
+  values: (r?.data?.result?.[0]?.values ?? []).map((p) => Number(p[1]) || 0),
+});
+reg({
+  id: "prometheus", label: "Prometheus", category: "dev", authKind: "none",
+  defaultTtlMs: TTL.min, minRefreshMs: 30_000,
+  resources: [
+    { id: "prometheus.query", label: "Instant query (number)", shape: "scalar" },
+    { id: "prometheus.range", label: "Range query (series)", shape: "series" },
+  ],
+  async resolve(ctx) {
+    const base = String(ctx.config.baseUrl || "").replace(/\/+$/, "");
+    const q = ctx.query.query;
+    if (!base || !q) return null;
+    if (ctx.resource === "prometheus.range") {
+      const mins = Math.min(Math.max(Number(ctx.query.minutes) || 60, 5), 1440);
+      const step = Math.max(15, Math.round((mins * 60) / 100)); // ~100 points across the window
+      const end = Math.floor(Date.now() / 1000);
+      return promSeries((await getJSON(`${base}/api/v1/query_range?query=${encodeURIComponent(q)}&start=${end - mins * 60}&end=${end}&step=${step}`)) as PromResp);
+    }
+    return promScalar((await getJSON(`${base}/api/v1/query?query=${encodeURIComponent(q)}`)) as PromResp);
+  },
+});
+
 // ---- OAuth provider: Microsoft 365 / Outlook Calendar (read-only). Multi-tenant
 // 'common' endpoints; the self-hoster registers an Azure app. ctx.secret is the
 // access token (refreshed via offline_access).

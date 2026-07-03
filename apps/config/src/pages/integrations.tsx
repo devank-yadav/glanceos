@@ -73,6 +73,7 @@ const CONNECT_HELP: Record<string, string> = {
 interface ExtraField { key: string; label: string; placeholder?: string; hint?: ComponentChildren }
 const EXTRA_CONFIG: Record<string, ExtraField[]> = {
   homeassistant: [{ key: "baseUrl", label: "Home Assistant URL", placeholder: "http://homeassistant.local:8123", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code> on the server.</> }],
+  prometheus: [{ key: "baseUrl", label: "Prometheus URL", placeholder: "http://192.168.1.10:9090", hint: <>Private hosts need <code>GLANCEOS_ALLOW_PRIVATE_EGRESS=1</code> on the server.</> }], // #28
   jira: [
     { key: "baseUrl", label: "Jira site URL", placeholder: "https://yourteam.atlassian.net" },
     { key: "email", label: "Account email", placeholder: "you@example.com" },

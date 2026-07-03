@@ -4,7 +4,7 @@ import { PROVIDERS, slackError, formatTravelTime, gmailUnread, outlookUnread, fi
 
 describe("provider registry", () => {
   it("registers the providers (incl. v5.0 smart-life + B1-B7 integrations)", () => {
-    expect(PROVIDERS.size).toBe(189); // +csv (#29)
+    expect(PROVIDERS.size).toBe(190); // +csv (#29) +prometheus (#28)
     for (const id of ["asana", "jira", "trello", "slack"]) expect(PROVIDERS.has(id)).toBe(true);
     // E1 — more keyless public-data providers
     for (const id of ["hackernews", "wikipedia", "frankfurter", "iss", "spaceflightnews", "nager", "gutendex", "dictionary", "quotable", "xkcd", "freetogame", "binance"]) expect(PROVIDERS.has(id)).toBe(true);
@@ -127,5 +127,25 @@ describe("provider registry", () => {
     expect(slackError("token_revoked")).toBeInstanceOf(AuthError);
     expect(slackError("channel_not_found")).not.toBeInstanceOf(AuthError);
     expect(slackError(undefined).message).toContain("slack");
+  });
+});
+
+describe("#28 prometheus mappers (pure)", () => {
+  it("promScalar reads the first result's instant value", async () => {
+    const { promScalar } = await import("./registry");
+    expect(promScalar({ data: { result: [{ value: [1751500000, "42.5"] }] } })).toEqual({ value: 42.5 });
+    expect(promScalar({ data: { result: [] } })).toBeNull();
+    expect(promScalar(null)).toBeNull();
+  });
+  it("promSeries maps range values to numbers (bad samples become 0)", async () => {
+    const { promSeries } = await import("./registry");
+    expect(promSeries({ data: { result: [{ values: [[1, "1.5"], [2, "oops"], [3, "3"]] }] } })).toEqual({ values: [1.5, 0, 3] });
+    expect(promSeries(null)).toEqual({ values: [] });
+  });
+  it("the provider is registered with both LAN resources", async () => {
+    const { PROVIDERS } = await import("./registry");
+    const p = PROVIDERS.get("prometheus")!;
+    expect(p.authKind).toBe("none");
+    expect(p.resources.map((r) => r.id)).toEqual(["prometheus.query", "prometheus.range"]);
   });
 });
