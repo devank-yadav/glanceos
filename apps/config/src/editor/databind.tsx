@@ -74,6 +74,12 @@ export function DataPanel({
   const [labelField, setLabelField] = useState(existing?.map?.fields?.label ?? ""); // pair charts: the per-item label field
   const [transform, setTransform] = useState<string>(existing?.map?.transform ?? "first");
   const [transformArg, setTransformArg] = useState<string>(existing?.map?.transformArg ?? "");
+  // #23 — transform chaining: extra steps applied in order after the primary transform.
+  const [chain, setChain] = useState<{ t: string; arg: string }[]>(
+    existing?.map?.chain?.map((s) => ({ t: s.t, arg: s.arg ?? "" })) ?? [],
+  );
+  const patchChain = (i: number, p: Partial<{ t: string; arg: string }>) =>
+    setChain((c) => c.map((s, j) => (j === i ? { ...s, ...p, ...(p.t ? { arg: "" } : {}) } : s)));
   const [preview, setPreview] = useState("");
   const [previewData, setPreviewData] = useState<unknown>(undefined); // raw payload → shape inspector
   const [busy, setBusy] = useState(false);
@@ -112,7 +118,13 @@ export function DataPanel({
           ? { path: "", items: items || undefined, fields: field ? { text: field } : undefined, transform: "join" as const }
           : isPair
             ? { path: "", items: items || undefined, fields: Object.keys(pairFields).length ? pairFields : undefined, transform: "none" as const }
-            : { path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"], transformArg: (transform in TRANSFORM_ARGS && transformArg) ? transformArg : undefined };
+            : {
+              path: field, items: items || undefined, transform: transform as BlockSourceT["map"]["transform"], transformArg: (transform in TRANSFORM_ARGS && transformArg) ? transformArg : undefined,
+              // #23 — the chain rides along on scalar sinks only (where the picker lives)
+              chain: chain.length
+                ? chain.map((s) => ({ t: s.t as BlockSourceT["map"]["transform"], arg: (s.t in TRANSFORM_ARGS && s.arg) ? s.arg : undefined }))
+                : undefined,
+            };
     return { connectionId: connId || undefined, kind, query, map } as BlockSourceT;
   };
 
@@ -259,6 +271,22 @@ export function DataPanel({
               <span>Format</span>
               <input value={transformArg} placeholder={TRANSFORM_ARGS[transform]} onInput={(e) => setTransformArg((e.currentTarget as HTMLInputElement).value)} />
             </label>
+          )}
+          {/* #23 — chain extra shaping steps: "sum, then round 1, then currency €" */}
+          {!isArr && chain.map((s, i) => (
+            <div class="row" key={i} style={{ gap: "6px", alignItems: "center" }}>
+              <span class="muted">then</span>
+              <select value={s.t} onChange={(e) => patchChain(i, { t: (e.currentTarget as HTMLSelectElement).value })}>
+                {TRANSFORMS.filter((t) => t !== "none").map((t) => <option key={t} value={t}>{TRANSFORM_LABELS[t] ?? t}</option>)}
+              </select>
+              {s.t in TRANSFORM_ARGS && (
+                <input class="grow" value={s.arg} placeholder={TRANSFORM_ARGS[s.t]} onInput={(e) => patchChain(i, { arg: (e.currentTarget as HTMLInputElement).value })} />
+              )}
+              <button class="ghost icon-btn" onClick={() => setChain((c) => c.filter((_, j) => j !== i))} aria-label="Remove step">×</button>
+            </div>
+          ))}
+          {!isArr && chain.length < 5 && (
+            <button class="ghost" onClick={() => setChain((c) => [...c, { t: "round", arg: "" }])}>+ then…</button>
           )}
         </>
       )}

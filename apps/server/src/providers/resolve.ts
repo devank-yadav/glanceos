@@ -74,13 +74,21 @@ export function applyMap(raw: unknown, map: SourceMapT): unknown {
   // No shaping requested → pass the provider payload straight to an already-typed live
   // renderer (e.g. {events} for a calendar, the RSS shape). A `fields` map IS shaping
   // (a pair chart projecting a root array → [{label,value}]), so don't short-circuit it.
-  if (map.transform === "none" && !map.items && !map.path && !map.fields) return raw;
+  if (map.transform === "none" && !map.items && !map.path && !map.fields && !map.chain?.length) return raw;
   // Working set: an explicit array path, else an explicit scalar path, else the
   // root payload itself (so a top-level JSON array works with no path).
   let val: unknown = map.items ? resolvePath(raw, map.items) : map.path ? resolvePath(raw, map.path) : raw;
   if (Array.isArray(val) && map.fields) val = val.map((el) => project(el, map.fields));
   if (NEEDS_ARRAY.has(map.transform) && !Array.isArray(val)) return null; // wrong shape → placeholder/props fallback
-  return reduce(val, map.transform, map.transformArg);
+  let out = reduce(val, map.transform, map.transformArg);
+  // #23 — the chain: each extra step shapes the PREVIOUS step's result, in order
+  // ("sum, then round 1, then currency €"). The same wrong-shape rule applies per
+  // step, so a mid-chain mismatch degrades to the placeholder exactly like today.
+  for (const step of map.chain ?? []) {
+    if (NEEDS_ARRAY.has(step.t) && !Array.isArray(out)) return null;
+    out = reduce(out, step.t, step.arg);
+  }
+  return out;
 }
 
 export async function resolveSource(src: BlockSourceT, lookup?: ConnLookup): Promise<unknown> {

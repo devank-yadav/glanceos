@@ -380,6 +380,7 @@ export const NextFullMoonProps = z.object({ label: line(40).default("") });
 // A block can point a prop (or its whole data) at a live SOURCE instead of typed
 // props. Reuses jsonFeed's {{dotted.path}} extraction grammar so the mental model
 // is identical. `.optional()` keeps unbound blocks byte-identical → no migration.
+const TRANSFORM_KINDS = ["none", "series", "count", "sum", "first", "last", "join", "percent", "round", "currency", "duration", "rangeToWords"] as const;
 export const SourceMap = z.object({
   path: z.string().max(400).default(""), // scalar/object path, e.g. "data.today.total"
   items: z.string().max(400).optional(), // array path for a list/series, e.g. "results"
@@ -387,8 +388,12 @@ export const SourceMap = z.object({
   // v6.1 adds round/currency/duration/rangeToWords — pure, total scalar shapers so a raw
   // API number reads as a calm human phrase. `transformArg` carries their parameter
   // (decimals / currency symbol / "33,67:low,medium,high"). All optional → no migration.
-  transform: z.enum(["none", "series", "count", "sum", "first", "last", "join", "percent", "round", "currency", "duration", "rangeToWords"]).default("none"),
+  transform: z.enum(TRANSFORM_KINDS).default("none"),
   transformArg: z.string().max(120).optional(),
+  // #23 — transform CHAINING: extra steps applied IN ORDER after `transform`, so one
+  // binding can say "sum, then round to 1, then currency €". Additive + optional →
+  // existing bindings (and their bytes) are unchanged. Bounded at 5 steps.
+  chain: z.array(z.object({ t: z.enum(TRANSFORM_KINDS), arg: z.string().max(120).optional() })).max(5).optional(),
 }).prefault({});
 export type SourceMapT = z.infer<typeof SourceMap>;
 
