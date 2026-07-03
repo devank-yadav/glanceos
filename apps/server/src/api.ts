@@ -1387,7 +1387,7 @@ ${og}
   app.get("/api/inlets", (c) => c.json(listInlets(c.get("userId"))));
   app.post("/api/inlets", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { name?: string; sinkKind?: string; sinkTarget?: string; requireSignature?: boolean };
-    if (!body.sinkKind || !isSinkKind(body.sinkKind)) return c.json({ error: "sinkKind must be one of task|queue|data|none" }, 400);
+    if (!body.sinkKind || !isSinkKind(body.sinkKind)) return c.json({ error: "sinkKind must be one of task|queue|data|values|none" }, 400);
     const { inlet, signingKey } = createInlet(c.get("userId"), {
       name: body.name ?? "Inlet", sinkKind: body.sinkKind, sinkTarget: body.sinkTarget, requireSignature: !!body.requireSignature,
     });

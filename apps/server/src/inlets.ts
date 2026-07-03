@@ -13,7 +13,7 @@ import { fireAutomations, fireDataChanged } from "./automation/engine";
 // creation; only its sealed form is stored. resolveInlet/verify/route are pure
 // enough to unit-test offline.
 
-export const SINK_KINDS = ["task", "queue", "data", "none"] as const;
+export const SINK_KINDS = ["task", "queue", "data", "values", "none"] as const;
 export type SinkKind = (typeof SINK_KINDS)[number];
 export const isSinkKind = (s: string): s is SinkKind => (SINK_KINDS as readonly string[]).includes(s);
 
@@ -110,6 +110,22 @@ export async function routeInlet(row: InletRow, payload: Record<string, unknown>
       if (key) {
         setCustomData(uid, key, "value" in payload ? payload.value : payload);
         if (opts.fireAutos !== false) await fireDataChanged(uid, key); // #11 — precise per-key trigger (webhook fires below too)
+      }
+      break;
+    }
+    // #30 — one POST updates a whole SET of values (a scene-apply from outside): the
+    // payload (or its `values` envelope) is a {key: value, …} map and every entry
+    // lands as custom data. Bounded to the first 32 keys — deterministic (JSON key
+    // order), forgiving to an oversized push, and no single call can flood the store.
+    case "values": {
+      const src = payload.values && typeof payload.values === "object" && !Array.isArray(payload.values)
+        ? (payload.values as Record<string, unknown>)
+        : payload;
+      if (typeof src !== "object" || src === null || Array.isArray(src)) break; // an array/scalar body is not a key map
+      for (const [key, value] of Object.entries(src).slice(0, 32)) {
+        if (!key || key.length > 100) continue;
+        setCustomData(uid, key, value);
+        if (opts.fireAutos !== false) await fireDataChanged(uid, key);
       }
       break;
     }

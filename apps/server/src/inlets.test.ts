@@ -97,3 +97,34 @@ describe("POST /api/hooks/:secret (public, no session/CSRF)", () => {
     expect(getCustomData(user.id, "k")).toBe(7);
   });
 });
+
+describe("#30 values sink (one POST, a whole set of data values)", () => {
+  it("every key of the posted object lands as custom data (end-to-end via the hook URL)", async () => {
+    const { inlet } = createInlet(user.id, { name: "Board push", sinkKind: "values" });
+    const res = await post(inlet.secret, JSON.stringify({ temp: 21.5, door: "open", mode: true }));
+    expect(res.status).toBe(200);
+    expect(getCustomData(user.id, "temp")).toBe(21.5);
+    expect(getCustomData(user.id, "door")).toBe("open");
+    expect(getCustomData(user.id, "mode")).toBe(true);
+  });
+
+  it("accepts a {values: {…}} envelope and caps at the first 32 keys", async () => {
+    const { inlet } = createInlet(user.id, { name: "Enveloped", sinkKind: "values" });
+    const values = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`v30_${i}`, i]));
+    await routeInlet(
+      { id: inlet.id, user_id: user.id, name: inlet.name, secret: inlet.secret, hmac_key: null, sink_kind: "values", sink_target: "", enabled: 1, created_at: 0, last_fired: null },
+      { values },
+      { fireAutos: false },
+    );
+    expect(getCustomData(user.id, "v30_0")).toBe(0);
+    expect(getCustomData(user.id, "v30_31")).toBe(31);
+    expect(getCustomData(user.id, "v30_32")).toBeUndefined(); // beyond the cap → dropped
+  });
+
+  it("an array or scalar body is not a key map — nothing is written", async () => {
+    const { inlet } = createInlet(user.id, { name: "Bad shapes", sinkKind: "values" });
+    await post(inlet.secret, JSON.stringify([{ sneak: 1 }]));
+    expect(getCustomData(user.id, "0")).toBeUndefined();
+    expect(getCustomData(user.id, "sneak")).toBeUndefined();
+  });
+});

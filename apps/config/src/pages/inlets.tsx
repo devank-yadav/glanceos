@@ -10,14 +10,16 @@ import { Icon } from "../editor/icons";
 // payload is routed to a task list / queue / custom-data key. Management is
 // session-only; the public endpoint is /api/hooks/:secret.
 
-type SinkKind = "task" | "queue" | "data" | "none";
+type SinkKind = "task" | "queue" | "data" | "values" | "none";
 interface Inlet { id: string; name: string; secret: string; sinkKind: SinkKind; sinkTarget: string; enabled: boolean; signed: boolean; createdAt: number; lastFired: number | null }
 interface Created { inlet: Inlet; url: string; signingKey?: string; example: unknown }
 
 const SINKS: { id: SinkKind; label: string; target: string }[] = [
   { id: "task", label: "Add a task", target: "Task list id (default)" },
   { id: "queue", label: "Advance a queue", target: "Queue id" },
-  { id: "data", label: "Write custom data", target: "Data key" },
+  { id: "data", label: "Write one data value", target: "Data key" },
+  // #30 — the whole POSTed JSON object lands as data values: {"temp": 21, "door": "open"}
+  { id: "values", label: "Write many data values (JSON object)", target: "" },
   { id: "none", label: "Nothing (automations only)", target: "" },
 ];
 
@@ -75,10 +77,13 @@ export function InletsPage() {
                   {SINKS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </label>
-              {sinkKind !== "none" && (
+              {sinkKind !== "none" && sinkKind !== "values" && (
                 <label class="field grow"><span>{SINKS.find((s) => s.id === sinkKind)!.target}</span>
                   <input value={sinkTarget} onInput={(e) => setSinkTarget((e.currentTarget as HTMLInputElement).value)} />
                 </label>
+              )}
+              {sinkKind === "values" && (
+                <p class="muted" style={{ alignSelf: "center", margin: 0 }}>POST a JSON object — every key becomes a data value (first 32).</p>
               )}
             </div>
             <label class="scope-opt"><input type="checkbox" checked={requireSignature} onChange={(e) => setRequireSignature((e.currentTarget as HTMLInputElement).checked)} /> <span>Require a signed body (HMAC-SHA256)</span></label>
