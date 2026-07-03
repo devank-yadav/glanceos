@@ -6,6 +6,7 @@ import { navigate } from "../router";
 import { STARTER_CATEGORIES, STARTER_TEMPLATES } from "../starterTemplates";
 import { filterTemplates } from "../templateSearch";
 import { BoardPreview, BoardPreviewById } from "./BoardPreview";
+import { sampleDataFor } from "./sampleData";
 import { Modal } from "./Modal";
 import { useToast } from "./Toast";
 
@@ -79,7 +80,8 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
         {list.map((t) => (
           <div key={t.key} class="card hub-card starter-card">
             <button class="starter-view-hit" title={`Preview ${t.name}`} aria-label={`Preview ${t.name}`} onClick={() => setViewing(t)}>
-              <BoardPreview doc={t.doc} deviceName={t.name} />
+              {/* #118 — sample data so the card shows a LIVING wall, not empty bound blocks */}
+              <BoardPreview doc={t.doc} data={sampleDataFor(t.doc)} deviceName={t.name} />
             </button>
             <div class="hub-card-body">
               <h3 class="card-title" title={t.name}>{t.name}</h3>
@@ -98,7 +100,7 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
         {viewing && (
           <div class="starter-detail">
             <div class="starter-detail-preview">
-              <BoardPreview doc={viewing.doc} deviceName={viewing.name} />
+              <BoardPreview doc={viewing.doc} data={sampleDataFor(viewing.doc)} deviceName={viewing.name} />
             </div>
             <div class="row spread starter-detail-meta">
               <span class="chip subtle">{viewing.category}</span>
