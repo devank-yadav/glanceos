@@ -1320,3 +1320,7 @@ body.tv [data-focusable]:focus {
 .syl-arrow { opacity: 0.5; }
 .syl-to { font-weight: 700; }
 .syl-empty { opacity: 0.5; }
+
+/* #66 — a scan-me QR the wall displays (the phone is what acts on it). */
+.qr-block svg { max-width: 100%; height: auto; } /* follows the block's own alignment */
+.qr-block-label { font-size: 0.8em; opacity: 0.75; margin-top: 4px; }

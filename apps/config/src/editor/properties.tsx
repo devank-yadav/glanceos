@@ -58,6 +58,8 @@ const PROP_FIELDS: Record<WidgetType, Field[]> = {
   image: [S("url", "Image URL"), Sel("fit", "Fit", ["cover", "contain"])],
   deck: [T("slides", "Slides (separate each with a blank line)"), N("seconds", "Seconds per slide")],
   button: [S("label", "Label")], // a static chip (read-only wall)
+  // #66 — the wall displays the code; the phone scans it. `value` is bindable.
+  qrCode: [S("value", "Encoded value (link, Wi-Fi, text)"), S("label", "Caption"), N("size", "Size (px)")],
   callout: [T("content", "Text"), S("emoji", "Emoji")],
   subheading: [S("content", "Text")],
   quote: [T("content", "Quote"), S("author", "Author")],

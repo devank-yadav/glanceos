@@ -195,6 +195,18 @@ const divider: Render = (el) => {
 // #10 → the wall is READ-ONLY (owner's rule): the button block renders as a STATIC labelled chip —
 // the screen never takes input. Pair a physical button or your phone via the API instead (the
 // "manual" trigger + /api/automations/:id/run-now with a scoped key, or a webhook inlet).
+// #66 — a scan-me code. `value` binds like any scalar, so the QR can carry a live
+// link (a ticket, a shift URL, today's menu). The wall displays; the phone acts.
+const qrCode: Render = (el, w, data) => {
+  if (w.type !== "qrCode") return;
+  const text = boundStr(w, data, "value");
+  if (!text) return placeholder(el, "no value");
+  const box = div("qr-block");
+  box.innerHTML = qrSvg(text, { size: w.props.size });
+  el.appendChild(box);
+  if (w.props.label) el.appendChild(div("qr-block-label", w.props.label));
+};
+
 const button: Render = (el, widget) => {
   if (widget.type !== "button") return;
   el.appendChild(div("block-button", widget.props.label || "Tap"));
@@ -2691,7 +2703,7 @@ export const WIDGETS: Record<WidgetT["type"], Render> = {
   // v8.0 rotation
   deck,
   // #10 interactivity
-  button,
+  button, qrCode,
   // #27 metric history chart
   metricHistory,
   // #153 reflection

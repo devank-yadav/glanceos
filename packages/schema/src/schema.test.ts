@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Layout, PAGE_UNITS } from "./layout";
+import { Layout, PAGE_UNITS, Widget } from "./layout";
 import { parseDocument } from "./migrate";
 import { templates } from "./fixtures";
 
@@ -284,5 +284,14 @@ describe("TV / large-display profile (v1.7, optional → back-compatible)", () =
     const s = ScreenState.parse({ layoutVersion: 1, layout: null, data: {}, tv: { enabled: true, power: "on" } });
     expect(s.tv?.enabled).toBe(true);
     expect(ScreenState.parse({ layoutVersion: 1, layout: null, data: {} }).tv).toBeUndefined();
+  });
+});
+
+describe("#66 qrCode block", () => {
+  it("round-trips with defaults and bounds the code size", () => {
+    const w = Widget.parse({ id: "q1", type: "qrCode", props: {} });
+    expect(w.props).toMatchObject({ value: "https://example.com", size: 160 });
+    expect(Widget.safeParse({ id: "q2", type: "qrCode", props: { size: 4000 } }).success).toBe(false);
+    expect(Widget.safeParse({ id: "q3", type: "qrCode", props: { value: "WIFI:S:cafe;T:WPA;P:pw;;", label: "Guest Wi-Fi" } }).success).toBe(true);
   });
 });

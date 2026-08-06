@@ -440,6 +440,15 @@ const b = { id: z.string().min(1), name: line(60).optional(), hidden: z.boolean(
 // (An earlier `automationId` binding is stripped on read; external buttons pair via the API.)
 export const ButtonProps = z.object({ label: line(60).default("Tap") });
 
+// #66 — a QR the wall DISPLAYS and a phone scans: a link, a Wi-Fi string, a ticket, or
+// a live value from a bound source (bind `value` like any other scalar). Read-only by
+// nature — the wall shows it, the phone acts on it.
+export const QrCodeProps = z.object({
+  value: line(600).default("https://example.com"),
+  label: line(60).default(""), // optional caption under the code
+  size: z.number().int().min(64).max(512).default(160),
+});
+
 export const Widget = z.discriminatedUnion("type", [
   z.object({ ...b, type: z.literal("clock"), props: ClockProps }),
   z.object({ ...b, type: z.literal("weather"), props: WeatherProps }),
@@ -685,6 +694,7 @@ export const Widget = z.discriminatedUnion("type", [
   // v8.0 rotation
   z.object({ ...b, type: z.literal("deck"), props: DeckProps }),
   z.object({ ...b, type: z.literal("button"), props: ButtonProps }), // #10 — tap fires an automation
+  z.object({ ...b, type: z.literal("qrCode"), props: QrCodeProps }), // #66 — scan-me code (can be data-bound)
 ]);
 
 export const Row = z.object({
