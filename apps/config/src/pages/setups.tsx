@@ -257,6 +257,9 @@ function SetupCard({ setup, folders, onChanged, isFav, onToggleFav }: { setup: S
             items={[
               { label: "Share…", icon: <Icon.link />, onClick: () => setSharing(true) },
               { label: "Duplicate", icon: <Icon.copy />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`).then(() => { toast.success("Duplicated"); return onChanged(); }) },
+              // #110 — a private, reusable copy. It leaves this board untouched and never
+              // reaches the public gallery; find it under Templates → My templates.
+              { label: "Save as template", icon: <Icon.layers />, onClick: () => api.post(`/api/layouts/${setup.id}/duplicate`, { asTemplate: true }).then(() => toast.success(`Saved to Templates → My templates`)).catch((e) => toast.error(String(e instanceof Error ? e.message : e))) },
               { label: "Export JSON", icon: <Icon.download />, onClick: exportJson },
               // #44 — a live full-color PNG of the board (rendered server-side; same-origin
               // GET so the session cookie rides along and the browser saves the download).

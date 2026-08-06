@@ -142,15 +142,19 @@ export function verifySharePassword(pwHash: string | null, candidate: string | u
   return typeof candidate === "string" && verifyHash(candidate, pwHash);
 }
 
-export function listSetups(orgId: string, opts: { archived?: boolean } = {}): SetupSummary[] {
+export function listSetups(orgId: string, opts: { archived?: boolean; template?: boolean } = {}): SetupSummary[] {
   // #107 — the main list shows only active boards; pass { archived: true } for the archive view.
   const archiveClause = opts.archived ? "AND l.archived_at IS NOT NULL" : "AND l.archived_at IS NULL";
+  // #110 — the same query serves the private template library. Because global builtins
+  // have org_id NULL, an org-scoped query can only ever return THIS org's own templates,
+  // and boards (is_template = 0) stay the default everywhere else in the app.
+  const templateClause = opts.template ? 1 : 0;
   const rows = db
     .prepare(
       `SELECT l.*, COUNT(d.id) AS used_by,
               COALESCE(GROUP_CONCAT(d.name, char(31)), '') AS device_names
        FROM layouts l LEFT JOIN devices d ON d.layout_id = l.id
-       WHERE l.org_id = ? AND l.is_template = 0 ${archiveClause}
+       WHERE l.org_id = ? AND l.is_template = ${templateClause} ${archiveClause}
        GROUP BY l.id ORDER BY l.id LIMIT 1000`, // safety cap against a pathological/abusive count
     )
     .all(orgId) as Array<LayoutRow & { used_by: number; device_names: string }>;
@@ -198,11 +202,20 @@ export function createLayout(
   return getLayout(Number(result.lastInsertRowid))!;
 }
 
-export function duplicateLayout(id: number, orgId: string, userId: string): LayoutRecord | undefined {
+// #110 — one primitive serves three verbs: Duplicate (no opts), Save-as-template
+// ({asTemplate}) and Use-this-template ({name}). Saving as a template COPIES — it never
+// flips the source row — so a board that's live on a screen keeps rendering. A private
+// template is published=0 by construction, so it can never reach the public gallery.
+export function duplicateLayout(
+  id: number,
+  orgId: string,
+  userId: string,
+  opts: { name?: string; asTemplate?: boolean } = {},
+): LayoutRecord | undefined {
   const source = getOwnedLayout(id, orgId);
   if (!source) return undefined;
-  const name = `${source.name} copy`;
-  return createLayout(name, { ...source.document, name }, { userId, orgId });
+  const name = (opts.name?.trim() || `${source.name} copy`).slice(0, 80);
+  return createLayout(name, { ...source.document, name }, { userId, orgId, isTemplate: opts.asTemplate, description: source.description });
 }
 
 // ---- board version history (archive prior states; restore later) ----

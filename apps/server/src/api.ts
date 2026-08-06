@@ -838,7 +838,7 @@ export function buildApp(): Hono<Env> {
 
   // ---- setups ----
 
-  app.get("/api/layouts", (c) => c.json(listSetups(c.get("orgId"), { archived: c.req.query("archived") === "1" }).map(setupSummary))); // #107 ?archived=1 → the archive view
+  app.get("/api/layouts", (c) => c.json(listSetups(c.get("orgId"), { archived: c.req.query("archived") === "1", template: c.req.query("template") === "1" }).map(setupSummary))); // #107 ?archived=1 → the archive view · #110 ?template=1 → your private template library
 
   app.post("/api/layouts", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { name?: string; document?: unknown };
@@ -1016,8 +1016,15 @@ export function buildApp(): Hono<Env> {
     return c.json(updated);
   });
 
-  app.post("/api/layouts/:id/duplicate", (c) => {
-    const copy = duplicateLayout(Number(c.req.param("id")), c.get("orgId"), c.get("userId"));
+  // #110 — one route, three verbs: Duplicate (no body), Save as template
+  // ({asTemplate:true}) and Use this template ({name}). getOwnedLayout inside
+  // duplicateLayout blocks templatizing a global builtin or another org's board.
+  app.post("/api/layouts/:id/duplicate", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; asTemplate?: boolean };
+    const copy = duplicateLayout(Number(c.req.param("id")), c.get("orgId"), c.get("userId"), {
+      name: typeof body.name === "string" ? body.name : undefined,
+      asTemplate: body.asTemplate === true,
+    });
     if (!copy) return c.json({ error: "not found" }, 404);
     return c.json(copy, 201);
   });

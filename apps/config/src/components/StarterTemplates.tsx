@@ -15,9 +15,13 @@ import { useToast } from "./Toast";
 // once approved it appears here alongside the starters. "View" opens a larger
 // preview; "Copy template" drops an editable copy into the user's Boards.
 
-type GalleryItem = { key: string; name: string; category: string; description: string; doc: LayoutT; kind: "starter" | "community"; hubId?: number };
+// #110 — a third source: YOUR OWN saved templates. They are private org rows
+// (is_template=1, published=0), so they never reach the public gallery; `doc` is
+// optional for them because the preview lazy-fetches by layout id.
+type GalleryItem = { key: string; name: string; category: string; description: string; doc?: LayoutT; kind: "starter" | "community" | "mine"; hubId?: number; layoutId?: number };
 
 const COMMUNITY = "Community";
+const MINE = "My templates";
 
 export function StarterTemplates({ publishing, onClosePublish }: { publishing: boolean; onClosePublish: () => void }) {
   const [cat, setCat] = useState<string>("All");
@@ -31,19 +35,26 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
   // a server-side review queue ("the Glance team") — the in-app review/admin
   // surface is a later phase, so there's no moderation UI here yet.
   const loadCommunity = () => api.get<HubItem[]>("/api/hub").then(setCommunity).catch(() => {});
-  useEffect(() => { loadCommunity(); }, []);
+  // #110 — the private library: this org's own saved templates.
+  const [mine, setMine] = useState<SetupSummary[]>([]);
+  const loadMine = () => api.get<SetupSummary[]>("/api/layouts?template=1").then(setMine).catch(() => {});
+  useEffect(() => { loadCommunity(); loadMine(); }, []);
 
   const items: GalleryItem[] = [
     ...STARTER_TEMPLATES.map((t) => ({ key: `s-${t.id}`, name: t.name, category: t.category, description: t.description, doc: t.doc, kind: "starter" as const })),
     ...community.map((c) => ({ key: `c-${c.id}`, name: c.name, category: COMMUNITY, description: c.description, doc: c.document, kind: "community" as const, hubId: c.id })),
+    ...mine.map((m) => ({ key: `m-${m.id}`, name: m.name, category: MINE, description: m.description, kind: "mine" as const, layoutId: m.id })),
   ];
-  const categories = ["All", ...STARTER_CATEGORIES, ...(community.length ? [COMMUNITY] : [])];
+  // Your own templates lead the chips — it's your library, not a browse surface.
+  const categories = ["All", ...(mine.length ? [MINE] : []), ...STARTER_CATEGORIES, ...(community.length ? [COMMUNITY] : [])];
   const list = filterTemplates(items, cat, query);
 
   const copy = async (t: GalleryItem) => {
     setBusy(true);
     try {
       if (t.kind === "community" && t.hubId != null) await api.post(`/api/hub/${t.hubId}/import`);
+      // #110 — one's own template copies server-side (no doc round-trip through the browser).
+      else if (t.kind === "mine" && t.layoutId != null) await api.post(`/api/layouts/${t.layoutId}/duplicate`, { name: t.name });
       else await api.post("/api/layouts", { name: t.name, document: t.doc });
       toast.success(`"${t.name}" copied to your Boards`);
       setViewing(null);
@@ -80,8 +91,11 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
         {list.map((t) => (
           <div key={t.key} class="card hub-card starter-card">
             <button class="starter-view-hit" title={`Preview ${t.name}`} aria-label={`Preview ${t.name}`} onClick={() => setViewing(t)}>
-              {/* #118 — sample data so the card shows a LIVING wall, not empty bound blocks */}
-              <BoardPreview doc={t.doc} data={sampleDataFor(t.doc)} deviceName={t.name} />
+              {/* #118 — sample data so the card shows a LIVING wall, not empty bound blocks.
+                  #110 — one's own template has no inline doc; it lazy-fetches by id. */}
+              {t.doc
+                ? <BoardPreview doc={t.doc} data={sampleDataFor(t.doc)} deviceName={t.name} />
+                : <BoardPreviewById layoutId={t.layoutId!} name={t.name} />}
             </button>
             <div class="hub-card-body">
               <h3 class="card-title" title={t.name}>{t.name}</h3>
@@ -100,7 +114,9 @@ export function StarterTemplates({ publishing, onClosePublish }: { publishing: b
         {viewing && (
           <div class="starter-detail">
             <div class="starter-detail-preview">
-              <BoardPreview doc={viewing.doc} data={sampleDataFor(viewing.doc)} deviceName={viewing.name} />
+              {viewing.doc
+                ? <BoardPreview doc={viewing.doc} data={sampleDataFor(viewing.doc)} deviceName={viewing.name} />
+                : <BoardPreviewById layoutId={viewing.layoutId!} name={viewing.name} />}
             </div>
             <div class="row spread starter-detail-meta">
               <span class="chip subtle">{viewing.category}</span>

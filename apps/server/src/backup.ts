@@ -17,7 +17,9 @@ export function dumpUser(userId: string, orgId: string, sections?: ExportSection
   const want = new Set<ExportSection>(sections?.length ? sections : EXPORT_SECTIONS);
   const dump: Record<string, unknown> = { format: "glanceos-backup", version: 1, exportedAt: Date.now(), sections: [...want] };
   // Boards/screens are the active org's; the rest stays user-namespaced.
-  if (want.has("boards")) dump.layouts = db.prepare("SELECT id, name, version, document, created_at FROM layouts WHERE org_id = ?").all(orgId);
+  // #110 — is_template rides along so a private template library round-trips as
+  // templates rather than silently becoming ordinary boards on restore.
+  if (want.has("boards")) dump.layouts = db.prepare("SELECT id, name, version, document, is_template, created_at FROM layouts WHERE org_id = ?").all(orgId);
   if (want.has("screens")) dump.devices = db.prepare("SELECT id, name, profile, refresh_seconds, timezone, location_name, latitude, longitude, render_opts, created_at FROM devices WHERE org_id = ?").all(orgId);
   if (want.has("connections")) dump.connections = db.prepare("SELECT id, provider, label, auth_kind, config, status FROM connections WHERE user_id = ?").all(userId);
   if (want.has("tasks")) dump.tasks = db.prepare("SELECT list_id, text, done, created_at FROM tasks WHERE user_id = ?").all(userId);
@@ -53,7 +55,7 @@ export function importUser(userId: string, orgId: string, dump: unknown, opts: {
       // replacing "everything" would otherwise silently destroy tasks + connections.
       if (Array.isArray(d.tasks)) db.prepare("DELETE FROM tasks WHERE user_id = ?").run(userId);
       if (Array.isArray(d.connections)) db.prepare("DELETE FROM connections WHERE user_id = ?").run(userId); // connection_secrets cascade
-      if (Array.isArray(d.layouts)) db.prepare("DELETE FROM layouts WHERE org_id = ? AND is_template = 0").run(orgId);
+      if (Array.isArray(d.layouts)) db.prepare("DELETE FROM layouts WHERE org_id = ?").run(orgId); // org-scoped, so this can never touch the global builtins (org_id NULL); #110 templates go too, and come back from the dump
     }
 
     // Connections first (no secrets → needs_auth), remapping ids so board source
@@ -78,7 +80,7 @@ export function importUser(userId: string, orgId: string, dump: unknown, opts: {
         if (src?.connectionId && connMap.has(src.connectionId)) src.connectionId = connMap.get(src.connectionId);
       }
       const name = typeof l.name === "string" && l.name.trim() ? l.name : doc.name;
-      createLayout(name, { ...doc, name }, { userId, orgId });
+      createLayout(name, { ...doc, name }, { userId, orgId, isTemplate: !!l.is_template }); // #110 — a template restores as a template
       res.layouts++;
     }
 

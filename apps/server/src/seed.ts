@@ -7,7 +7,9 @@ import { createLayout } from "./layouts";
 export function seedTemplates(): void {
   for (const template of templates) {
     const exists = db
-      .prepare("SELECT id FROM layouts WHERE is_template = 1 AND name = ?")
+      // org_id IS NULL scopes this to the GLOBAL builtins — otherwise a user's private
+      // template (#110) sharing a starter's name would suppress re-seeding that starter.
+      .prepare("SELECT id FROM layouts WHERE is_template = 1 AND org_id IS NULL AND name = ?")
       .get(template.name);
     if (!exists) {
       createLayout(template.name, template, {
