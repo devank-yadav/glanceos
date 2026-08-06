@@ -113,6 +113,10 @@ export const Action = z.discriminatedUnion("kind", [
     target: z.enum(["all", "device"]).default("all"),
     deviceId: z.string().optional(),
     ttlSeconds: z.number().int().min(3).max(3600).optional(),
+    // #41 — where this alert goes: the wall banner, the notification bell, your inbox —
+    // any combination, per rule. Absent = ["screen"] (today's behavior). Bell/email fan
+    // out immediately; only the SCREEN channel is subject to digest/storm calming.
+    channels: z.array(z.enum(["screen", "bell", "email"])).min(1).max(3).optional(),
   }),
   act({ kind: z.literal("webhook"), url: z.url({ protocol: /^https?$/ }), body: z.unknown().optional() }), // outbound — SSRF-guarded at run time
   // Object-targeting actions (v4.0, Shortcuts-style). They reference a block by its

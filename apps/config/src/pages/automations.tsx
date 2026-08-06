@@ -1049,6 +1049,20 @@ function ActionFields({ action, objects, devices, boards, scenes, loaded, onChan
           <option value="info">info</option><option value="warn">warn</option><option value="critical">critical</option>
         </select>
         {txt("title", "title", "grow")}
+        {/* #41 — per-channel routing: where this alert goes. Blank = the wall only. */}
+        <select
+          value={((action.channels as string[] | undefined) ?? ["screen"]).join("+")}
+          onChange={(e) => f("channels", (e.currentTarget as HTMLSelectElement).value.split("+"))}
+          title="Where this alert is delivered"
+        >
+          <option value="screen">Send to: the wall</option>
+          <option value="bell">Send to: notifications</option>
+          <option value="email">Send to: email</option>
+          <option value="screen+bell">Send to: wall + notifications</option>
+          <option value="screen+email">Send to: wall + email</option>
+          <option value="bell+email">Send to: notifications + email</option>
+          <option value="screen+bell+email">Send to: all three</option>
+        </select>
         <select value={String(action.respectQuiet ?? "off")} onChange={(e) => f("respectQuiet", (e.currentTarget as HTMLSelectElement).value)} title="What this alert does during a screen's quiet hours">
           <option value="off">Quiet hrs: always show</option>
           <option value="soften">Quiet hrs: soften</option>

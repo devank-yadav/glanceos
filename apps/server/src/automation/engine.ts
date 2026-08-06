@@ -20,7 +20,7 @@ import { allBlocks } from "../widgets";
 import { db } from "../db";
 import { metricSeries } from "../metrics";
 import { emailConfigured } from "../email";
-import { sendSnapshotEmail } from "../emails";
+import { sendAlertEmail, sendSnapshotEmail } from "../emails";
 import { boardSnapshotPng, snapshotFilename } from "../snapshot";
 import { calendarContext, resolveUserCalendar, resolveUserWeather, type DayCalendar, type DayWeather } from "../daycontext";
 // Re-export the day-context helpers from their new leaf home so existing call sites
@@ -470,6 +470,19 @@ const DIGEST_CAP = 50; // a runaway rule can't grow the buffer without bound
 export const pendingDigest = (userId: string): number => digestBuffer.get(userId)?.length ?? 0;
 
 async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
+  // #41 — channel fan-out. Bell + email deliver immediately: they are not wall
+  // interruptions, and digest mode / storm grouping exist to keep the WALL calm.
+  // Email is best-effort (no backend → silent skip; sendEmail never throws).
+  const channels = a.channels?.length ? a.channels : ["screen" as const];
+  if (channels.includes("bell")) {
+    const day = Math.floor(Date.now() / 86_400_000);
+    createIfAbsent(userId, null, "alert", a.body ? `${a.title} — ${a.body}` : a.title, `alertbell:${a.title}:${day}`);
+  }
+  if (channels.includes("email") && emailConfigured()) {
+    const u = getUser(userId);
+    if (u) void sendAlertEmail(u.email, a.severity, a.title, a.body);
+  }
+  if (!channels.includes("screen")) return;
   const every = getUser(userId)?.alertDigestMin ?? 0;
   if (every > 0 && a.severity !== "critical") {
     let buf = digestBuffer.get(userId);
@@ -927,7 +940,7 @@ const describeAction = (a: ActionT): string => {
     case "advanceQueue": return `advance queue "${a.queueId}" by ${a.delta ?? 1}`;
     case "switchBoard": return `switch a screen to board #${a.layoutId}`;
     case "notify": return `notify: ${a.message}`;
-    case "alert": return `alert (${a.severity}): ${a.title}`;
+    case "alert": return `alert (${a.severity}${a.channels?.length ? ` → ${a.channels.join("+")}` : ""}): ${a.title}`;
     case "webhook": return `POST to ${a.url}`;
     case "setObjectText": return `set “${a.objectName ?? a.objectId}” text`;
     case "setObjectProp": return `set “${a.objectName ?? a.objectId}” ${a.prop}`;

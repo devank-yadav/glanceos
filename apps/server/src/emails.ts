@@ -110,3 +110,12 @@ export async function sendSnapshotEmail(to: string, boardName: string, png: Buff
     attachments: [{ filename, content: png, contentType: "image/png" }],
   });
 }
+
+// #41 — an automation alert routed to the inbox (per-rule channel choice). Same calm
+// house style; the severity leads the subject so filters can grab it.
+export async function sendAlertEmail(to: string, severity: string, title: string, body?: string): Promise<boolean> {
+  return sendEmail(to, `[${severity}] ${title}`, {
+    text: `${title}${body ? `\n\n${body}` : ""}${FOOT}`,
+    html: html(title, [body ?? "An automation rule raised this alert.", `Severity: <strong>${severity}</strong>`], { label: "Open GlanceOS", url: publicUrl("/") }),
+  });
+}

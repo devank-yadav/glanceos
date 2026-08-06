@@ -865,3 +865,33 @@ describe("#47 alert digest mode", () => {
     expect(s).toMatchObject({ count: 1, severity: "info", title: "Backup finished", body: "42 GB" });
   });
 });
+
+describe("#41 per-channel alert routing", () => {
+  it("bell channel records a notification; screen-less routing never touches the wall", async () => {
+    const { listNotifications } = await import("../notifications");
+    const u = createUser("Chan", "chan@example.com", "password123")!;
+    await runActions([{ kind: "alert", severity: "warn", title: "Disk low", body: "under 5%", target: "all", channels: ["bell"] }], u.id, buildContext(u.id));
+    const n = listNotifications(u.id);
+    expect(n.length).toBe(1);
+    expect(n[0]!.message).toBe("Disk low — under 5%");
+    expect(n[0]!.kind).toBe("alert");
+  });
+
+  it("defaults to the wall only (no channels = today's behavior, no bell row)", async () => {
+    const { listNotifications } = await import("../notifications");
+    const u = createUser("Chan2", "chan2@example.com", "password123")!;
+    await runActions([{ kind: "alert", severity: "info", title: "Just the wall", target: "all" }], u.id, buildContext(u.id));
+    expect(listNotifications(u.id).length).toBe(0);
+  });
+
+  it("bell delivers even while digest mode holds the wall copy", async () => {
+    const { listNotifications } = await import("../notifications");
+    const { setUserAlertDigest } = await import("../auth");
+    const { pendingDigest } = await import("./engine");
+    const u = createUser("Chan3", "chan3@example.com", "password123")!;
+    setUserAlertDigest(u.id, 30);
+    await runActions([{ kind: "alert", severity: "info", title: "Held on the wall", target: "all", channels: ["screen", "bell"] }], u.id, buildContext(u.id));
+    expect(listNotifications(u.id).length).toBe(1); // bell is not a wall interruption → immediate
+    expect(pendingDigest(u.id)).toBe(1); // the wall copy is still held
+  });
+});
