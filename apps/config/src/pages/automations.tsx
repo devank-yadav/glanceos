@@ -76,6 +76,14 @@ const FIELD_CATALOG: FieldDef[] = [
   { field: "calendar.nextIsOnline", label: "Next is a video call", group: "Calendar", control: "bool" },
   { field: "calendar.nextLocation", label: "Next event location", group: "Calendar", control: "text" },
   { field: "calendar.nextIsAllDay", label: "Next event is all-day", group: "Calendar", control: "bool" },
+  // #8 — calendar depth: who's in it, who runs it, how packed the day is, real free time
+  { field: "calendar.nextAttendees", label: "People in the next event", group: "Calendar", control: "number" },
+  { field: "calendar.nextIsOneOnOne", label: "Next event is a 1:1", group: "Calendar", control: "bool" },
+  { field: "calendar.nextIsGroup", label: "Next event is a group meeting", group: "Calendar", control: "bool" },
+  { field: "calendar.nextIsMine", label: "I'm hosting the next event", group: "Calendar", control: "bool" },
+  { field: "calendar.backToBack", label: "Back-to-back (no gap after this one)", group: "Calendar", control: "bool" },
+  { field: "calendar.freeForMinutes", label: "Free for (minutes)", group: "Calendar", control: "number" },
+  { field: "calendar.meetingMinutesToday", label: "Meeting minutes today", group: "Calendar", control: "number" },
   // Screen / device
   { field: "device.online", label: "Screen is online", group: "Screen", control: "bool" },
   // Webhook
@@ -138,6 +146,12 @@ const WHEN_SCENARIOS: WhenScenario[] = [
   { id: "video-soon", group: "Calendar", label: "Video call starting within 5 min", trigger: { kind: "tick" }, conditions: { type: "all", conditions: [{ type: "field", field: "calendar.nextIsOnline", op: "eq", value: true }, { type: "field", field: "calendar.minutesUntilNext", op: "lte", value: 5 }] } },
   { id: "busy-day", group: "Calendar", label: "Heavy day (more than 5 meetings)", trigger: { kind: "tick" }, conditions: fcond("calendar.eventsToday", "gt", 5) },
   { id: "free-now", group: "Calendar", label: "When I'm free (no event now)", trigger: { kind: "tick" }, conditions: fcond("calendar.isBusyNow", "eq", false) },
+  // #8 — depth recipes
+  { id: "deep-work", group: "Calendar", label: "A real gap (free for 2h+)", trigger: { kind: "tick" }, conditions: fcond("calendar.freeForMinutes", "gte", 120) },
+  { id: "back-to-back", group: "Calendar", label: "Back-to-back meetings (no gap)", trigger: { kind: "tick" }, conditions: fcond("calendar.backToBack", "eq", true) },
+  { id: "one-on-one", group: "Calendar", label: "Next event is a 1:1", trigger: { kind: "tick" }, conditions: fcond("calendar.nextIsOneOnOne", "eq", true) },
+  { id: "hosting", group: "Calendar", label: "I'm hosting the next meeting", trigger: { kind: "tick" }, conditions: fcond("calendar.nextIsMine", "eq", true) },
+  { id: "heavy-hours", group: "Calendar", label: "Over 4 hours of meetings today", trigger: { kind: "tick" }, conditions: fcond("calendar.meetingMinutesToday", "gt", 240) },
   // Trend — react to a direction, not just a level (uses the trend ring-buffer)
   { id: "rising", group: "Trend", label: "When a value has been rising", trigger: { kind: "tick" }, conditions: fcond("data.value", "rising", "") },
   { id: "falling", group: "Trend", label: "When a value has been falling", trigger: { kind: "tick" }, conditions: fcond("data.value", "falling", "") },

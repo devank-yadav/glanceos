@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeContextualGreeting, composeDailyBrief, type DayCalendar, type DayContext, type DayWeather } from "./daycontext";
+import { calendarContext, composeContextualGreeting, composeDailyBrief, type DayCalendar, type DayContext, type DayWeather } from "./daycontext";
 
 const TZ = "UTC";
 const morning = Date.parse("2026-06-29T08:00:00Z"); // 08:00 UTC, a Monday
@@ -77,5 +77,56 @@ describe("composeDailyBrief (#148)", () => {
     expect(b.weatherLine).toBeNull();
     expect(b.dateLabel).toBe("");
     expect(b.events.length).toBe(0);
+  });
+});
+
+// #8 — calendar depth: company, host, packing, and real free time, all derived from the
+// same parsed agenda (no extra fetch). calendarContext is pure — fixed clock, no throw.
+describe("#8 calendar depth (calendarContext)", () => {
+  const T0 = Date.parse("2026-06-29T09:00:00Z"); // 09:00 UTC Monday
+  const ev = (h: number, mins: number, over: Record<string, unknown> = {}) => ({
+    title: `E${h}`, start: new Date(Date.parse(`2026-06-29T${String(h).padStart(2, "0")}:00:00Z`)).toISOString(),
+    end: new Date(Date.parse(`2026-06-29T${String(h).padStart(2, "0")}:00:00Z`) + mins * 60_000).toISOString(), ...over,
+  });
+
+  it("reads company size and who's hosting off the next event", () => {
+    const c = calendarContext([ev(10, 30, { title: "1:1 with Sam", attendees: 2, isOrganizer: true })], T0, TZ);
+    expect(c.nextAttendees).toBe(2);
+    expect(c.nextIsOneOnOne).toBe(true);
+    expect(c.nextIsGroup).toBe(false);
+    expect(c.nextIsMine).toBe(true);
+  });
+
+  it("three or more people is a group, and a guest isn't hosting", () => {
+    const c = calendarContext([ev(10, 30, { attendees: 5 })], T0, TZ);
+    expect(c.nextIsGroup).toBe(true);
+    expect(c.nextIsOneOnOne).toBe(false);
+    expect(c.nextIsMine).toBe(false);
+  });
+
+  it("back-to-back = in one now and the next starts within the 5-min seam", () => {
+    const tight = calendarContext([ev(8, 65), ev(10, 30)], Date.parse("2026-06-29T08:30:00Z"), TZ); // 08:00–09:05, next 10:00
+    expect(tight.backToBack).toBe(false); // a 55-min gap is real breathing room
+    const packed = calendarContext([ev(8, 62), ev(9, 30)], Date.parse("2026-06-29T08:30:00Z"), TZ); // ends 09:02, next 09:00
+    expect(packed.backToBack).toBe(true);
+  });
+
+  it("free time is 0 while busy, the gap when idle, and undefined with nothing ahead", () => {
+    expect(calendarContext([ev(8, 120)], T0, TZ).freeForMinutes).toBe(0); // mid-meeting
+    expect(calendarContext([ev(11, 30)], T0, TZ).freeForMinutes).toBe(120); // two clear hours
+    expect(calendarContext([], T0, TZ).freeForMinutes).toBeUndefined();
+  });
+
+  it("all-day events don't consume time: they skip free-time, packing and the up-next list", () => {
+    const c = calendarContext([ev(0, 1440, { title: "Conference", allDay: true }), ev(14, 60, { title: "Retro" })], T0, TZ);
+    expect(c.freeForMinutes).toBe(300); // 09:00 → 14:00, the all-day banner isn't a booking
+    expect(c.meetingMinutesToday).toBe(60);
+    expect(c.upcomingTitles).toEqual(["Retro"]);
+  });
+
+  it("sums the day's booked minutes and lists the next three", () => {
+    const c = calendarContext([ev(10, 30), ev(11, 60), ev(13, 45), ev(15, 30)], T0, TZ);
+    expect(c.meetingMinutesToday).toBe(165);
+    expect(c.upcomingTitles).toEqual(["E10", "E11", "E13"]);
   });
 });

@@ -20,6 +20,18 @@ export interface DayWeather { tempC: number; summary: string; high?: number; low
 export interface DayCalendar {
   isBusyNow: boolean; minutesUntilNext?: number; nextTitle?: string; nextStart?: string; freeUntil?: string;
   eventsToday: number; nextLocation?: string; nextIsOnline: boolean; nextJoinUrl?: string; nextIsAllDay: boolean;
+  // #8 — depth: how much company, who's hosting, how the day is packed, and how much
+  // real room you have. All derived from the same parsed agenda (no extra fetch).
+  // All optional: a partially-built context (tests, future callers) stays valid, and
+  // every consumer must already tolerate a missing calendar.
+  nextAttendees?: number; // people on the next event (rooms/equipment excluded)
+  nextIsOneOnOne?: boolean; // exactly you + one other
+  nextIsGroup?: boolean; // three or more people
+  nextIsMine?: boolean; // you organize the next event
+  backToBack?: boolean; // the next event starts within 5 min of the current one ending
+  freeForMinutes?: number; // uninterrupted minutes from now until the next timed event
+  meetingMinutesToday?: number; // total booked minutes today (all-day events excluded)
+  upcomingTitles?: string[]; // the next three timed events, in order
 }
 
 // The user's geo for weather/sun: their home location, else the first located screen they own.
@@ -49,14 +61,15 @@ function dayKeyInTz(ts: number, tz: string): string {
 }
 
 // A single parsed agenda event (start/end ms epoch, title, optional location, allDay, join link).
-export interface AgendaEvent { start: number; end: number; title: string; location?: string; allDay: boolean; join?: string }
+export interface AgendaEvent { start: number; end: number; title: string; location?: string; allDay: boolean; join?: string; attendees?: number; isOrganizer?: boolean }
 // Pure: parse + sort a raw resolved event list. Used by both calendarContext and the brief.
 export function parseAgenda(list: unknown[]): AgendaEvent[] {
   return list
     .map((e) => {
       const o = (e ?? {}) as Record<string, unknown>;
       const s = Date.parse(String(o.start));
-      return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? ""), location: o.location ? String(o.location) : undefined, allDay: o.allDay === true, join: joinLinkOf(o) };
+      const att = Number(o.attendees);
+      return { start: s, end: o.end ? Date.parse(String(o.end)) : s + 3_600_000, title: String(o.title ?? ""), location: o.location ? String(o.location) : undefined, allDay: o.allDay === true, join: joinLinkOf(o), attendees: Number.isFinite(att) ? att : undefined, isOrganizer: o.isOrganizer === true ? true : undefined };
     })
     .filter((e) => Number.isFinite(e.start))
     .sort((a, b) => a.start - b.start);
@@ -69,17 +82,38 @@ export function calendarContext(list: unknown[], now: number, tz: string): DayCa
   const busy = evs.find((e) => e.start <= now && e.end > now);
   const next = evs.find((e) => e.start > now);
   const today = dayKeyInTz(now, tz);
+  // #8 — an all-day event isn't a claim on your time, so packing, free-time and
+  // back-to-back all reason over TIMED events only. (isBusyNow keeps its original
+  // meaning — an all-day event does mark you busy — so existing rules are unchanged.)
+  const timedAhead = evs.filter((e) => !e.allDay && e.start > now);
+  const nextTimed = timedAhead[0];
+  const busyTimed = evs.find((e) => !e.allDay && e.start <= now && e.end > now);
+  const att = next?.attendees;
+  const todays = evs.filter((e) => dayKeyInTz(e.start, tz) === today);
   return {
     isBusyNow: !!busy,
     minutesUntilNext: next ? Math.max(0, Math.round((next.start - now) / 60_000)) : undefined,
     nextTitle: next?.title || undefined,
     nextStart: next ? new Date(next.start).toISOString() : undefined,
     freeUntil: busy ? new Date(busy.end).toISOString() : undefined,
-    eventsToday: evs.filter((e) => dayKeyInTz(e.start, tz) === today).length,
+    eventsToday: todays.length,
     nextLocation: next?.location,
     nextIsOnline: !!next?.join,
     nextJoinUrl: next?.join,
     nextIsAllDay: next?.allDay ?? false,
+    // #8 depth
+    nextAttendees: att,
+    nextIsOneOnOne: att === 2,
+    nextIsGroup: att !== undefined && att >= 3,
+    nextIsMine: next?.isOrganizer === true,
+    // "Back-to-back" = you're in something now and the next thing starts as it ends
+    // (a ≤5 min seam), i.e. no real gap to breathe, stand up, or switch rooms.
+    backToBack: !!busyTimed && !!nextTimed && nextTimed.start - busyTimed.end <= 5 * 60_000,
+    // Free time = until the next timed event starts; while you're IN one, you aren't
+    // free at all (0). No timed events ahead → undefined ("free as far as I can see").
+    freeForMinutes: busyTimed ? 0 : nextTimed ? Math.max(0, Math.round((nextTimed.start - now) / 60_000)) : undefined,
+    meetingMinutesToday: todays.filter((e) => !e.allDay).reduce((m, e) => m + Math.max(0, Math.round((e.end - e.start) / 60_000)), 0),
+    upcomingTitles: timedAhead.slice(0, 3).map((e) => e.title).filter(Boolean),
   };
 }
 

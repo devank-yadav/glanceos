@@ -274,15 +274,20 @@ export interface GEvent {
   summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string };
   location?: string; hangoutLink?: string; // #70 — the Meet link (legacy shortcut, still populated)
   conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] }; // #70 — Zoom/Teams add-ons land here
+  attendees?: { email?: string; self?: boolean; responseStatus?: string; resource?: boolean }[]; // #8
+  organizer?: { email?: string; self?: boolean }; // #8 — am I hosting?
 }
 /** Shape Google Calendar API items into the {title,start,end,location,url} events the calendar
- *  renderer + daycontext read. `url` is the join link (#70): hangoutLink, else the video entry point. */
-export function mapGoogleEvents(items: GEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string }[] } {
+ *  renderer + daycontext read. `url` is the join link (#70): hangoutLink, else the video entry point.
+ *  #8 adds `attendees` (people only — rooms/equipment are resources, not company) and `organizer`. */
+export function mapGoogleEvents(items: GEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string; attendees?: number; isOrganizer?: boolean }[] } {
   const events = items
     .map((e) => ({
       title: e.summary || "(busy)", start: e.start?.dateTime || e.start?.date || "", end: e.end?.dateTime || e.end?.date,
       location: e.location || undefined,
       url: e.hangoutLink || e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri || undefined,
+      attendees: e.attendees ? e.attendees.filter((a) => !a.resource).length : undefined,
+      isOrganizer: e.organizer?.self === true ? true : undefined,
     }))
     .filter((e) => e.start);
   return { events };
@@ -373,14 +378,18 @@ reg({
 export interface GraphEvent {
   subject?: string; start?: { dateTime?: string }; end?: { dateTime?: string };
   location?: { displayName?: string }; onlineMeeting?: { joinUrl?: string } | null; // #70 — Teams join link
+  attendees?: { type?: string }[]; isOrganizer?: boolean; // #8 — company size + am I hosting?
 }
 /** Shape Microsoft Graph calendar items into the {title,start,end,location,url} events the
- *  calendar renderer + daycontext read. `url` is the Teams join link (#70). */
-export function mapGraphEvents(items: GraphEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string }[] } {
+ *  calendar renderer + daycontext read. `url` is the Teams join link (#70). #8 adds the
+ *  attendee count (people only — Graph types rooms as "resource") and the organizer flag. */
+export function mapGraphEvents(items: GraphEvent[]): { events: { title: string; start: string; end?: string; location?: string; url?: string; attendees?: number; isOrganizer?: boolean }[] } {
   const events = items
     .map((e) => ({
       title: e.subject || "(busy)", start: e.start?.dateTime || "", end: e.end?.dateTime,
       location: e.location?.displayName || undefined, url: e.onlineMeeting?.joinUrl || undefined,
+      attendees: e.attendees ? e.attendees.filter((a) => a.type !== "resource").length : undefined,
+      isOrganizer: e.isOrganizer === true ? true : undefined,
     }))
     .filter((e) => e.start);
   return { events };
@@ -401,7 +410,7 @@ reg({
     const end = new Date(now.getTime() + 30 * 86_400_000);
     const url = "https://graph.microsoft.com/v1.0/me/calendarView"
       + `?startDateTime=${now.toISOString()}&endDateTime=${end.toISOString()}`
-      + `&$orderby=${encodeURIComponent("start/dateTime")}&$top=${max}&$select=subject,start,end,location,onlineMeeting`; // #70 — join link + place
+      + `&$orderby=${encodeURIComponent("start/dateTime")}&$top=${max}&$select=subject,start,end,location,onlineMeeting,attendees,isOrganizer`; // #70 join link + place · #8 company
     const raw = (await getJSON(url, { authorization: `Bearer ${ctx.secret}`, prefer: 'outlook.timezone="UTC"' })) as { value?: GraphEvent[] } | null;
     if (!raw?.value) return null;
     return mapGraphEvents(raw.value);
