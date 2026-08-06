@@ -88,3 +88,12 @@ describe("#74 habitShape (pure wall shapes from done-days)", () => {
     expect(s.streak).toBe(0);
   });
 });
+
+describe("review fix — metricSeries keeps the NEWEST points", () => {
+  it("a window past the cap summarises end-to-end, not by a stale mid-window sample", () => {
+    const u = "metric-newest";
+    for (let i = 0; i < 20; i++) logMetric(u, "m", i, 1_800_000_000_000 + i * 60_000);
+    const capped = metricSeries(u, "m", 0, 5);
+    expect(capped.map((p) => p.value)).toEqual([15, 16, 17, 18, 19]); // newest 5, ascending
+  });
+});

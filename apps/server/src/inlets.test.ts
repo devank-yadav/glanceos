@@ -128,3 +128,17 @@ describe("#30 values sink (one POST, a whole set of data values)", () => {
     expect(getCustomData(user.id, "sneak")).toBeUndefined();
   });
 });
+
+describe("review fix — a rejected write is not a change", () => {
+  it("an over-cap value neither lands nor fires its dataChanged rule", async () => {
+    const { createAutomation } = await import("./automations");
+    const { inlet } = createInlet(user.id, { name: "Reject", sinkKind: "data", sinkTarget: "rejkey" });
+    createAutomation(user.id, {
+      name: "Watch rejkey", enabled: true, trigger: { kind: "dataChanged", key: "rejkey" },
+      actions: [{ kind: "setData", key: "rej_fired", value: "yes" }],
+    });
+    await post(inlet.secret, JSON.stringify({ value: "x".repeat(300_000) })); // past MAX_VALUE_BYTES
+    expect(getCustomData(user.id, "rejkey")).toBeUndefined();
+    expect(getCustomData(user.id, "rej_fired")).toBeUndefined();
+  });
+});

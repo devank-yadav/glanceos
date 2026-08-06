@@ -895,3 +895,66 @@ describe("#41 per-channel alert routing", () => {
     expect(pendingDigest(u.id)).toBe(1); // the wall copy is still held
   });
 });
+
+// ---- adversarial-review regressions (Batch-3 diff) ----
+describe("review fixes", () => {
+  it("a dataChanged write no longer swallows a tick rule's crossesAbove edge", async () => {
+    const { fireDataChanged } = await import("./engine");
+    const u = createUser("Rev1", "rev1@example.com", "password123")!;
+    createAutomation(u.id, {
+      name: "Temp crosses 30", enabled: true, trigger: { kind: "tick" },
+      conditions: { type: "field", field: "data.temp", op: "crossesAbove", value: 30 },
+      actions: [{ kind: "setData", key: "rev1_hit", value: "yes" }],
+    });
+    createAutomation(u.id, { // an unrelated watcher on another key
+      name: "Humidity watcher", enabled: true, trigger: { kind: "dataChanged", key: "humidity" },
+      actions: [{ kind: "setData", key: "rev1_hum", value: "seen" }],
+    });
+    const at = (m: number) => new Date(Date.UTC(2026, 6, 4, 9, m));
+    setCustomData(u.id, "temp", 25);
+    await fireAutomations(u.id, "tick", { now: at(0), usePrev: true }); // baseline prev temp=25
+    setCustomData(u.id, "temp", 35);
+    await fireDataChanged(u.id, "temp"); // the write that used to clobber the tick baseline
+    await fireAutomations(u.id, "tick", { now: at(1), usePrev: true });
+    expect(getCustomData(u.id, "rev1_hit")).toBe("yes"); // 25 → 35 crossing still fires
+  });
+
+  it("a trend rule on a no-history field falls back to the live buffer instead of dying", async () => {
+    const u = createUser("Rev2", "rev2@example.com", "password123")!;
+    createAutomation(u.id, {
+      name: "Objects rising", enabled: true, trigger: { kind: "tick" },
+      // a stale numeric value left over from switching the op — must NOT be read as a window
+      conditions: { type: "field", field: "weather.tempC", op: "rising", value: 25 },
+      actions: [{ kind: "setData", key: "rev2_hit", value: "yes" }],
+    });
+    const c = (tempC: number, m: number) => ({
+      data: {}, webhook: {}, device: {}, objects: {}, tz: "UTC",
+      time: { hour: 9, minute: m, minuteOfDay: 540 + m, weekday: 4, ts: Date.UTC(2026, 6, 4, 9, m), isWeekend: false, isWorkday: true },
+      weather: { tempC, summary: "", precipProbPct: 0, isRaining: false },
+    }) as unknown as NonNullable<Parameters<typeof fireAutomations>[2]>["ctx"];
+    for (const [i, t] of [10, 20, 30].entries()) await fireAutomations(u.id, "tick", { ctx: c(t, i), now: new Date(Date.UTC(2026, 6, 4, 9, i)), usePrev: true });
+    expect(getCustomData(u.id, "rev2_hit")).toBe("yes"); // live buffer produced a verdict
+  });
+
+  it("a digest keeps the held alerts' quiet-hours posture and device targeting", async () => {
+    const { flushAlertDigest } = await import("./engine");
+    const { setUserAlertDigest } = await import("../auth");
+    const u = createUser("Rev3", "rev3@example.com", "password123")!;
+    setUserAlertDigest(u.id, 30);
+    await runActions([{ kind: "alert", severity: "warn", title: "Kitchen only", target: "device", deviceId: "dev-x", respectQuiet: "suppress" }], u.id, buildContext(u.id));
+    const s = await flushAlertDigest(u.id, Date.now() + 31 * 60_000);
+    expect(s).toMatchObject({ count: 1, title: "Kitchen only" }); // delivered, not silently widened
+  });
+
+  it("a concurrent alert storm can't discard the held digest", async () => {
+    const { flushAlertDigest } = await import("./engine");
+    const { setUserAlertDigest } = await import("../auth");
+    const u = createUser("Rev4", "rev4@example.com", "password123")!;
+    setUserAlertDigest(u.id, 15);
+    await runActions([{ kind: "alert", severity: "info", title: "Held one", target: "all" }], u.id, buildContext(u.id));
+    // criticals bypass the digest and feed the #14 storm counter until it goes silent
+    for (let i = 0; i < 6; i++) await runActions([{ kind: "alert", severity: "critical", title: `Storm ${i}`, target: "all" }], u.id, buildContext(u.id));
+    const s = await flushAlertDigest(u.id, Date.now() + 16 * 60_000);
+    expect(s).toMatchObject({ count: 1, title: "Held one" }); // survived the storm gate
+  });
+});

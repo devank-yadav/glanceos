@@ -386,7 +386,9 @@ export function AccountPage() {
             </button>
             {user?.dailyBriefAt != null && (
               <label class="field"><span>Send at</span>
-                <input type="time" value={minToTime(user.dailyBriefAt)} onChange={(e) => saveBrief(timeToMin((e.currentTarget as HTMLInputElement).value))} />
+                {/* An incomplete/cleared time input fires change with "" — ignore it
+                    rather than reading it as 00:00 and quietly moving the brief to midnight. */}
+                <input type="time" value={minToTime(user.dailyBriefAt)} onChange={(e) => { const v = (e.currentTarget as HTMLInputElement).value; if (/^\d{2}:\d{2}/.test(v)) saveBrief(timeToMin(v)); }} />
               </label>
             )}
           </div>

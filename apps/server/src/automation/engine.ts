@@ -355,9 +355,16 @@ function trendLookback(cond: Extract<ConditionT, { type: "field" }>): number | n
 // A trend verdict's slot in the per-pass map — windowed verdicts live beside the live
 // one ("data.x@1440" vs "data.x"), so two rules on the same field never collide.
 const trendKey = (field: string, lookbackMin: number | null): string => (lookbackMin ? `${field}@${lookbackMin}` : field);
+// Only `data.*` fields have persistent history to look back over. Anything else
+// (weather.*, objects.*) has no window available — hasHistory lets the caller fall
+// back to the live buffer instead of leaving the verdict null forever, which would
+// silently kill a rule whose op was switched to rising/falling with a stale value.
+const hasHistory = (field: string): boolean => field.startsWith("data.");
 function lookbackDirection(userId: string, field: string, minutes: number, nowMs: number): "rising" | "falling" | "steady" | null {
-  if (!field.startsWith("data.")) return null; // history is keyed by custom-data key
-  const pts = metricSeries(userId, field.slice(5), nowMs - minutes * 60_000);
+  if (!hasHistory(field)) return null;
+  // maxPoints must cover the whole window: metricSeries keeps the NEWEST points, so a
+  // long window is summarised end-to-end rather than by a stale mid-window sample.
+  const pts = metricSeries(userId, field.slice(5), nowMs - minutes * 60_000, Math.max(500, minutes + 2));
   if (pts.length < 2) return null; // a single write in the window has no direction
   return directionOf(pts[0]!.value, pts[pts.length - 1]!.value);
 }
@@ -463,7 +470,12 @@ export function alertStorm(userId: string, now: number): "deliver" | "summarize"
 // delivers them as ONE calm summary once the window has passed. `critical` always
 // breaks through (a safety valve). The buffer + clock persist with the rest of the
 // engine's history, so a restart loses nothing.
-interface DigestEntry { severity: "info" | "warn"; title: string; body?: string; at: number }
+// A held alert keeps its DELIVERY constraints, not just its words: dropping
+// respectQuiet/target/deviceId would let a digest flash a screen the original action
+// explicitly suppressed or never targeted.
+interface DigestEntry { severity: "info" | "warn"; title: string; body?: string; at: number; quiet?: "off" | "hold" | "suppress" | "soften"; target?: "all" | "device"; deviceId?: string; ttl?: number }
+// Strictest-wins when a digest mixes alerts with different quiet-hours postures.
+const QUIET_RANK = { off: 0, soften: 1, hold: 2, suppress: 3 } as const;
 const digestBuffer = new Map<string, DigestEntry[]>();
 const digestLast = new Map<string, number>();
 const DIGEST_CAP = 50; // a runaway rule can't grow the buffer without bound
@@ -488,7 +500,7 @@ async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>)
     let buf = digestBuffer.get(userId);
     if (!buf) { buf = []; digestBuffer.set(userId, buf); }
     if (!digestLast.has(userId)) digestLast.set(userId, Date.now()); // the clock starts at the first held alert
-    buf.push({ severity: a.severity, title: a.title, body: a.body, at: Date.now() });
+    buf.push({ severity: a.severity, title: a.title, body: a.body, at: Date.now(), quiet: a.respectQuiet, target: a.target, deviceId: a.deviceId, ttl: a.ttlSeconds });
     if (buf.length > DIGEST_CAP) buf.splice(0, buf.length - DIGEST_CAP);
     return;
   }
@@ -511,13 +523,26 @@ export async function flushAlertDigest(userId: string, nowMs = Date.now()): Prom
   const titles = [...new Set(buf.map((e) => e.title))];
   const title = count === 1 ? buf[0]!.title : `${count} alerts while the wall stayed calm`;
   const body = count === 1 ? (buf[0]!.body ?? "") : titles.slice(0, 3).join(" · ") + (titles.length > 3 ? ` · +${titles.length - 3} more` : "");
-  await deliverAlert(userId, { kind: "alert", severity, title, body, target: "all" });
+  // Carry the held alerts' delivery constraints into the summary: the STRICTEST
+  // quiet-hours posture wins, and the device targeting survives only when every held
+  // alert agreed on it (a mixed digest can only honestly go to all screens).
+  const quiet = buf.reduce<"off" | "hold" | "suppress" | "soften">((m, e) => (QUIET_RANK[e.quiet ?? "off"] > QUIET_RANK[m] ? (e.quiet ?? "off") : m), "off");
+  const sameTarget = buf.every((e) => (e.target ?? "all") === (buf[0]!.target ?? "all") && e.deviceId === buf[0]!.deviceId);
+  const target = sameTarget ? (buf[0]!.target ?? "all") : "all";
+  // A digest IS the calm summary, so it bypasses #14's storm gate — otherwise a
+  // concurrent storm's "silent" verdict would discard alerts we already cleared.
+  await deliverAlert(userId, {
+    kind: "alert", severity, title, body,
+    target, deviceId: sameTarget ? buf[0]!.deviceId : undefined,
+    respectQuiet: quiet === "off" ? undefined : quiet,
+    ttlSeconds: sameTarget ? buf[0]!.ttl : undefined,
+  }, { bypassStorm: true });
   return { count, severity, title, body };
 }
 
-async function deliverAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>): Promise<void> {
+async function deliverAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>, opts: { bypassStorm?: boolean } = {}): Promise<void> {
   // #14 — grouping: inside a storm, replace the flood with one calm summary (or stay silent).
-  const verdict = alertStorm(userId, Date.now());
+  const verdict = opts.bypassStorm ? "deliver" : alertStorm(userId, Date.now());
   if (verdict === "silent") return;
   const payload = verdict === "summarize"
     ? { severity: "info" as const, title: "Several alerts in the last few minutes", body: "Grouped to keep the wall calm — see Notifications for the details.", ttl: a.ttlSeconds }
@@ -732,6 +757,12 @@ const lastOnline = new Map<string, boolean>();
 const lastPresence = new Map<string, boolean>();
 const lastPresencePerson = new Map<string, boolean>(); // v7.0 per-person lanes, keyed `user:name`
 const ctxKey = (userId: string, layoutId: number | null): string => (layoutId == null ? userId : `${userId}:${layoutId}`);
+// #11 fix — an event-driven dataChanged fire keeps its OWN prev lane, per watched key.
+// Sharing the tick's lane let every data write overwrite the tick baseline, swallowing
+// tick rules' `changed` / `crossesAbove` edges (they'd compare a value against itself).
+// A per-key lane also gives each watcher the right "value at my last write" semantics.
+const prevKey = (userId: string, layoutId: number | null, dataKey?: string): string =>
+  (dataKey ? `${ctxKey(userId, layoutId)}#dc:${dataKey}` : ctxKey(userId, layoutId));
 const loadBoard = (userId: string, layoutId: number): { id: number; document: LayoutT } | undefined => {
   const rec = getOwnedLayout(layoutId, userId);
   return rec ? { id: rec.id, document: rec.document } : undefined;
@@ -792,7 +823,8 @@ export async function fireAutomations(
       const trend: Resolved["trend"] = {};
       for (const [k, t] of trendNeeded) {
         // #6 — a windowed verdict reads the persistent history; no live sampling needed.
-        if (t.lookback) { trend[k] = lookbackDirection(userId, t.field, t.lookback, ctx.time.ts); continue; }
+        // A field with no history (weather.*, objects.*) falls through to the live buffer.
+        if (t.lookback && hasHistory(t.field)) { trend[k] = lookbackDirection(userId, t.field, t.lookback, ctx.time.ts); continue; }
         // Sample on every pass (not just the usePrev tick): a rising/falling/steady rule
         // can ride an interval/time/sun trigger too. recordTrend dedups within a clock
         // minute (minuteStamp replace), so repeated passes in one minute are harmless.
@@ -820,7 +852,7 @@ export async function fireAutomations(
     if (a.trigger.kind === "sun" && !sunMatches(a.trigger, ctx, a.id)) continue;
     if (a.trigger.kind === "presence" && (a.trigger.event !== opts.presenceEvent || (a.trigger.person ?? "") !== (opts.presencePerson ?? ""))) continue;
     if (a.trigger.kind === "dataChanged" && a.trigger.key !== opts.dataKey) continue; // #11 — only the watched key
-    const prev = opts.usePrev ? prevCtx.get(ctxKey(userId, a.layoutId)) : opts.prev;
+    const prev = opts.usePrev ? prevCtx.get(prevKey(userId, a.layoutId, opts.dataKey)) : opts.prev;
     // "held for N minutes" verdicts are driven once here (mutating sustainedSince), then
     // read purely inside evaluate. Only walks the tree when the rule uses `sustained`.
     const sustainedMap = a.conditions ? resolveSustained(a.conditions, ctxKey(userId, a.layoutId), ctx, prev, trend, staleMs, ctx.time.ts) : {};
@@ -844,9 +876,10 @@ export async function fireAutomations(
     }
   }
   // The tick stashes every context it evaluated as next tick's "prev" (so "changed"
-  // compares against the exact prior snapshot — globally and per board).
+  // compares against the exact prior snapshot — globally and per board). A dataChanged
+  // pass writes only its own per-key lane, so it can never disturb the tick's baseline.
   if (opts.usePrev) {
-    for (const [lid, c] of ctxCache) prevCtx.set(ctxKey(userId, lid), c.ctx);
+    for (const [lid, c] of ctxCache) prevCtx.set(prevKey(userId, lid, opts.dataKey), c.ctx);
   }
 }
 

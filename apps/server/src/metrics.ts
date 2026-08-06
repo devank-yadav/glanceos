@@ -39,8 +39,13 @@ export interface MetricPoint { at: number; value: number }
 /** A key's series (oldest → newest), optionally only points at/after `sinceMs`, capped. */
 export function metricSeries(userId: string, key: string, sinceMs = 0, maxPoints = 500): MetricPoint[] {
   const lim = Math.min(Math.max(1, maxPoints), MAX_POINTS);
-  return db.prepare("SELECT at, value FROM metric_history WHERE user_id = ? AND key = ? AND at >= ? ORDER BY at ASC LIMIT ?")
-    .all(userId, key, sinceMs, lim) as MetricPoint[];
+  // Keep the NEWEST points when a window holds more than the cap (a plain ASC LIMIT
+  // would keep the oldest, so "the latest value" would actually be a stale mid-window
+  // sample — wrong for both charts and #6's trend-over-a-window verdicts), then
+  // re-sort ascending because every caller reads oldest → newest.
+  return db.prepare(
+    "SELECT at, value FROM (SELECT at, value FROM metric_history WHERE user_id = ? AND key = ? AND at >= ? ORDER BY at DESC LIMIT ?) ORDER BY at ASC",
+  ).all(userId, key, sinceMs, lim) as MetricPoint[];
 }
 
 // ---- #74 live habit blocks ----

@@ -108,8 +108,10 @@ export async function routeInlet(row: InletRow, payload: Record<string, unknown>
     case "data": {
       const key = row.sink_target || (typeof payload.key === "string" ? payload.key : "");
       if (key) {
-        setCustomData(uid, key, "value" in payload ? payload.value : payload);
-        if (opts.fireAutos !== false) await fireDataChanged(uid, key); // #11 — precise per-key trigger (webhook fires below too)
+        // Only a write that actually landed counts as a change — a rejected one
+        // (too large, key cap) must not fire dataChanged rules against stale context.
+        const r = setCustomData(uid, key, "value" in payload ? payload.value : payload);
+        if (r.ok && opts.fireAutos !== false) await fireDataChanged(uid, key); // #11 — precise per-key trigger (webhook fires below too)
       }
       break;
     }
@@ -124,8 +126,8 @@ export async function routeInlet(row: InletRow, payload: Record<string, unknown>
       if (typeof src !== "object" || src === null || Array.isArray(src)) break; // an array/scalar body is not a key map
       for (const [key, value] of Object.entries(src).slice(0, 32)) {
         if (!key || key.length > 100) continue;
-        setCustomData(uid, key, value);
-        if (opts.fireAutos !== false) await fireDataChanged(uid, key);
+        const r = setCustomData(uid, key, value); // a rejected write is not a change
+        if (r.ok && opts.fireAutos !== false) await fireDataChanged(uid, key);
       }
       break;
     }
