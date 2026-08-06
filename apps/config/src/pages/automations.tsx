@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
+import { hold, isHeld, unhold } from "./holdCondition";
 import { EmptyState } from "../components/EmptyState";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
@@ -671,6 +672,35 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
         )}
       </div>
 
+      {/* #16 — held vs instant, in one tap. The engine has always supported holding,
+          cooling down and once-a-day; they were three scattered controls (and holding
+          meant rebuilding your condition inside a nested "+ held for…" node). */}
+      <div class="field"><span>Timing</span>
+        <div class="row wrap timing-chips">
+          <button
+            class={`chip-toggle${!a.cooldownMinutes && !a.oncePerDay && !isHeld(a.conditions) ? " on" : ""}`}
+            title="Fire every time the conditions match"
+            onClick={() => set({ cooldownMinutes: 0, oncePerDay: undefined, conditions: unhold(a.conditions) })}
+          >Instant</button>
+          <button
+            class={`chip-toggle${isHeld(a.conditions) ? " on" : ""}`}
+            title="Only fire once the conditions have held continuously — debounces a twitchy signal"
+            onClick={() => set({ conditions: isHeld(a.conditions) ? unhold(a.conditions) : hold(a.conditions, 5) })}
+            disabled={!a.conditions}
+          >{isHeld(a.conditions) ? `Held ${(a.conditions as { minutes?: number }).minutes ?? 5} min` : "Only if it holds 5 min"}</button>
+          <button
+            class={`chip-toggle${a.cooldownMinutes === 60 ? " on" : ""}`}
+            title="At most one fire per hour"
+            onClick={() => set({ cooldownMinutes: a.cooldownMinutes === 60 ? 0 : 60 })}
+          >At most hourly</button>
+          <button
+            class={`chip-toggle${a.oncePerDay ? " on" : ""}`}
+            title="At most one fire per local day"
+            onClick={() => set({ oncePerDay: a.oncePerDay ? undefined : true })}
+          >Once a day</button>
+        </div>
+      </div>
+
       <label class="field"><span>Run at most once every <span class="muted">(optional)</span></span>
         <span class="row" style={{ alignItems: "center", gap: "6px" }}>
           <input type="number" min="0" max="1440" step="1" style={{ width: "5.5rem" }} value={a.cooldownMinutes ?? 0} onInput={(e) => set({ cooldownMinutes: Math.round(Math.max(0, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 0))) })} />
@@ -681,6 +711,15 @@ function AutomationEditor({ draft, objects, layoutId, onCancel, onSaved }: { dra
         <input type="checkbox" checked={!!a.oncePerDay} onChange={(e) => set({ oncePerDay: (e.currentTarget as HTMLInputElement).checked || undefined })} />
         <span>At most once per day <span class="muted">— resets at your midnight (a morning rule greets each new day once)</span></span>
       </label>
+      {isHeld(a.conditions) && (
+        <label class="field"><span>Hold for <span class="muted">(minutes the conditions must stay true)</span></span>
+          <input
+            type="number" min="1" max="1440" step="1" style={{ width: "5.5rem" }}
+            value={(a.conditions as { minutes?: number }).minutes ?? 5}
+            onInput={(e) => set({ conditions: hold(unhold(a.conditions), Math.round(Math.max(1, Math.min(1440, Number((e.currentTarget as HTMLInputElement).value) || 1)))) })}
+          />
+        </label>
+      )}
 
       <div class="field"><span>Then do</span>
         {a.actions.map((act, i) => (

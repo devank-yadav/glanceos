@@ -3471,6 +3471,15 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-head { margin-bottom: 6px; }
 .notif-head .ghost { font-size: 12px; padding: 3px 7px; }
 .notif-search { width: 100%; margin: 0 0 6px; font-size: 13px; } /* #43 — history search */
+/* #16 — one-tap timing chips in the rule builder */
+.timing-chips { gap: 6px; margin-top: 2px; }
+.chip-toggle {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--rule); background: var(--card-bg); color: var(--fg); cursor: pointer;
+}
+.chip-toggle.on { border-color: var(--indigo); color: var(--indigo); font-weight: 600; }
+.chip-toggle:disabled { opacity: 0.45; cursor: default; }
+
 /* #122 — the first-run checklist on Boards */
 .onboard-card { margin-bottom: 14px; }
 .onboard-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
