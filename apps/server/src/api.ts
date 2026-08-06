@@ -881,6 +881,7 @@ export function buildApp(): Hono<Env> {
   app.get("/api/providers", (c) =>
     c.json([...PROVIDERS.values()].map((p) => ({
       id: p.id, label: p.label, category: p.category, authKind: p.authKind, oauth: !!p.oauth,
+      scopes: p.oauth?.scopes ?? [], // #170 — so the UI can say what a connection reaches
       resources: p.resources.map((r) => ({ id: r.id, label: r.label, shape: r.shape })),
     }))));
 

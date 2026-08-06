@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { SettingsTabs } from "../components/SettingsTabs";
+import { describeScopes } from "./scopeText";
 import { useToast } from "../components/Toast";
 import { Icon } from "../editor/icons";
 import { buildPresetBlock, type IntegrationObject, objectsForProvider } from "../editor/integrationObjects";
@@ -31,7 +32,29 @@ interface ProviderInfo {
   category: string;
   authKind: "none" | "url" | "token" | "apiKey" | "oauth2";
   oauth: boolean;
+  scopes?: string[]; // #170 — raw OAuth scopes, rendered in plain words before you connect
   resources: { id: string; label: string; shape: string }[];
+}
+
+// #170 — what this connection will be able to reach, said plainly. Shown BEFORE you
+// authorize, so the decision is informed; read-only access is called out, and anything
+// we can't prove is read-only is left unmarked rather than reassuringly mislabelled.
+function ScopeList({ scopes }: { scopes: string[] }) {
+  const items = describeScopes(scopes);
+  if (items.length === 0) return null;
+  return (
+    <div class="scope-box">
+      <strong class="scope-title">This connection will be able to reach</strong>
+      <ul class="scope-list">
+        {items.map((s) => (
+          <li key={s.raw} title={s.raw}>
+            {s.label}
+            {s.readOnly && <span class="scope-ro"> · read-only</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 interface Connection {
   id: string;
@@ -376,6 +399,7 @@ function OAuthForm({ provider }: { provider: ProviderInfo }) {
   return (
     <>
       {CONNECT_HELP[provider.id] && <p class="muted" style={{ marginTop: 0 }}>{CONNECT_HELP[provider.id]}</p>}
+      <ScopeList scopes={provider.scopes ?? []} />
       <label class="field grow">
         <span>Authorized redirect URI <em>(add this to your OAuth app)</em></span>
         <input type="text" readOnly value={redirectUri} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
