@@ -22,7 +22,7 @@ import { navigate } from "../router";
 // resolution ladder (the server reads the real resolver, so this can't drift), plus
 // the modifiers shaping the render (sleep, quiet hours, Focus, overrides, pages).
 interface AuditRow {
-  id: string; name: string | null; online: boolean; battery: number | null; lastSeen: number | null;
+  id: string; name: string | null; online: boolean; health?: string; battery: number | null; lastSeen: number | null;
   showing: { layoutId: number | null; layoutName: string | null; reason: string };
   outranked: string | null;
   modifiers: { asleep: boolean; quiet: boolean; overrides: number; focus: boolean; pages: number };
@@ -42,7 +42,7 @@ function ScreensAudit() {
         <li key={r.id} class="audit-row">
           <div class="row spread">
             <strong>{r.name ?? "Unnamed screen"}</strong>
-            <span class={`tile-status ${r.online ? "live" : "muted"}`}>{r.online ? "online" : "offline"}</span>
+            <span class={`tile-status ${healthOf(r) === "live" ? "live" : "muted"}`}>{HEALTH_LABEL[healthOf(r)].toLowerCase()}</span>
           </div>
           <p class="audit-line">
             {r.showing.layoutName
@@ -230,7 +230,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
       <div class="device-card-body">
       <div class="row spread">
         <div class="row device-id">
-          <span class={device.online ? "dot online" : "dot"} aria-label={device.online ? "Online" : "Offline"} title={device.online ? "Online" : "Offline"} />
+          <span class={`dot${healthOf(device) === "live" ? " online" : healthOf(device) === "offline" ? "" : " warn"}`} aria-label={HEALTH_LABEL[healthOf(device)]} title={HEALTH_LABEL[healthOf(device)]} />
           {editing ? (
             <input ref={inputRef} class="rename-input" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(device.name ?? ""); setEditing(false); } }} onBlur={rename} />
           ) : (
@@ -254,7 +254,7 @@ function DeviceCard({ device, setups, onChanged, onPick }: { device: DeviceSumma
         />
       </div>
 
-      <p class={`tile-status${device.online ? " live" : " muted"}`} title={device.online ? "Online" : "Offline"}>
+      <p class={`tile-status${healthOf(device) === "live" ? " live" : " muted"}`} title={HEALTH_LABEL[healthOf(device)]}>
         {device.layoutName ? <>Showing <strong>{device.layoutName}</strong></> : <>No content yet</>}
       </p>
       <div class="device-meta row">
@@ -375,6 +375,11 @@ function ScreenSettings({ device, onSaved }: { device: DeviceSummary; onSaved: (
 }
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // bit 0 = Sunday
+// The screen's real state, in one word. `online` is SSE presence only — an e-ink panel
+// polls and deep-sleeps, so health is what the card should show.
+const HEALTH_LABEL: Record<string, string> = { live: "Online", recent: "Checked in recently", stale: "Late checking in", offline: "Offline" };
+const healthOf = (d: { online: boolean; health?: string }): string => d.health ?? (d.online ? "live" : "offline");
+
 const minToTime = (m: number): string => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const timeToMin = (t: string): number => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 

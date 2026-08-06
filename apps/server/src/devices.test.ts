@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-devices-"));
-const { deviceProfile, batteryForecast } = await import("./devices");
+const { deviceProfile, batteryForecast, deviceHealth } = await import("./devices");
 import type { DeviceRow } from "./devices";
 
 const row = (profile: string): DeviceRow => ({ profile } as unknown as DeviceRow);
@@ -64,5 +64,41 @@ describe("batteryForecast (v6.1)", () => {
     const stale = batteryForecast(battRow({ ...base, last_seen: 9 * DAY })); // many flat polls later
     expect(fresh?.daysRemaining).toBe(16);
     expect(stale?.daysRemaining).toBe(16); // unchanged — last_seen no longer feeds the forecast
+  });
+});
+
+describe("deviceHealth — honest for poll-based panels, not just streaming ones", () => {
+  const row = (over: Partial<DeviceRow>): DeviceRow =>
+    ({ id: "d", refresh_seconds: 300, last_seen: null, ...over } as unknown as DeviceRow);
+  const NOW = 1_800_000_000_000;
+
+  it("a streaming screen is live", () => {
+    expect(deviceHealth(row({}), NOW, true)).toBe("live");
+  });
+
+  it("an e-ink panel polling on its own cadence is LIVE, not offline", () => {
+    // The bug this fixes: isConnected() is false for every poll-based panel, so a
+    // healthy screen that checked in 30s ago used to read "offline" forever.
+    const eink = row({ refresh_seconds: 3600, last_seen: NOW - 30_000 });
+    expect(deviceHealth(eink, NOW, false)).toBe("live");
+    // …and it stays live right up to a half-window of grace past its refresh.
+    expect(deviceHealth(row({ refresh_seconds: 3600, last_seen: NOW - 90 * 60_000 }), NOW, false)).toBe("live");
+  });
+
+  it("lateness is measured against the device's OWN cadence", () => {
+    // 5-minute cadence: 20 minutes late is stale…
+    expect(deviceHealth(row({ refresh_seconds: 300, last_seen: NOW - 20 * 60_000 }), NOW, false)).toBe("stale");
+    // …while for a 6-hour e-ink cadence the same 20 minutes is perfectly healthy.
+    expect(deviceHealth(row({ refresh_seconds: 21_600, last_seen: NOW - 20 * 60_000 }), NOW, false)).toBe("live");
+  });
+
+  it("grades the slide: recent → stale → offline", () => {
+    expect(deviceHealth(row({ refresh_seconds: 300, last_seen: NOW - 12 * 60_000 }), NOW, false)).toBe("recent");
+    expect(deviceHealth(row({ refresh_seconds: 300, last_seen: NOW - 45 * 60_000 }), NOW, false)).toBe("stale");
+    expect(deviceHealth(row({ refresh_seconds: 300, last_seen: NOW - 8 * 3_600_000 }), NOW, false)).toBe("offline");
+  });
+
+  it("a screen that never checked in is offline, not live", () => {
+    expect(deviceHealth(row({ last_seen: null }), NOW, false)).toBe("offline");
   });
 });

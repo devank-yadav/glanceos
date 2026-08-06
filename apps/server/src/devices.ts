@@ -187,6 +187,27 @@ export function batteryForecast(d: DeviceRow): BatteryForecast | null {
   return { battery: d.battery, daysRemaining: Math.max(0, Math.round((msLeft / 86_400_000) * 10) / 10), basis: "ok" };
 }
 
+// Honest health for BOTH device classes. `isConnected` only knows about screens that
+// hold an SSE stream (web/TV); a battery e-paper panel deep-sleeps between polls and
+// never holds one, so presence alone reports every healthy e-ink screen as offline.
+// Health instead asks "did it check in within the cadence IT was told to use?" — the
+// same both-signals reasoning checkDeviceForAlerts already applies to offline alerts.
+//   live    — streaming now, or checked in within its refresh window
+//   recent  — a window or two late (a skipped wake, a slow network)
+//   stale   — many windows late; something is probably wrong
+//   offline — streaming device that dropped, or never checked in at all
+export type DeviceHealth = "live" | "recent" | "stale" | "offline";
+export function deviceHealth(d: DeviceRow, now: number, isOnline: boolean): DeviceHealth {
+  if (isOnline) return "live";
+  if (d.last_seen == null) return "offline"; // never checked in — nothing to be late for
+  const windowMs = Math.max(60, d.refresh_seconds || 300) * 1000;
+  const late = now - d.last_seen;
+  if (late <= windowMs * 1.5) return "live"; // within its own cadence (+ a grace half-window)
+  if (late <= windowMs * 3) return "recent";
+  if (late <= windowMs * 12) return "stale";
+  return "offline";
+}
+
 export function setRefresh(id: string, seconds: number, orgId: string): DeviceRow | null {
   const device = getDevice(id);
   if (!device || device.org_id !== orgId) return null;

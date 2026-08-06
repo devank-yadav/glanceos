@@ -26,7 +26,7 @@ import { playLogCsv, playLogForGroup, recordPlayLog, type PlayLogEntry } from ".
 import { requestLogger } from "./logging";
 import { hmacSign, hmacVerify } from "./secrets";
 import {
-  authDevice, batteryForecast, claimDevice, deleteDevice, deviceProfile, devicesOwnedBy, getDevice, listDevices, recordTelemetry, setLowBatterySwap,
+  authDevice, batteryForecast, claimDevice, deleteDevice, deviceHealth, deviceProfile, devicesOwnedBy, getDevice, listDevices, recordTelemetry, setLowBatterySwap,
   registerDevice, setDeviceLocation, setDeviceTimezone, setDeviceTvSettings, setRefresh, setRenderOpts,
   updateDevice, type DeviceProfile, type DeviceRow,
 } from "./devices";
@@ -144,6 +144,9 @@ function deviceSummary(d: DeviceRow) {
     layoutId: d.layout_id,
     layoutName: layout?.name ?? null,
     online: isConnected(d.id),
+    // A poll-based e-ink panel never holds an SSE stream, so `online` alone calls every
+    // healthy one offline. `health` is the honest signal — see deviceHealth.
+    health: deviceHealth(d, Date.now(), isConnected(d.id)),
     refreshSeconds: d.refresh_seconds,
     battery: d.battery,
     batteryForecast: batteryForecast(d),
@@ -575,6 +578,7 @@ export function buildApp(): Hono<Env> {
         id: d.id,
         name: d.name,
         online: isConnected(d.id),
+        health: deviceHealth(d, now, isConnected(d.id)), // #171 — honest for poll-based panels too
         battery: d.battery,
         lastSeen: d.last_seen,
         showing: { layoutId, layoutName: board?.name ?? null, reason },

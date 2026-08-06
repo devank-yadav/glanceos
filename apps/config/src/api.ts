@@ -79,6 +79,9 @@ export interface DeviceSummary {
   layoutId: number | null;
   layoutName: string | null;
   online: boolean;
+  // Honest health across both device classes: a poll-based e-ink panel never holds an
+  // SSE stream, so `online` alone calls every healthy one offline. Prefer `health`.
+  health?: "live" | "recent" | "stale" | "offline";
   refreshSeconds: number;
   battery: number | null;
   batteryForecast?: { battery: number; daysRemaining: number | null; basis: "ok" | "charging" | "collecting" } | null;

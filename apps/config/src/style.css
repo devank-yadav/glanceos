@@ -3471,6 +3471,8 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-head { margin-bottom: 6px; }
 .notif-head .ghost { font-size: 12px; padding: 3px 7px; }
 .notif-search { width: 100%; margin: 0 0 6px; font-size: 13px; } /* #43 — history search */
+.dot.warn { background: var(--amber, #d97706); } /* checked in late, but not gone */
+
 /* #170 — what a connection will be able to reach, before you authorize it */
 .scope-box { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
 .scope-title { font-size: 13px; display: block; margin-bottom: 4px; }
