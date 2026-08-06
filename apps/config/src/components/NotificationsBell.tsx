@@ -49,10 +49,17 @@ export function NotificationsBell() {
     if (fresh.length > BANNER_CAP) new Notification("GlanceOS", { body: `…and ${fresh.length - BANNER_CAP} more notifications`, tag: "glanceos-notif-more" });
   };
 
+  // #13 — alerts waiting on a human. Acking lives here (and on the phone/API) because
+  // the wall is read-only: it shows the alarm, you clear it from a device that takes input.
+  const [openAlerts, setOpenAlerts] = useState<{ id: string; title: string; body: string | null; severity: string; createdAt: number }[]>([]);
+  const loadAlerts = () => api.get<typeof openAlerts>("/api/alerts/open").then(setOpenAlerts).catch(() => {});
+  const ack = async (id: string) => { await api.post(`/api/alerts/${id}/ack`).catch(() => {}); loadAlerts(); };
+
   const load = () => api.get<Feed>("/api/notifications").then((f) => { setFeed(f); maybeNotify(f); }).catch(() => {});
   useEffect(() => {
     load();
-    const t = setInterval(load, 30_000);
+    loadAlerts();
+    const t = setInterval(() => { load(); loadAlerts(); }, 30_000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
@@ -149,6 +156,17 @@ export function NotificationsBell() {
               value={q}
               onInput={(e) => searchHistory((e.currentTarget as HTMLInputElement).value)}
             />
+          )}
+          {mode === "live" && openAlerts.length > 0 && (
+            <ul class="notif-list ack-list" aria-label="Alerts awaiting acknowledgement">
+              {openAlerts.map((al) => (
+                <li key={al.id} class="notif-item ack-item">
+                  <span class={`notif-dot ${al.severity}`} aria-hidden="true" />
+                  <span class="notif-msg"><strong>{al.title}</strong>{al.body ? ` — ${al.body}` : ""}</span>
+                  <button class="ghost ack-btn" onClick={() => ack(al.id)}>Acknowledge</button>
+                </li>
+              ))}
+            </ul>
           )}
           {(mode === "history" ? (history ?? []) : feed.notifications).length === 0 ? (
             <p class="muted notif-empty">{mode === "history" ? (history === null ? "Loading…" : q ? "No alerts match." : "No history yet.") : "You're all caught up."}</p>

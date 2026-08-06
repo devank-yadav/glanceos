@@ -958,3 +958,23 @@ describe("review fixes", () => {
     expect(s).toMatchObject({ count: 1, title: "Held one" }); // survived the storm gate
   });
 });
+
+describe("#13 escalation through the engine", () => {
+  it("an alert action with escalation arms an ack, and the drain re-raises it once", async () => {
+    const { drainEscalations } = await import("./engine");
+    const { openAlerts } = await import("../alerts");
+    const u = createUser("Esc9", "esc9@example.com", "password123")!;
+    await runActions([{ kind: "alert", severity: "warn", title: "Freezer warm", target: "all", escalateAfterMinutes: 15 }], u.id, buildContext(u.id));
+    expect(openAlerts(u.id).map((a) => a.title)).toEqual(["Freezer warm"]);
+    expect(await drainEscalations(Date.now() + 5 * 60_000)).toBe(0); // not due
+    expect(await drainEscalations(Date.now() + 16 * 60_000)).toBe(1); // re-raised
+    expect(await drainEscalations(Date.now() + 60 * 60_000)).toBe(0); // and only once
+  });
+
+  it("a plain alert (no ack asked) tracks nothing", async () => {
+    const { openAlerts } = await import("../alerts");
+    const u = createUser("Esc10", "esc10@example.com", "password123")!;
+    await runActions([{ kind: "alert", severity: "info", title: "Just saying", target: "all" }], u.id, buildContext(u.id));
+    expect(openAlerts(u.id)).toEqual([]);
+  });
+});

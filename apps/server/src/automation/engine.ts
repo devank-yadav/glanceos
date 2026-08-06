@@ -18,6 +18,7 @@ import { ensurePersonalOrg } from "../orgs";
 import { resolveSource } from "../providers/resolve";
 import { allBlocks } from "../widgets";
 import { db } from "../db";
+import { claimDueEscalations, createAlertAck } from "../alerts";
 import { metricSeries } from "../metrics";
 import { emailConfigured } from "../email";
 import { sendAlertEmail, sendSnapshotEmail } from "../emails";
@@ -494,6 +495,11 @@ async function emitAlert(userId: string, a: Extract<ActionT, { kind: "alert" }>)
     const u = getUser(userId);
     if (u) void sendAlertEmail(u.email, a.severity, a.title, a.body);
   }
+  // #13 — an alert that wants an acknowledgement is tracked until someone acks it from
+  // the phone/config/API. Escalation (if any) is armed here and drained by the tick.
+  if (a.needsAck || a.escalateAfterMinutes) {
+    createAlertAck(userId, { title: a.title, body: a.body, severity: a.severity, escalateMinutes: a.escalateAfterMinutes });
+  }
   if (!channels.includes("screen")) return;
   const every = getUser(userId)?.alertDigestMin ?? 0;
   if (every > 0 && a.severity !== "critical") {
@@ -892,8 +898,27 @@ export async function fireDataChanged(userId: string, key: string): Promise<void
   await fireAutomations(userId, "dataChanged", { dataKey: key, usePrev: true });
 }
 
+/** #13 — re-raise every alert nobody acknowledged in time: one notch louder, and on
+ *  every channel the account can reach (the wall alone clearly didn't land). Claimed
+ *  atomically, so an alert escalates at most once no matter how the tick overlaps. */
+export async function drainEscalations(now = Date.now()): Promise<number> {
+  const due = claimDueEscalations(now);
+  for (const { userId, ack } of due) {
+    await emitAlert(userId, {
+      kind: "alert",
+      severity: ack.severity === "critical" ? "critical" : ack.severity === "warn" ? "critical" : "warn",
+      title: `Still unacknowledged: ${ack.title}`,
+      body: ack.body ?? "Nobody has acknowledged this yet — open GlanceOS to acknowledge it.",
+      target: "all",
+      channels: ["screen", "bell", "email"],
+    });
+  }
+  return due.length;
+}
+
 export async function runAutomationTick(now = new Date()): Promise<void> {
   await drainDeferred(now); // run any "N minutes later" actions that have come due
+  await drainEscalations(now.getTime()); // #13 — unacked alerts get louder
   for (const userId of allUserIds()) {
     const ctx = buildContext(userId, { now });
     await fireAutomations(userId, "tick", { ctx, now, usePrev: true });

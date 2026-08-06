@@ -3471,6 +3471,11 @@ button.primary.danger-solid { background: linear-gradient(180deg, #e05a48, #c039
 .notif-head { margin-bottom: 6px; }
 .notif-head .ghost { font-size: 12px; padding: 3px 7px; }
 .notif-search { width: 100%; margin: 0 0 6px; font-size: 13px; } /* #43 — history search */
+/* #13 — alerts awaiting acknowledgement, at the top of the bell panel */
+.ack-list { border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin-bottom: 6px; }
+.ack-item { display: flex; align-items: center; gap: 8px; padding: 6px 2px; font-size: 13px; }
+.ack-btn { font-size: 12px; padding: 3px 8px; margin-left: auto; white-space: nowrap; }
+
 /* #16 — one-tap timing chips in the rule builder */
 .timing-chips { gap: 6px; margin-top: 2px; }
 .chip-toggle {

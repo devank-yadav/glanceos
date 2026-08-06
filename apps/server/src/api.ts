@@ -72,6 +72,7 @@ import { advanceQueue, adjustWaiting, getQueue, resetQueue } from "./queues";
 import { renderAvailable, renderImage, type RenderFormat, toDitherOpts } from "./render";
 import { boardSnapshotPng, snapshotFilename } from "./snapshot";
 import { CSV_MAX_CHARS, parseCsv } from "./csvparse";
+import { ackAlert, openAlerts } from "./alerts";
 import {
   composeState, currentLayoutId, emitGroupCommand, pushDevice, pushDeviceIds, pushDevicesUsingLayout,
   pushGroupDevices, pushUserDevices, resolveLayoutWithReason, scheduledSig, wakePower, windowActive,
@@ -718,6 +719,14 @@ export function buildApp(): Hono<Env> {
   });
 
   // ---- in-app notifications (offline / low-battery alerts) ----
+  // #13 — alerts awaiting acknowledgement, and acking one. Acking is a phone/config/API
+  // action by design: the wall is read-only and never takes input.
+  app.get("/api/alerts/open", (c) => c.json(openAlerts(c.get("userId"))));
+  app.post("/api/alerts/:id/ack", (c) => {
+    const ok = ackAlert(c.req.param("id"), c.get("userId"));
+    return ok ? c.json({ ok: true, open: openAlerts(c.get("userId")).length }) : c.json({ error: "not found" }, 404);
+  });
+
   app.get("/api/notifications", (c) => {
     const userId = c.get("userId");
     return c.json({ notifications: listNotifications(userId, c.req.query("unread") === "1"), unread: unreadCount(userId) });

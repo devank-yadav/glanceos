@@ -117,6 +117,12 @@ export const Action = z.discriminatedUnion("kind", [
     // any combination, per rule. Absent = ["screen"] (today's behavior). Bell/email fan
     // out immediately; only the SCREEN channel is subject to digest/storm calming.
     channels: z.array(z.enum(["screen", "bell", "email"])).min(1).max(3).optional(),
+    // #13 — ask for an acknowledgement. The alert is tracked until someone acks it from
+    // the phone / config / API (never the wall — it is read-only). With
+    // `escalateAfterMinutes`, an unacked alert is re-raised once, louder and on every
+    // channel the account can reach.
+    needsAck: z.boolean().optional(),
+    escalateAfterMinutes: z.number().int().min(1).max(1440).optional(),
   }),
   act({ kind: z.literal("webhook"), url: z.url({ protocol: /^https?$/ }), body: z.unknown().optional() }), // outbound — SSRF-guarded at run time
   // Object-targeting actions (v4.0, Shortcuts-style). They reference a block by its

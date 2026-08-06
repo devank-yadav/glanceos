@@ -1116,6 +1116,22 @@ function ActionFields({ action, objects, devices, boards, scenes, loaded, onChan
           <option value="bell+email">Send to: notifications + email</option>
           <option value="screen+bell+email">Send to: all three</option>
         </select>
+        {/* #13 — ask for an acknowledgement, and optionally get louder if none comes.
+            Acking happens on your phone / this app — never on the wall. */}
+        <select
+          value={action.escalateAfterMinutes ? String(action.escalateAfterMinutes) : action.needsAck ? "ack" : "none"}
+          onChange={(e) => {
+            const v = (e.currentTarget as HTMLSelectElement).value;
+            f("needsAck", v === "none" ? undefined : true);
+            f("escalateAfterMinutes", v === "none" || v === "ack" ? undefined : Number(v));
+          }}
+          title="Track this alert until someone acknowledges it (from your phone or this app — never from the wall)"
+        >
+          <option value="none">No acknowledgement</option>
+          <option value="ack">Needs acknowledgement</option>
+          <option value="15">Ack, escalate after 15m</option>
+          <option value="60">Ack, escalate after 1h</option>
+        </select>
         <select value={String(action.respectQuiet ?? "off")} onChange={(e) => f("respectQuiet", (e.currentTarget as HTMLSelectElement).value)} title="What this alert does during a screen's quiet hours">
           <option value="off">Quiet hrs: always show</option>
           <option value="soften">Quiet hrs: soften</option>

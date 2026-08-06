@@ -5,6 +5,7 @@ import { snapshotDatabase, pruneSnapshots } from "./backup-db";
 import { checkpoint, migrate } from "./db";
 import { emailConfigured } from "./email";
 import { runDailyBriefSweep, runLifecycleSweep } from "./lifecycle";
+import { pruneAlertAcks } from "./alerts";
 import { pruneNotifications, runAlertChecks } from "./notifications";
 import { sweepTokenExpiry } from "./oauth";
 import { hydrateEngineState, runAutomationTick } from "./automation/engine";
@@ -78,6 +79,7 @@ setInterval(() => {
   try { pruneAutomationRuns(Date.now() - AUTO_RUN_RETENTION_DAYS * 86_400_000); } catch { /* never crash the loop */ }
   try { pruneNotifications(Date.now() - 90 * 86_400_000); } catch { /* never crash the loop */ }
   try { sweepTokenExpiry(); } catch { /* never crash the loop */ } // #32 — warn before tokens die
+  try { pruneAlertAcks(Date.now() - 30 * 86_400_000); } catch { /* never crash the loop */ } // #13
 }, 6 * 60 * 60 * 1000);
 
 // Drop expired rate-limit windows so the map stays bounded.
