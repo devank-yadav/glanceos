@@ -1,4 +1,4 @@
-# GlanceOS <sub>(working title)</sub>
+# GlanceOS
 
 > An open platform that turns any screen into a calm, glanceable dashboard.
 > Look → understand → move on.
