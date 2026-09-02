@@ -19,5 +19,9 @@ jobs:
       - name: Check markdown links
         uses: lycheeverse/lychee-action@v2
         with:
-          # 429 accepted: doc sites rate-limit CI runners, that's not a dead link
-          args: --no-progress --accept "200..=204,429" "./**/*.md"
+          # A runner has no dev server and no LAN, so localhost / 192.168.x examples in the
+          # docs are illustrations, not links — --exclude-all-private skips them.
+          # 429 + 403: doc sites rate-limit and block CI runners; neither means a dead link.
+          args: >-
+            --no-progress --exclude-all-private
+            --accept "200..=204,403,429" "./**/*.md"

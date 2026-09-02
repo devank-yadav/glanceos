@@ -19,7 +19,7 @@ The living-room endpoint: an Apple TV that boots into your GlanceOS dashboard on
 - `Sources/ContentView.swift` — hosts the WebView fullscreen (`ignoresSafeArea`); holds the configurable `host` constant and builds the contract URL.
 - `Sources/WebView.swift` — a `UIViewRepresentable` `WKWebView` wrapper (JS enabled via `WKWebpagePreferences`, inline media playback, and `isIdleTimerDisabled = true` to keep the screen awake).
 - `Info.plist` — app metadata, `UIRequiresFullScreen`, and the ATS exception for LAN HTTP.
-- `project.yml` — an [XcodeGen](https://github.com/yonyon/XcodeGen) spec that generates the `.xcodeproj` from the sources + `Info.plist` with **one command** (below).
+- `project.yml` — an [XcodeGen](https://github.com/yonaskolb/XcodeGen) spec that generates the `.xcodeproj` from the sources + `Info.plist` with **one command** (below).
 
 The `.xcodeproj` is **generated, not committed** — a `project.pbxproj` shouldn't be hand-authored or committed half-formed, so `project.yml` is the source of truth and the generated project is `.gitignore`d.
 
