@@ -26,3 +26,7 @@ coverage/
 *.img.xz
 .pio/
 __pycache__/
+
+# Showcase application drafts + poster source — personal submission material,
+# not project documentation (and the seeded poster carries a ~2 MB editor payload).
+docs/showcase/
