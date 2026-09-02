@@ -1,10 +1,24 @@
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { formatNowPlaying, mapGoogleEvents, mapGraphEvents, type OAuthSpec } from "./providers/registry";
-import {
+import type { OAuthSpec } from "./providers/registry";
+
+// buildAuthorizeUrl reads the oauth_apps table, so this file needs its own migrated
+// scratch database like every other server suite. Importing ./oauth statically opened
+// whatever database happened to exist instead: the developer's real dev DB locally
+// (passing, and writing to it), an empty one on a clean CI checkout (failing with
+// "no such table: oauth_apps"). The env var must be set before the imports that reach
+// db.ts, which is why these are dynamic.
+process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-oauth-"));
+const { migrate } = await import("./db");
+migrate();
+const { formatNowPlaying, mapGoogleEvents, mapGraphEvents } = await import("./providers/registry");
+const {
   buildAuthorizeUrl, exchangeCode, NoOAuthApp, pkcePair, refreshAccessToken,
   signState, tokensFromResp, verifyState,
-} from "./oauth";
+} = await import("./oauth");
 
 const SPEC: OAuthSpec = {
   authorizeUrl: "https://example.com/auth",

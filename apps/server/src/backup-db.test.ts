@@ -1,10 +1,13 @@
 import Database from "better-sqlite3";
-import { existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { pruneSnapshots, snapshotDatabase } from "./backup-db";
-import { migrate } from "./db";
+
+// Own scratch database: without this the suite snapshotted the developer's real dev DB.
+process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-backupdb-"));
+const { pruneSnapshots, snapshotDatabase } = await import("./backup-db");
+const { migrate } = await import("./db");
 
 migrate();
 const dir = join(tmpdir(), `glo-backup-${process.pid}-${Date.now()}`);

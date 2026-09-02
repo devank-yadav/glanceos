@@ -1,10 +1,17 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createUser } from "./auth";
-import { migrate } from "./db";
-import {
+
+// Own scratch database: without this every local run created users and boards in the
+// developer's real dev DB.
+process.env.GLANCEOS_DATA_DIR = mkdtempSync(join(tmpdir(), "glanceos-versions-"));
+const { migrate } = await import("./db");
+const { createUser } = await import("./auth");
+const {
   blankDocument, createLayout, getLayoutVersionDocument, listLayoutVersions, listSetups, updateLayout, updateLayoutMeta,
-} from "./layouts";
-import { ensurePersonalOrg } from "./orgs";
+} = await import("./layouts");
+const { ensurePersonalOrg } = await import("./orgs");
 
 migrate();
 const user = createUser("Ver Tester", `ver-${Date.now()}@example.com`, "calm-glass-2")!;
