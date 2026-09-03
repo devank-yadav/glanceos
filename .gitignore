@@ -31,3 +31,6 @@ __pycache__/
 # Showcase application drafts + poster source — personal submission material,
 # not project documentation (and the seeded poster carries a ~2 MB editor payload).
 docs/showcase/
+
+# Internal build tracker — working directives, not documentation for anyone reading the repo.
+docs/launch-roadmap.md

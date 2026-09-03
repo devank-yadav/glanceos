@@ -7,13 +7,13 @@ import { Icon } from "../editor/icons";
 
 // The home page: liquid-glass surfaces over a monochrome fog, a monumental
 // hero with a faint suspension-bridge motif, and Notion-calm typography. The
-// demo is the ACTUAL <30 KB screen runtime — no signup, the homepage IS the product.
+// demo is the ACTUAL <32 KB screen runtime — no signup, the homepage IS the product.
 
 const FEATURES = [
   { icon: Icon.convert, title: "A wall that knows what's going on", body: "Point a board at your live tools — deploys, pull requests, incidents, on-call, sprint, KPIs. It updates the second things change, not on a slideshow timer." },
   { icon: Icon.target, title: "Live in two minutes", body: "Open any browser, TV or Raspberry Pi, enter the code on screen, pick a team template. Done — no app to install, no per-device setup." },
   { icon: Icon.settings, title: "Built for teams", body: "Invite your team by email, with roles. Everyone shares the same boards and screens; admins manage people, viewers just watch." },
-  { icon: Icon.link, title: "Connect 177 apps", body: "GitHub, Sentry, Stripe, Linear, calendars, RSS and 170+ more. Many need no login; tokens are encrypted on our server, never on the screen." },
+  { icon: Icon.link, title: "Connect 190 apps", body: "GitHub, Sentry, Stripe, Linear, calendars, RSS and 170+ more. Many need no login; tokens are encrypted on our server, never on the screen." },
   { icon: Icon.grid, title: `${BLOCKS.length} calm blocks`, body: "Stats, charts, lists, gauges, countdowns, clocks, menus — quiet black-and-white that reads from across the room." },
   { icon: Icon.layers, title: "Boards outlive screens", body: "Run one board on every screen in the office and they stay in step. Swap a screen and its board carries over." },
 ];
