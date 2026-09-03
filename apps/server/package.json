@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "rotate-secrets": "tsx src/rotate.ts",
+    "passwd": "tsx src/passwd.ts",
     "backup": "tsx src/backup-db.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -24,7 +24,9 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 }
 
 export async function sendVerifyEmail(to: string, name: string, token: string): Promise<void> {
-  const url = publicUrl(`/#/verify/${token}`);
+  // The API route, not a client hash route: it redeems the token and then bounces
+  // to /#/verified. "#/verify/:token" was never a route, so this link went to Boards.
+  const url = publicUrl(`/api/auth/verify/${token}`);
   await sendEmail(to, "Verify your email", {
     text: `Hi ${name},\n\nConfirm your email for GlanceOS:\n${url}\n\nThis link expires in 24 hours.${FOOT}`,
     html: html("Confirm your email", [`Hi ${name}, please confirm this is your email address.`, "The link expires in 24 hours."], { label: "Verify email", url }),

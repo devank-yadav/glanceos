@@ -181,27 +181,64 @@ function csrfToken(): string {
 }
 
 async function errorDetail(res: Response): Promise<string> {
+  // Rate limit: the server already sends retry-after (clamped to 1-60s), so say how
+  // long instead of leaving someone to guess whether they're locked out for good.
+  if (res.status === 429) {
+    const after = Number(res.headers.get("retry-after"));
+    return after > 0 ? `Too many attempts — try again in ${after}s.` : "Too many attempts — try again in a moment.";
+  }
   let detail = `HTTP ${res.status}`;
   try {
     const j = (await res.json()) as { error?: string; issues?: Array<{ path: Array<string | number>; message: string }> };
     if (j.error) detail = j.error;
-    if (j.issues) detail += ` — ${j.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`;
+    // "validation — email: Invalid email address" is our internal shape leaking out.
+    // When every issue names a field, just say the field's problem.
+    if (j.issues?.length) {
+      const parts = j.issues.map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message));
+      detail = j.error === "validation" ? parts.join("; ") : `${detail} — ${parts.join("; ")}`;
+    }
   } catch {
     // non-JSON error body; keep the status text
   }
   return detail;
 }
 
+// The session ended underneath a request. app.tsx registers a handler that re-opens
+// the sign-in card without unmounting the page you were on, so unsaved work survives.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: () => void): void {
+  onUnauthorized = fn;
+}
+
+// /api/auth/* is exempt: a failed login is a 401 by design and must not be mistaken
+// for an expired session (that would re-open the very card you're already on).
+function noteStatus(res: Response, path: string): void {
+  if (res.status === 401 && !path.startsWith("/api/auth/")) onUnauthorized?.();
+}
+
+const OFFLINE = "Can't reach the server — check that GlanceOS is running.";
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["content-type"] = "application/json";
   if (method !== "GET" && method !== "HEAD") headers["x-csrf-token"] = csrfToken();
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(await errorDetail(res));
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // A network-layer failure surfaces as a bare TypeError — "Load failed" in Safari,
+    // which tells the user nothing about what went wrong or what to do.
+    throw new Error(OFFLINE);
+  }
+  if (!res.ok) {
+    noteStatus(res, path);
+    if (res.status === 401 && !path.startsWith("/api/auth/")) throw new Error("your session ended — log in again");
+    throw new Error(await errorDetail(res));
+  }
   return (await res.json()) as T;
 }
 
@@ -210,13 +247,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 // double-submit header every mutating call needs, or the guard returns 403
 // "bad or missing csrf token".
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "x-csrf-token": csrfToken() },
-    body: form,
-    credentials: "same-origin",
-  });
-  if (!res.ok) throw new Error(await errorDetail(res));
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      headers: { "x-csrf-token": csrfToken() },
+      body: form,
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new Error(OFFLINE);
+  }
+  if (!res.ok) {
+    noteStatus(res, path);
+    if (res.status === 401) throw new Error("your session ended — log in again");
+    throw new Error(await errorDetail(res));
+  }
   return (await res.json()) as T;
 }
 

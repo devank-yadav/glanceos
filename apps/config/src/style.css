@@ -707,6 +707,66 @@ input[type="checkbox"] {
   color: var(--fg);
 }
 
+/* The card owns the 13px rhythm as flex gap, so wrapping the fields in a <form>
+   would collapse them into one flex child. The form inherits the same rhythm. */
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+/* recover.tsx has always referenced these three; none of them existed, so the
+   recovery cards rendered uncentered and their errors as plain body text. */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-title {
+  font-size: 24px;
+}
+
+.auth-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bad);
+}
+
+/* The re-auth card floats over whatever you were doing, so the page underneath
+   (usually the Studio, with unsaved edits) stays mounted. */
+.session-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--backdrop);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.session-scrim .auth-wrap {
+  min-height: 0;
+}
+
+.auth-cmd {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--soft);
+  border: 1px solid var(--rule);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
 /* ---------- screens page ---------- */
 
 .empty-state {

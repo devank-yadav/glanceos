@@ -24,8 +24,10 @@ export type Route =
   | { name: "verified" }
   | { name: "edit"; layoutId: number };
 
-export function parseRoute(hash: string): Route {
-  const path = hash.replace(/^#/, "") || "/";
+// Split out from parseRoute so callers can ask "is this hash a real app route?"
+// without the Boards fallback answering yes to everything. Returns null for an
+// in-page anchor (#features) or an unknown path.
+function matchRoute(path: string): Route | null {
   if (path === "/login") return { name: "login" };
   if (path === "/register") return { name: "register" };
   if (path === "/boards" || path === "/setups") return { name: "boards" }; // /setups = legacy alias
@@ -49,7 +51,56 @@ export function parseRoute(hash: string): Route {
   if (invite) return { name: "invite", token: invite[1]! };
   const edit = /^\/edit\/(\d+)$/.exec(path);
   if (edit) return { name: "edit", layoutId: Number(edit[1]) };
-  return { name: "boards" }; // Boards is home
+  return null;
+}
+
+// Strip any ?query and trailing #fragment before matching: the server's own
+// verification bounce lands on "#/verified?expired=1", and strict equality against
+// the raw hash matched nothing — so both branches of VerifiedPage were unreachable.
+function hashPath(hash: string): string {
+  return hash.replace(/^#/, "").split(/[?#]/)[0] || "/";
+}
+
+export function parseRoute(hash: string): Route {
+  return matchRoute(hashPath(hash)) ?? { name: "boards" }; // Boards is home
+}
+
+// True only for a hash the router actually recognizes. Landing anchors (#features,
+// #pricing) have no leading slash and are deliberately excluded — gating on them
+// would throw a logged-out visitor reading the marketing page into the sign-in card.
+export function isAppRoute(hash: string): boolean {
+  const path = hashPath(hash);
+  return path.startsWith("/") && matchRoute(path) !== null;
+}
+
+// Where the user was actually trying to go when we made them log in first. Kept in
+// memory only — never a query parameter, so it can't be crafted, mailed, or logged,
+// and it is fed to location.hash, which cannot leave this origin.
+let intended: string | null = null;
+
+export function rememberIntended(hash: string): void {
+  const path = hashPath(hash);
+  // Same-origin hash paths only: one leading slash, no scheme, no protocol-relative.
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes(":")) return;
+  if (!isAppRoute(hash)) return;
+  intended = path;
+}
+
+export function consumeIntended(): string | null {
+  const next = intended;
+  intended = null;
+  if (next) deepLinked = true;
+  return next;
+}
+
+// Sticky, unlike `intended`: auth.tsx consumes the destination synchronously right
+// after login, which is BEFORE Preact flushes the effects that want to know whether
+// this was a deep-link arrival. A flag that outlives the consume is the only thing
+// those effects can read reliably.
+let deepLinked = false;
+
+export function arrivedViaDeepLink(): boolean {
+  return deepLinked;
 }
 
 // Path + label for each top-level section, used for breadcrumbs and origin.

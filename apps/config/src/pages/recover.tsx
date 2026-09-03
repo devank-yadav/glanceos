@@ -5,7 +5,7 @@ import { navigate } from "../router";
 // Logged-out password recovery + email-verification landing. Plain centered cards,
 // reusing the auth-screen chrome. All endpoints are inert without a mail backend.
 
-export function ForgotPage() {
+export function ForgotPage({ emailReady = true }: { emailReady?: boolean }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -14,6 +14,22 @@ export function ForgotPage() {
     setBusy(true);
     try { await api.post("/api/auth/forgot", { email: email.trim() }); } catch { /* always show the same result */ }
     setSent(true); setBusy(false);
+  }
+  // No mail backend configured — the stock single-container install. Sending someone
+  // to an inbox that will never receive anything is how people lose their dashboard,
+  // so say what's actually true and hand them the command that works.
+  if (!emailReady) {
+    return (
+      <main class="auth-screen">
+        <div class="auth-card">
+          <h1 class="auth-title">Reset your password</h1>
+          <p class="muted">This server has no mail backend, so it can&rsquo;t send you a reset link. You can reset the password directly on the machine running GlanceOS:</p>
+          <pre class="auth-cmd">docker compose exec glanceos pnpm --filter @glanceos/server passwd you@example.com</pre>
+          <p class="muted">It asks for the new password on the terminal (or generates one), and signs out every existing session for that account.</p>
+          <p class="muted auth-switch"><a href="#/login">Back to log in</a></p>
+        </div>
+      </main>
+    );
   }
   return (
     <main class="auth-screen">

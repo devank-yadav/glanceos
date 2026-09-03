@@ -22,7 +22,7 @@ import { ForgotPage, ResetPage, VerifiedPage } from "./pages/recover";
 import { ScreensPage } from "./pages/screens";
 import { SetupsPage } from "./pages/setups";
 import { SharedPage } from "./pages/shared";
-import { navigate, useRoute } from "./router";
+import { arrivedViaDeepLink, isAppRoute, navigate, rememberIntended, useRoute } from "./router";
 import { STARTER_TEMPLATES } from "./starterTemplates";
 
 // The Studio (and zod with it) lives in its own chunk: the shell loads tiny,
@@ -96,7 +96,9 @@ export function App() {
       .then(([l, d]) => {
         try { sessionStorage.setItem(BOOTSTRAP_KEY, "1"); } catch { /* ignore */ }
         if (needsOnboarding({ deviceCount: d.length, layoutCount: l.length, dismissed })) { setOnboard(true); return; }
-        if (l.length === 0) return api.post<{ id: number }>("/api/layouts", { name: "My first board" }).then((r) => navigate(`/edit/${r.id}`));
+        // Never redirect someone who was on their way somewhere specific — an invited
+        // teammate has no boards yet, and auto-creating one would eat the invite.
+        if (l.length === 0 && !arrivedViaDeepLink()) return api.post<{ id: number }>("/api/layouts", { name: "My first board" }).then((r) => navigate(`/edit/${r.id}`));
       })
       .catch(() => {});
   }, [status?.authed]);
@@ -180,16 +182,28 @@ export function App() {
   if (!status) return <Splash />;
 
   // Password recovery + email-verification landings work in any auth state.
-  if (route.name === "forgot") return <ForgotPage />;
+  if (route.name === "forgot") return <ForgotPage emailReady={status.emailReady !== false} />;
   if (route.name === "reset") return <ResetPage token={route.token} />;
   if (route.name === "verified") return <VerifiedPage />;
 
   if (!status.authed) {
-    // A logged-out visitor following an invite link logs in first; the #/invite/:token
-    // hash is preserved, so after auth they land back on the acceptance screen.
-    if (route.name === "login" || route.name === "register" || route.name === "invite") {
+    // Anyone arriving on a real app route — a board, a screen, an invite, a QR claim —
+    // gets the sign-in card, and router.ts remembers where they were going so auth.tsx
+    // can put them there afterwards. Only the bare root and unrecognized hashes get the
+    // marketing page; in-page anchors (#features, #pricing) are not app routes, so a
+    // logged-out visitor reading the landing page is never yanked into the form.
+    const wantsApp = route.name !== "login" && route.name !== "register" && isAppRoute(location.hash);
+    if (wantsApp) rememberIntended(location.hash);
+    if (route.name === "login" || route.name === "register" || wantsApp) {
       const mode = route.name === "register" ? "register" : "login";
-      return <AuthPage mode={mode} registrationOpen={status.registrationOpen} onDone={refreshAuth} />;
+      return (
+        <AuthPage
+          mode={mode}
+          registrationOpen={status.registrationOpen}
+          emailReady={status.emailReady !== false}
+          onDone={refreshAuth}
+        />
+      );
     }
     return <Landing registrationOpen={status.registrationOpen} />;
   }
