@@ -10,6 +10,7 @@ build/
 # local state
 .env
 .env.*
+!.env.example   # the setup reference — must ship with the repo
 *.local
 *.db
 *.db-shm

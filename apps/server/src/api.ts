@@ -972,7 +972,7 @@ export function buildApp(): Hono<Env> {
     const provider = c.req.param("provider");
     const redirectUri = `${publicBase(c)}/api/oauth/${provider}/callback`;
     try {
-      return c.redirect(buildAuthorizeUrl(c.get("userId"), provider, redirectUri));
+      return c.redirect(buildAuthorizeUrl(c.get("userId"), provider, redirectUri, c.get("orgId")));
     } catch (e) {
       if (e instanceof NoOAuthApp) return c.json({ error: "no_oauth_app", provider }, 412);
       return c.json({ error: "oauth_unavailable" }, 400);
@@ -1424,6 +1424,16 @@ ${og}
   app.delete("/api/inlets/:id", (c) =>
     deleteInlet(c.req.param("id"), c.get("userId")) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404));
 
+  // Registered BEFORE /api/hooks/:secret — Hono matches in registration order, so the
+  // parametric inlet route would otherwise swallow this literal path and the webhook
+  // would never run.
+  // Stripe webhook (under /api/hooks/* → bypasses session auth + CSRF). Verifies the
+  // signature over the RAW body, then syncs the subscription state onto the org.
+  app.post("/api/hooks/stripe", async (c) => {
+    const raw = await c.req.text();
+    return handleWebhook(raw, c.req.header("stripe-signature")) ? c.json({ received: true }) : c.json({ error: "bad signature" }, 400);
+  });
+
   // The public inbound webhook — pre-guard skip-listed (no session/CSRF); the URL
   // secret is the capability, plus an optional HMAC over the raw body.
   app.post("/api/hooks/:secret", async (c) => {
@@ -1633,13 +1643,6 @@ ${og}
     if (c.get("role") !== "owner") return c.json({ error: "only the workspace owner can manage billing" }, 403);
     const url = await createPortal(c.get("orgId"), publicUrl("/#/members"));
     return url ? c.json({ url }) : c.json({ error: "no billing account yet" }, 400);
-  });
-
-  // Stripe webhook (under /api/hooks/* → bypasses session auth + CSRF). Verifies the
-  // signature over the RAW body, then syncs the subscription state onto the org.
-  app.post("/api/hooks/stripe", async (c) => {
-    const raw = await c.req.text();
-    return handleWebhook(raw, c.req.header("stripe-signature")) ? c.json({ received: true }) : c.json({ error: "bad signature" }, 400);
   });
 
   // ---- onboarding + founder metrics ----

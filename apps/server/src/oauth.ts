@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "./db";
 import { createIfAbsent } from "./notifications";
 import { getOAuthAppCreds } from "./oauth-apps";
+import { ensurePersonalOrg } from "./orgs";
 import { PROVIDERS, type OAuthSpec } from "./providers/registry";
 import { currentKeyVersion, hmacSign, hmacVerify, open, seal } from "./secrets";
 
@@ -57,7 +58,7 @@ function takeVerifier(sid: string): string | null {
 
 /** Build the provider's authorize URL to start the flow; throws NoOAuthApp if
  *  the self-hoster hasn't registered a client id/secret for this provider. */
-export function buildAuthorizeUrl(userId: string, providerId: string, redirectUri: string): string {
+export function buildAuthorizeUrl(userId: string, providerId: string, redirectUri: string, orgId?: string): string {
   const provider = PROVIDERS.get(providerId);
   if (!provider?.oauth) throw new Error("not an oauth provider");
   const creds = getOAuthAppCreds(userId, providerId);
@@ -65,7 +66,9 @@ export function buildAuthorizeUrl(userId: string, providerId: string, redirectUr
   const { verifier, challenge } = pkcePair();
   const sid = randomUUID();
   rememberVerifier(sid, verifier);
-  const state = signState({ sid, userId, provider: providerId, exp: Date.now() + 10 * 60_000 });
+  // orgId rides in the SIGNED state so the finished connection lands in the workspace
+  // the flow started in, not merely the user's personal org.
+  const state = signState({ sid, userId, provider: providerId, orgId, exp: Date.now() + 10 * 60_000 });
   const u = new URL(provider.oauth.authorizeUrl);
   u.searchParams.set("client_id", creds.clientId);
   u.searchParams.set("redirect_uri", redirectUri);
@@ -112,16 +115,23 @@ export function tokensFromResp(r: TokenResp, prevRefresh?: string | null, nonExp
 
 /** Persist (create or update) the per-user connection for an oauth provider and
  *  seal its tokens. Returns the connection id. */
-export function saveOAuthConnection(userId: string, providerId: string, tokens: OAuthTokens): string {
+export function saveOAuthConnection(userId: string, providerId: string, tokens: OAuthTokens, orgId?: string): string {
   const provider = PROVIDERS.get(providerId)!;
-  const existing = db.prepare("SELECT id FROM connections WHERE user_id = ? AND provider = ? LIMIT 1").get(userId, providerId) as { id: string } | undefined;
+  // org_id is the access boundary every read path filters on (connections.ts). Omitting
+  // it here left finished OAuth connections with org_id = NULL — saved, tokens sealed,
+  // and invisible in the app. Adopt an existing NULL row so installs already carrying
+  // one are healed on the next reconnect rather than gaining a duplicate.
+  const org = orgId ?? ensurePersonalOrg(userId);
+  const existing = db.prepare(
+    "SELECT id FROM connections WHERE user_id = ? AND provider = ? AND (org_id = ? OR org_id IS NULL) LIMIT 1",
+  ).get(userId, providerId, org) as { id: string } | undefined;
   const now = Date.now();
   const id = existing?.id ?? randomUUID();
   if (existing) {
-    db.prepare("UPDATE connections SET status = 'ok', last_error = '', updated_at = ? WHERE id = ?").run(now, id);
+    db.prepare("UPDATE connections SET org_id = ?, status = 'ok', last_error = '', updated_at = ? WHERE id = ?").run(org, now, id);
   } else {
-    db.prepare("INSERT INTO connections (id, user_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, 'oauth2', '{}', 'ok', '', ?, ?)")
-      .run(id, userId, providerId, provider.label, now, now);
+    db.prepare("INSERT INTO connections (id, user_id, org_id, provider, label, auth_kind, config, status, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'oauth2', '{}', 'ok', '', ?, ?)")
+      .run(id, userId, org, providerId, provider.label, now, now);
   }
   db.prepare("INSERT INTO connection_secrets (connection_id, kind, key_version, cipher, updated_at) VALUES (?, 'oauth', ?, ?, ?) ON CONFLICT(connection_id, kind) DO UPDATE SET cipher = excluded.cipher, key_version = excluded.key_version, updated_at = excluded.updated_at")
     .run(id, currentKeyVersion(), seal(JSON.stringify(tokens)), now);
@@ -141,7 +151,7 @@ export async function completeOAuth(userId: string, providerId: string, code: st
   const resp = await exchangeCode(provider.oauth, creds, code, verifier, redirectUri, f);
   const tokens = tokensFromResp(resp, undefined, provider.oauth.nonExpiring);
   if (!tokens) return { ok: false, error: resp.error || "exchange_failed" };
-  saveOAuthConnection(userId, providerId, tokens);
+  saveOAuthConnection(userId, providerId, tokens, typeof payload.orgId === "string" ? payload.orgId : undefined);
   return { ok: true };
 }
 
