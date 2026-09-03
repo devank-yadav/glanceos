@@ -1246,6 +1246,37 @@ ul.tasks li:last-child {
   margin: 0 auto 26px;
 }
 
+/* "Put it on your TV" — same card vocabulary as .feature-card, one step wider so the
+   three routes sit side by side on a laptop and stack cleanly on a phone. */
+.tv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+.tv-card {
+  border: 1px solid var(--rule);
+  background: var(--card-bg);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+.tv-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+.tv-card h3 { margin: 0; font-size: 16px; }
+.tv-card p { color: var(--muted); font-size: 14px; margin: 0; }
+.tv-card .btn { align-self: flex-start; margin-top: auto; }
+.tv-note {
+  margin: 22px auto 0;
+  max-width: 640px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

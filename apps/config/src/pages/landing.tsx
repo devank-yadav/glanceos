@@ -119,6 +119,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         <nav class="landing-links">
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
+          <a href="#tv">On your TV</a>
           <a href="#pricing">Pricing</a>
         </nav>
         <span class="spacer" />
@@ -135,7 +136,6 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
 
       <section class="hero">
         <BridgeMotif />
-        <p class="hero-pill glass">For teams · Live data · Any screen</p>
         <h1 class="hero-title">
           The office wall that
           <br />
@@ -154,7 +154,6 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
           </a>
         </div>
         <a class="hero-howlink" href="#how">or see how it works ↓</a>
-        <p class="hero-caption">On the TV itself? Open <strong>screen mode</strong> — it shows a pairing code you claim from any signed-in device. No typing URLs.</p>
         <DemoBoard />
         <p class="hero-caption">This is the live runtime — the exact pixels your screens render. No signup to look.</p>
         <ul class="trust-strip" aria-label="What you get">
@@ -204,6 +203,44 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Getting it onto a TV is the question people actually ask, and it was only a
+          passing clause before. Concrete routes, cheapest first. */}
+      <section id="tv" class="section">
+        <h2 class="section-title">Put it on your TV</h2>
+        <p class="section-lede">
+          No box to buy and nothing to install. A television already has everything it needs — a browser,
+          or a phone to cast from.
+        </p>
+        <div class="tv-grid">
+          <div class="tv-card">
+            <h3>The TV&rsquo;s own browser</h3>
+            <p>
+              Open GlanceOS on the set and press <strong>Open screen mode</strong>. It shows a short pairing
+              code; claim it from your laptop or phone and the wall fills in. Nothing is ever typed with a remote.
+            </p>
+            <a class="btn glass-btn" href={screenModeHref()}>Open screen mode →</a>
+          </div>
+          <div class="tv-card">
+            <h3>Cast from your phone</h3>
+            <p>
+              Chromecast a board straight to the set. It sends a read-only link, never a device secret, so
+              the TV shows the wall without holding any credentials of yours.
+            </p>
+          </div>
+          <div class="tv-card">
+            <h3>A native app, if you prefer</h3>
+            <p>
+              Thin shells for Fire TV, Android TV, Samsung Tizen, LG webOS, Apple tvOS and a Raspberry Pi
+              kiosk. Each one just loads the runtime full-screen and pairs by the on-screen code.
+            </p>
+          </div>
+        </div>
+        <p class="tv-note">
+          Once it is paired the set is <strong>read-only glass</strong> — it displays and never asks for input.
+          You change what it shows from your phone or laptop, and it updates in place.
+        </p>
       </section>
 
       <section id="compare" class="section">
