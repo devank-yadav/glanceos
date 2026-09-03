@@ -23,8 +23,8 @@ pnpm install
 pnpm dev          # runs server + config + screen dev servers in parallel
 ```
 
-- **config** (the app you log into) — http://localhost:5173
-- **screen** (the dumb-glass runtime a TV/e-ink panel loads) — http://localhost:5174
+- **config** (the app you log into) — http://localhost:5174
+- **screen** (the dumb-glass runtime a TV/e-ink panel loads) — http://localhost:5173
 - **server** (API + SSE) — http://localhost:8080
 
 The first account you create becomes the admin.
@@ -47,7 +47,7 @@ A pnpm workspace. `apps/*` and `packages/*` are workspaces; `devices/*` is **not
 
 1. **`apps/screen` stays tiny and dependency-light.** The runtime ships to e-ink
    panels and old smart-TVs. **zod must never be imported into `apps/screen`**, and
-   the entry chunk must stay **≤ 30 KB gzipped** (`pnpm --filter @glanceos/screen size`).
+   the entry chunk must stay **≤ 32 KB gzipped** (`pnpm --filter @glanceos/screen size`).
 2. **Schema changes are additive.** Add optional, defaulted fields so old board
    documents keep parsing — avoid a breaking schema bump.
 3. **Database migrations are additive + backfilled.** New SQL files in
@@ -84,7 +84,8 @@ template can never ship a board the runtime can't render.
 
 - TypeScript everywhere (except `devices/*` native shells).
 - Match the surrounding code — naming, comment density, idioms.
-- ESLint + Prettier are configured; run them before pushing.
+- No linter is configured — `pnpm typecheck` and `pnpm test` are the gates, and
+  `.editorconfig` covers whitespace.
 
 By contributing you agree your contributions are licensed under the repository's
 [MIT license](LICENSE).
