@@ -116,7 +116,13 @@ pnpm dev          # server :8080 · screen :5173 · config :5174
 
 Open <http://localhost:5173> on anything with a browser — it registers itself and shows a claim code. Open <http://localhost:5174>, create your account (first visit), enter the code, pick a setup, and the screen flips live. Click any screen to open the **Studio**: double-click anywhere to type, or drag blocks from the categorized palette by their top ⠿ handle (the drop line and halo show where they land — block edges make columns); drag a column seam or a row's bottom edge to resize; press `/` to insert, arrows reorder, ⌘Z undoes whole gestures — every change autosaves to connected screens. `pnpm test` runs the suite.
 
-**Upgrading a v0.1 install:** your old password becomes the `admin@local` account — log in with that email and your existing password; screens and setups carry over. (Self-hosting publicly? `GLANCEOS_REGISTRATION=closed` stops strangers registering; the first account is always allowed.)
+**Upgrading a v0.1 install:** the migration moves your screens, setups and old password onto a single `admin@local` account. That isn't a valid sign-in address, so give it a real one first — this also sets a new password and takes effect on a running server:
+
+```sh
+pnpm --filter @glanceos/server passwd admin@local --email you@example.com
+```
+
+(Self-hosting publicly? `GLANCEOS_REGISTRATION=closed` stops strangers registering; the first account is always allowed.)
 
 ### Run it (one command)
 

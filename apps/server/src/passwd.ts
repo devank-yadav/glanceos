@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 import { randomBytes } from "node:crypto";
-import { destroyAllSessions, getUserByEmail, setPassword } from "./auth";
+import { destroyAllSessions, getUserByEmail, setEmail, setPassword } from "./auth";
 
 // Out-of-band password reset for the operator of a self-hosted install.
 //
@@ -33,12 +33,28 @@ function prompt(question: string, hidden: boolean): Promise<string> {
   });
 }
 
-export async function resetPasswordCli(email: string, supplied?: string): Promise<void> {
+export async function resetPasswordCli(email: string, newEmail?: string, supplied?: string): Promise<void> {
   const user = getUserByEmail(email);
   if (!user) {
     console.error(`[passwd] no account for ${email}`);
     process.exitCode = 1;
     return;
+  }
+  // Renaming is what rescues a v0.1 upgrade: the migration parks everything on
+  // "admin@local", which the API's email validation refuses, so the account owns
+  // every board on the box and cannot sign in to reach them.
+  if (newEmail) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      console.error(`[passwd] "${newEmail}" doesn't look like an email address the app will accept`);
+      process.exitCode = 1;
+      return;
+    }
+    if (!setEmail(user.id, newEmail)) {
+      console.error(`[passwd] couldn't set the address — is ${newEmail} already used by another account?`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`[passwd] sign-in address changed from ${user.email} to ${newEmail}.`);
   }
   // Read from stdin or generate — never from argv, which lands in shell history
   // and is readable by any other process via `ps`.
@@ -55,7 +71,7 @@ export async function resetPasswordCli(email: string, supplied?: string): Promis
   }
   setPassword(user.id, next);
   destroyAllSessions(user.id); // whoever was signed in as them is signed out
-  console.log(`[passwd] password reset for ${user.email} and all sessions signed out.`);
+  console.log(`[passwd] password reset for ${newEmail ?? user.email} and all sessions signed out.`);
   if (generated) console.log(`[passwd] new password (shown once): ${next}`);
 }
 
@@ -64,9 +80,11 @@ export async function resetPasswordCli(email: string, supplied?: string): Promis
 // If it reports SQLITE_BUSY, another write was in flight — just run it again.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const email = process.argv[2];
-  if (!email) {
-    console.error("usage: passwd <email>            # prompts for the new password on stdin");
+  const flag = process.argv.indexOf("--email");
+  const newEmail = flag > 0 ? process.argv[flag + 1] : undefined;
+  if (!email || (flag > 0 && !newEmail)) {
+    console.error("usage: passwd <email> [--email <new-address>]   # prompts for the new password on stdin");
     process.exit(1);
   }
-  await resetPasswordCli(email);
+  await resetPasswordCli(email, newEmail);
 }

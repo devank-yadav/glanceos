@@ -194,6 +194,21 @@ export function createUser(name: string, email: string, password: string): Publi
   return toPublic(user);
 }
 
+/**
+ * Change an account's sign-in address. Operator-only (the passwd CLI): a v0.1 install
+ * migrates its single password into an "admin@local" account, and that address can't
+ * pass the API's email validation, so without this the upgrade path is a locked door.
+ * Returns false if the address is already taken (UNIQUE is case-insensitive).
+ */
+export function setEmail(userId: string, next: string): boolean {
+  try {
+    const r = db.prepare("UPDATE users SET email = ? WHERE id = ?").run(next.trim(), userId);
+    return r.changes > 0;
+  } catch {
+    return false; // email UNIQUE (case-insensitive) violated
+  }
+}
+
 export function verifyLogin(email: string, password: string): PublicUser | null {
   const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email.trim()) as
     | UserRow
