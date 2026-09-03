@@ -1,7 +1,6 @@
-import type { LayoutT } from "@glanceos/schema";
-import { useMemo } from "preact/hooks";
 import { BoardPreview } from "../components/BoardPreview";
 import { BLOCKS } from "../editor/blocks";
+import { STARTER_TEMPLATES } from "../starterTemplates";
 import { BlockIcon } from "../editor/blockIcons";
 import { Icon } from "../editor/icons";
 
@@ -60,37 +59,17 @@ function BridgeMotif() {
 // A canned board that shows off the v7.0 "knows your day" story — Focus now, Leave
 // by, the day's timeline — fed to the real runtime below. Times are relative to the
 // viewer's clock (built fresh on mount) so the demo is alive, not a screenshot.
-const DEMO_BOARD = {
-  schemaVersion: 3,
-  name: "A day at a glance",
-  theme: { mode: "light", fontScale: "m" },
-  gap: 3,
-  align: "top",
-  rows: [
-    { id: "r1", h: 20, blocks: [{ id: "day1", type: "myDay", width: 1, props: { name: "Alex", subtitle: "", showDate: true } }] },
-    { id: "r2", h: 44, blocks: [
-      { id: "focus1", type: "focusNow", width: 1, props: { label: "Right now", items: "" } },
-      { id: "leave1", type: "leaveBy", width: 1, props: { label: "Leave by", items: "", travelMinutes: 15 } },
-    ] },
-    { id: "r3", h: 36, blocks: [
-      { id: "agenda1", type: "dayTimeline", width: 1, props: { label: "Today", items: "", max: 5 } },
-      { id: "steps1", type: "healthRing", width: 1, props: { label: "Steps", value: 7200, goal: 10000, unit: "" } },
-    ] },
-  ],
-} as unknown as LayoutT;
-
-const buildDemoData = (): Record<string, unknown> => {
-  const now = Date.now();
-  const ev = (min: number, title: string, location?: string) => ({ start: new Date(now + min * 60_000).toISOString(), title, location });
-  const agenda = [ev(-12, "Design review", "Studio"), ev(22, "1:1 with Sam", "Zoom"), ev(95, "Gym"), ev(200, "Dinner", "Home")];
-  return { day1: { temperatureC: 21, summary: "clear" }, focus1: { events: agenda }, leave1: { events: agenda }, agenda1: { events: agenda } };
-};
+// The hero shows a REAL starter template rather than a mock built for the marketing
+// page: "Deploys & On-call" is the board the headline describes, it carries its own
+// sample values (no bindings, so it renders standalone), and a visitor can open the
+// same one from Templates in a click.
+const DEMO_TEMPLATE = STARTER_TEMPLATES.find((t) => t.id === "eng-deploys-oncall") ?? STARTER_TEMPLATES[0];
 
 function DemoBoard() {
-  const data = useMemo(buildDemoData, []);
+  if (!DEMO_TEMPLATE) return null;
   return (
     <div class="mock-frame glass-strong">
-      <BoardPreview doc={DEMO_BOARD} data={data} w={1920} h={1080} deviceName="Live demo" />
+      <BoardPreview doc={DEMO_TEMPLATE.doc} w={1920} h={1080} deviceName={DEMO_TEMPLATE.name} />
     </div>
   );
 }
@@ -155,7 +134,7 @@ export function Landing({ registrationOpen }: { registrationOpen: boolean }) {
         </div>
         <a class="hero-howlink" href="#how">or see how it works ↓</a>
         <DemoBoard />
-        <p class="hero-caption">This is the live runtime — the exact pixels your screens render. No signup to look.</p>
+        <p class="hero-caption">This is the live runtime showing <strong>{DEMO_TEMPLATE?.name}</strong>, one of the {STARTER_TEMPLATES.length} ready-made boards — the exact pixels your screens render. No signup to look.</p>
         <ul class="trust-strip" aria-label="What you get">
           <li>Set up in minutes</li>
           <li>Works on any screen</li>
